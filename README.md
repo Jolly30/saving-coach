@@ -74,12 +74,13 @@ choco install openjdk.17
 java -version
 ```
 
-> **⚠️ Git Bash users:** If `java` is not found after installing, add it manually:
-> ```
+#### 🪟 Git Bash extra step (if `java` not found)
+Open **Git Bash** and run:
+```bash
 echo 'export JAVA_HOME="/c/Program Files/Java/jdk-17"' >> ~/.bashrc
 echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
-> ```
+```
 
 ### 🔑 Step 3: Get Your API Keys (One-Time)
 
