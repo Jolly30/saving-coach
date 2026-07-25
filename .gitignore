@@ -1,0 +1,36 @@
+# Android
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+build/
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.aab
+*.ap_
+*.dex
+bin/
+gen/
+out/
+.navigation/
+*.log
+*.hprof
+
+# Firebase
+google-services.json
+
+# Secrets
+local.properties
+
+# Misc
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Claude AI
+.claude/
+.playwright-mcp/
