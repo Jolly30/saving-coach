@@ -254,4 +254,18 @@ Private — Internal team use.
 
 ---
 
+## 📊 Dev Reports
+
+Individual work logs for each developer are in the [`reports/`](./reports/) folder.
+
+| File | For | Role |
+|------|:---:|------|
+| [mynote.md](./reports/mynote.md) | Dev 1 | UI Skeleton ✅ |
+| [mynote-DEV2.md](./reports/mynote-DEV2.md) | Dev 2 | AI Chat + Camera |
+| [mynote-DEV3.md](./reports/mynote-DEV3.md) | Dev 3 | Data Layer |
+| [mynote-DEV4.md](./reports/mynote-DEV4.md) | Dev 4 | Expense Forms + Budget |
+| [mynote-DEV5.md](./reports/mynote-DEV5.md) | Dev 5 | Export + Settings + Release |
+
+---
+
 *Built with ❤️ by Jolly30 & Team*
