@@ -52,16 +52,34 @@
 
 ### ☕ Step 2: Install JDK 17 (One-Time)
 
-**macOS (Homebrew):**
+**Mac (Homebrew):**
 ```bash
 brew install openjdk@17
 echo 'export PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH"' >> ~/.zshrc
 echo 'export JAVA_HOME="/opt/homebrew/opt/openjdk@17"' >> ~/.zshrc
 source ~/.zshrc
-java -version   # Should show 17.x
+java -version
 ```
 
-**Windows / Linux:** Download from [oracle.com/java/technologies/javase/jdk17-archive-downloads.html](https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html)
+**Windows (Git Bash):**
+```bash
+# Option A: Download from Oracle
+# Go to https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html
+# Download Windows x64 .msi → install → restart Git Bash
+
+# Option B: Using Chocolatey (if installed)
+choco install openjdk.17
+
+# Check version
+java -version
+```
+
+> **⚠️ Git Bash users:** If `java` is not found after installing, add it manually:
+> ```bash
+# echo 'export JAVA_HOME="/c/Program Files/Java/jdk-17"' >> ~/.bashrc
+# echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> ~/.bashrc
+# source ~/.bashrc
+# ```
 
 ### 🔑 Step 3: Get Your API Keys (One-Time)
 
@@ -75,16 +93,23 @@ java -version   # Should show 17.x
 ```bash
 git clone https://github.com/Jolly30/saving-coach.git
 cd saving-coach
+```
+
+**For ALL platforms (Mac, Windows Git Bash, Linux):**
+```bash
 cp local.defaults.properties local.properties
 ```
 
-Edit `local.properties`:
+Then edit `local.properties` with your values:
+
 ```properties
-sdk.dir=/Users/YOUR_USERNAME/Library/Android/sdk
+sdk.dir=C\\:/Users/YOUR_USERNAME/AppData/Local/Android/sdk
 gemini.api.key=AIzaSy...
 ```
 
-Then **place** `google-services.json` into the `app/` folder.
+> **🪟 Windows path note:** Use forward slashes `C:/Users/...` or escaped backslashes `C:\\Users\\...`
+
+Then **place** `google-services.json` (from Firebase) into the `app/` folder.
 
 ### 🏃 Step 5: Build & Run
 
@@ -95,17 +120,17 @@ Then **place** `google-services.json` into the `app/` folder.
 
 > ✅ **Done.** Gradle will download everything else automatically — Compose, Firebase, Hilt, Gemini SDK, CameraX, etc.
 
-### 🔄 After Cloning — What Auto-Installs vs What's Manual
+### 🔄 What Auto-Installs vs What's Manual
 
 | Item | Auto-Installed? | How |
 |------|:---------------:|-----|
 | Android Studio | ❌ **Manual** | Download from developer.android.com |
-| JDK 17 | ❌ **Manual** | `brew install` or download from Oracle |
+| JDK 17 | ❌ **Manual** | `brew install`, Oracle download, or `choco install` |
 | Android SDK 35 | ❌ **Manual** | Android Studio SDK Manager |
 | Gemini API key | ❌ **Manual** | Get from aistudio.google.com |
 | Firebase config | ❌ **Manual** | Download from Firebase Console |
 | **Gradle 8.11.1** | ✅ **Auto** | `gradle-wrapper.jar` downloads it |
-| **All dependencies** | ✅ **Auto** | `libs.versions.toml` specifies them → Gradle resolves |
+| **All dependencies** | ✅ **Auto** | `libs.versions.toml` → Gradle resolves them |
 | **Compose, Firebase, Hilt, etc.** | ✅ **Auto** | Listed in `libs.versions.toml`, downloaded from Google Maven |
 
 ---
@@ -125,6 +150,22 @@ Then **place** `google-services.json` into the `app/` folder.
 ```
 Dev 1 defines interfaces + mocks (shipped) → All devs code in parallel
 Dev 3 builds real Firestore later → Others swap mocks with zero code changes
+```
+
+### 🌿 Git Workflow
+
+```bash
+# Each dev clones and checks out their branch:
+git clone https://github.com/Jolly30/saving-coach.git
+cd saving-coach
+git checkout feature/your-branch-name
+
+# Make changes, then:
+git add .
+git commit -m "Describe your change"
+git push origin feature/your-branch-name
+
+# Then create a Pull Request to develop on GitHub
 ```
 
 ---
