@@ -75,11 +75,11 @@ java -version
 ```
 
 > **⚠️ Git Bash users:** If `java` is not found after installing, add it manually:
-> ```bash
-# echo 'export JAVA_HOME="/c/Program Files/Java/jdk-17"' >> ~/.bashrc
-# echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> ~/.bashrc
-# source ~/.bashrc
-# ```
+> ```
+echo 'export JAVA_HOME="/c/Program Files/Java/jdk-17"' >> ~/.bashrc
+echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+> ```
 
 ### 🔑 Step 3: Get Your API Keys (One-Time)
 
@@ -103,13 +103,21 @@ cp local.defaults.properties local.properties
 Then edit `local.properties` with your values:
 
 ```properties
-sdk.dir=C\\:/Users/YOUR_USERNAME/AppData/Local/Android/sdk
+sdk.dir=C:/Users/YOUR_USERNAME/AppData/Local/Android/sdk
 gemini.api.key=AIzaSy...
 ```
 
 > **🪟 Windows path note:** Use forward slashes `C:/Users/...` or escaped backslashes `C:\\Users\\...`
 
-Then **place** `google-services.json` (from Firebase) into the `app/` folder.
+Then **place** `google-services.json` into the `app/` folder.
+
+> **💡 Can the team share one google-services.json?**
+> **Yes.** `google-services.json` is project config, not a secret key.  
+> Dev 1 (or whoever sets up Firebase) can share their copy with the team.  
+> **Option 1:** Each dev downloads from Firebase Console  
+> **Option 2:** Dev 1 shares the file once → everyone puts it in `app/`
+> 
+> The reason it's gitignored is because it contains your Firebase project ID and some internal URLs — not a security risk, but standard practice to keep it out of git.
 
 ### 🏃 Step 5: Build & Run
 
