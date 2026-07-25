@@ -42,30 +42,71 @@
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Android Studio Ladybug (2024.3+)
-- JDK 17
-- Android SDK API 35
+> You need **5 things** to get started. Steps 1-3 are **manual** (one-time install on your machine). Steps 4-5 are project-specific.
 
-### Setup
+### ⚙️ Step 1: Install Android Studio (One-Time)
+
+- Download: [developer.android.com/studio](https://developer.android.com/studio)
+- Version: **Ladybug (2024.3+)**
+- Open Android Studio → SDK Manager → Install **Android SDK API 35** + **Build-Tools**
+
+### ☕ Step 2: Install JDK 17 (One-Time)
+
+**macOS (Homebrew):**
+```bash
+brew install openjdk@17
+echo 'export PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH"' >> ~/.zshrc
+echo 'export JAVA_HOME="/opt/homebrew/opt/openjdk@17"' >> ~/.zshrc
+source ~/.zshrc
+java -version   # Should show 17.x
+```
+
+**Windows / Linux:** Download from [oracle.com/java/technologies/javase/jdk17-archive-downloads.html](https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html)
+
+### 🔑 Step 3: Get Your API Keys (One-Time)
+
+| Key | Where to Get It |
+|-----|----------------|
+| **Gemini API Key** | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — click "Create API Key" |
+| **Firebase google-services.json** | [console.firebase.google.com](https://console.firebase.google.com) → Project Settings → Your apps → Download |
+
+### 📦 Step 4: Clone & Setup
 
 ```bash
-# 1. Clone
 git clone https://github.com/Jolly30/saving-coach.git
 cd saving-coach
-
-# 2. Set up local properties
 cp local.defaults.properties local.properties
-# Edit local.properties → add your Android SDK path + Gemini API key
+```
 
-# 3. Firebase
-# Download google-services.json from Firebase Console → place in app/
+Edit `local.properties`:
+```properties
+sdk.dir=/Users/YOUR_USERNAME/Library/Android/sdk
+gemini.api.key=AIzaSy...
+```
 
-# 4. Build & run
+Then **place** `google-services.json` into the `app/` folder.
+
+### 🏃 Step 5: Build & Run
+
+```bash
+# Gradle auto-downloads ALL dependencies (no manual install needed!)
 ./gradlew assembleDebug
 ```
 
-> **Don't have a Gemini API key?** Get one free at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+> ✅ **Done.** Gradle will download everything else automatically — Compose, Firebase, Hilt, Gemini SDK, CameraX, etc.
+
+### 🔄 After Cloning — What Auto-Installs vs What's Manual
+
+| Item | Auto-Installed? | How |
+|------|:---------------:|-----|
+| Android Studio | ❌ **Manual** | Download from developer.android.com |
+| JDK 17 | ❌ **Manual** | `brew install` or download from Oracle |
+| Android SDK 35 | ❌ **Manual** | Android Studio SDK Manager |
+| Gemini API key | ❌ **Manual** | Get from aistudio.google.com |
+| Firebase config | ❌ **Manual** | Download from Firebase Console |
+| **Gradle 8.11.1** | ✅ **Auto** | `gradle-wrapper.jar` downloads it |
+| **All dependencies** | ✅ **Auto** | `libs.versions.toml` specifies them → Gradle resolves |
+| **Compose, Firebase, Hilt, etc.** | ✅ **Auto** | Listed in `libs.versions.toml`, downloaded from Google Maven |
 
 ---
 
@@ -73,7 +114,7 @@ cp local.defaults.properties local.properties
 
 | Dev | Role | Branch | What They Build |
 |:---:|------|--------|----------------|
-| **1** | UI Skeleton | `feature/ui-skeleton` | Theme, Navigation, Auth, Dashboard, CI/CD |
+| **1** | UI Skeleton | `feature/ui-skeleton` ✅ Done | Theme, Navigation, Auth, Dashboard, CI/CD |
 | **2** | AI & Camera | `feature/ai-chat-receipt` | Gemini Chat, Receipt Scanner, Camera |
 | **3** | Data Layer | `feature/data-layer` | Firestore repos, Auth, DI modules |
 | **4** | Forms & Budget | `feature/expense-budget` | Expense CRUD, Budget, Savings |
