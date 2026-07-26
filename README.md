@@ -112,6 +112,18 @@ gemini.api.key=AIzaSy...
 
 Then **place** `google-services.json` into the `app/` folder.
 
+### ⚠️ Fingerprint Key (Required for Google Sign-In)
+Google Sign-In won't work without your machine's **SHA-1 fingerprint** registered in Firebase Console. After setting up, send your fingerprint to the team lead (Dev 1) who will add it to Firebase.
+
+**Get your fingerprint:**
+```bash
+./gradlew signingReport
+```
+
+Copy the `SHA1` from the `debug` variant and send it to the team lead. They will add it in Firebase Console → Project Settings → Your Android App → **SHA certificate fingerprints**.
+
+> ⚠️ **Without this, Google Sign-In will fail** with a `12500` or `10` error.
+
 > **💡 Can the team share one google-services.json?**
 > **Yes.** `google-services.json` is project config, not a secret key.  
 > Dev 1 (or whoever sets up Firebase) can share their copy with the team.  

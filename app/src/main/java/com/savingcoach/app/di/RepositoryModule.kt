@@ -1,6 +1,6 @@
 package com.savingcoach.app.di
 
-import com.savingcoach.app.data.mock.MockAuthRepository
+import com.savingcoach.app.data.repository.FirebaseAuthRepository
 import com.savingcoach.app.data.mock.MockBudgetRepository
 import com.savingcoach.app.data.mock.MockChatRepository
 import com.savingcoach.app.data.mock.MockExpenseRepository
@@ -47,6 +47,6 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindAuthRepository(
-        impl: MockAuthRepository
+        impl: FirebaseAuthRepository
     ): AuthRepository
 }

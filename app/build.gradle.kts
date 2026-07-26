@@ -7,6 +7,7 @@ plugins {
     kotlin("kapt")
     alias(libs.plugins.secrets)
     id("com.google.gms.google-services") version "4.4.2"
+    id("com.google.firebase.crashlytics") version "3.0.2"
 }
 
 android {
@@ -103,6 +104,12 @@ dependencies {
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+
+    // Google Credential Manager (Sign-In)
+    implementation(libs.credentials)
+    implementation(libs.credentials.play.services.auth)
+    implementation(libs.play.services.auth)
+    implementation(libs.google.id)
 
     // Coroutines
     implementation(libs.coroutines.core)

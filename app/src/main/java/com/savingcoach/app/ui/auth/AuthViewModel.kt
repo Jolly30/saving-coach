@@ -82,7 +82,7 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun signInWithGoogle(idToken: String) {
+    fun onGoogleIdTokenReceived(idToken: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
@@ -103,6 +103,10 @@ class AuthViewModel @Inject constructor(
                 }
             )
         }
+    }
+
+    fun onGoogleSignInError(message: String) {
+        _uiState.value = _uiState.value.copy(error = message)
     }
 
     fun clearError() {
