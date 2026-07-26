@@ -42,117 +42,51 @@
 
 ## 🚀 Quick Start
 
-> You need **5 things** to get started. Steps 1-3 are **manual** (one-time install on your machine). Steps 4-5 are project-specific.
+### Prerequisites (One-Time Setup)
 
-### ⚙️ Step 1: Install Android Studio (One-Time)
+1. **Android Studio** — [Download Ladybug (2024.3+)](https://developer.android.com/studio) → SDK Manager → Install **Android SDK API 35**
+2. **JDK 17**
+   - Mac: `brew install openjdk@17`
+   - Windows: Download from [Oracle](https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html) or `choco install openjdk.17`
+3. **API Keys**
+   - Gemini: [aistudio.google.com/apikey](https://aistudio.google.com/apikey) → Create API Key
+   - Firebase: [console.firebase.google.com](https://console.firebase.google.com) → Project Settings → Download `google-services.json`
 
-- Download: [developer.android.com/studio](https://developer.android.com/studio)
-- Version: **Ladybug (2024.3+)**
-- Open Android Studio → SDK Manager → Install **Android SDK API 35** + **Build-Tools**
-
-### ☕ Step 2: Install JDK 17 (One-Time)
-
-**Mac (Homebrew):**
-```bash
-brew install openjdk@17
-echo 'export PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH"' >> ~/.zshrc
-echo 'export JAVA_HOME="/opt/homebrew/opt/openjdk@17"' >> ~/.zshrc
-source ~/.zshrc
-java -version
-```
-
-**Windows (Git Bash):**
-```bash
-# Option A: Download from Oracle
-# Go to https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html
-# Download Windows x64 .msi → install → restart Git Bash
-
-# Option B: Using Chocolatey (if installed)
-choco install openjdk.17
-
-# Check version
-java -version
-```
-
-#### 🪟 Git Bash extra step (if `java` not found)
-Open **Git Bash** and run:
-```bash
-echo 'export JAVA_HOME="/c/Program Files/Java/jdk-17"' >> ~/.bashrc
-echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-### 🔑 Step 3: Get Your API Keys (One-Time)
-
-| Key | Where to Get It |
-|-----|----------------|
-| **Gemini API Key** | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — click "Create API Key" |
-| **Firebase google-services.json** | [console.firebase.google.com](https://console.firebase.google.com) → Project Settings → Your apps → Download |
-
-### 📦 Step 4: Clone & Setup
+### Project Setup
 
 ```bash
 git clone https://github.com/Jolly30/saving-coach.git
 cd saving-coach
-```
-
-**For ALL platforms (Mac, Windows Git Bash, Linux):**
-```bash
 cp local.defaults.properties local.properties
 ```
 
-Then edit `local.properties` with your values:
-
+Edit `local.properties`:
 ```properties
 sdk.dir=C:/Users/YOUR_USERNAME/AppData/Local/Android/sdk
 gemini.api.key=AIzaSy...
 ```
 
-> **🪟 Windows path note:** Use forward slashes `C:/Users/...` or escaped backslashes `C:\\Users\\...`
+Place `google-services.json` in `app/` folder.
 
-Then **place** `google-services.json` into the `app/` folder.
+### Google Sign-In Setup
 
-### ⚠️ Fingerprint Key (Required for Google Sign-In)
-Google Sign-In won't work without your machine's **SHA-1 fingerprint** registered in Firebase Console. After setting up, send your fingerprint to the team lead (Dev 1) who will add it to Firebase.
+Google Sign-In requires your **SHA-1 fingerprint** registered in Firebase Console.
 
-**Get your fingerprint:**
 ```bash
 ./gradlew signingReport
 ```
 
-Copy the `SHA1` from the `debug` variant and send it to the team lead. They will add it in Firebase Console → Project Settings → Your Android App → **SHA certificate fingerprints**.
+Copy the `SHA1` from the `debug` variant → send to team lead → they add it in Firebase Console → Project Settings → Your Android App → **SHA certificate fingerprints**.
 
-> ⚠️ **Without this, Google Sign-In will fail** with a `12500` or `10` error.
+> ⚠️ **Without this, Google Sign-In fails** with error `12500` or `10`.
 
-> **💡 Can the team share one google-services.json?**
-> **Yes.** `google-services.json` is project config, not a secret key.  
-> Dev 1 (or whoever sets up Firebase) can share their copy with the team.  
-> **Option 1:** Each dev downloads from Firebase Console  
-> **Option 2:** Dev 1 shares the file once → everyone puts it in `app/`
-> 
-> The reason it's gitignored is because it contains your Firebase project ID and some internal URLs — not a security risk, but standard practice to keep it out of git.
-
-### 🏃 Step 5: Build & Run
+### Build & Run
 
 ```bash
-# Gradle auto-downloads ALL dependencies (no manual install needed!)
 ./gradlew assembleDebug
 ```
 
-> ✅ **Done.** Gradle will download everything else automatically — Compose, Firebase, Hilt, Gemini SDK, CameraX, etc.
-
-### 🔄 What Auto-Installs vs What's Manual
-
-| Item | Auto-Installed? | How |
-|------|:---------------:|-----|
-| Android Studio | ❌ **Manual** | Download from developer.android.com |
-| JDK 17 | ❌ **Manual** | `brew install`, Oracle download, or `choco install` |
-| Android SDK 35 | ❌ **Manual** | Android Studio SDK Manager |
-| Gemini API key | ❌ **Manual** | Get from aistudio.google.com |
-| Firebase config | ❌ **Manual** | Download from Firebase Console |
-| **Gradle 8.11.1** | ✅ **Auto** | `gradle-wrapper.jar` downloads it |
-| **All dependencies** | ✅ **Auto** | `libs.versions.toml` → Gradle resolves them |
-| **Compose, Firebase, Hilt, etc.** | ✅ **Auto** | Listed in `libs.versions.toml`, downloaded from Google Maven |
+Open in Android Studio → Run on emulator or device.
 
 ---
 
@@ -160,33 +94,21 @@ Copy the `SHA1` from the `debug` variant and send it to the team lead. They will
 
 | Dev | Role | Branch | What They Build |
 |:---:|------|--------|----------------|
-| **1** | UI Skeleton | `feature/ui-skeleton` ✅ Done | Theme, Navigation, Auth, Dashboard, CI/CD |
+| **1** | UI Skeleton | `feature/ui-skeleton` ✅ | Theme, Navigation, Auth, Dashboard, CI/CD |
 | **2** | AI & Camera | `feature/ai-chat-receipt` | Gemini Chat, Receipt Scanner, Camera |
 | **3** | Data Layer | `feature/data-layer` | Firestore repos, Auth, DI modules |
 | **4** | Forms & Budget | `feature/expense-budget` | Expense CRUD, Budget, Savings |
 | **5** | Export & Release | `feature/export-settings-ci` | CSV Export, Settings, APK signing |
 
-### 🔄 How We Work Together
-
-```
-Dev 1 defines interfaces + mocks (shipped) → All devs code in parallel
-Dev 3 builds real Firestore later → Others swap mocks with zero code changes
-```
-
-### 🌿 Git Workflow
+### Git Workflow
 
 ```bash
-# Each dev clones and checks out their branch:
-git clone https://github.com/Jolly30/saving-coach.git
-cd saving-coach
 git checkout feature/your-branch-name
-
-# Make changes, then:
+# make changes
 git add .
 git commit -m "Describe your change"
 git push origin feature/your-branch-name
-
-# Then create a Pull Request to develop on GitHub
+# create Pull Request to develop on GitHub
 ```
 
 ---
@@ -198,40 +120,20 @@ app/src/main/java/com/savingcoach/app/
 ├── SavingCoachApp.kt           # Hilt Application class
 ├── MainActivity.kt             # Single activity + bottom nav
 ├── navigation/                 # Routes + NavGraph
-│   ├── Routes.kt
-│   └── NavGraph.kt
 ├── data/
-│   ├── model/                  # 6 data classes
-│   ├── repository/             # 5 interfaces
+│   ├── model/                  # Data classes
+│   ├── repository/             # Repository interfaces + Firebase impl
 │   ├── mock/                   # In-memory mocks (Dev 1)
 │   └── firestore/              # Firestore (Dev 3)
 ├── ai/                         # Gemini client (Dev 2)
 ├── export/                     # CSV exporter (Dev 5)
 ├── ui/
 │   ├── theme/                  # Material 3 theme
-│   ├── auth/                   # Login screen
+│   ├── auth/                   # Sign up / Sign in
 │   ├── dashboard/              # Main dashboard
-│   ├── expenses/               # Expense list + form (Dev 4)
-│   ├── camera/                 # Receipt camera (Dev 2)
-│   ├── chat/                   # AI chat (Dev 2)
-│   ├── budget/                 # Budget settings (Dev 4)
-│   ├── settings/               # Settings + export (Dev 5)
-│   └── components/             # Shared UI components
+│   ├── components/             # Shared UI components
+│   └── [expenses, chat, camera, budget, settings]  # Feature screens
 └── di/                         # Hilt modules
-```
-
----
-
-## 🌿 Branch Strategy
-
-```
-main
-  └── develop
-       ├── feature/ui-skeleton           ← Dev 1 ✅ Done
-       ├── feature/ai-chat-receipt       ← Dev 2
-       ├── feature/data-layer            ← Dev 3
-       ├── feature/expense-budget        ← Dev 4
-       └── feature/export-settings-ci    ← Dev 5
 ```
 
 ---
@@ -240,8 +142,8 @@ main
 
 | Screen | Route | Status |
 |--------|-------|--------|
-| Auth / Login | `auth` | ✅ Dev 1 |
-| Dashboard | `dashboard` | ✅ Dev 1 |
+| Auth / Login | `auth` | ✅ Done |
+| Dashboard | `dashboard` | ✅ Done |
 | Expense List | `expenses` | ⏳ Dev 4 |
 | Add Expense | `add_expense` | ⏳ Dev 4 |
 | AI Chat | `chat` | ⏳ Dev 2 |
@@ -253,30 +155,24 @@ main
 
 ## 🔒 Security
 
-- **API keys**: Stored in `local.properties` (gitignored)
-- **Firebase config**: `google-services.json` (gitignored)
-- **Auth**: Firestore rules require `request.auth.uid == userId`
-- **Secrets template**: `local.defaults.properties` shows what's needed
-
----
-
-## 📄 License
-
-Private — Internal team use.
+- **API keys** → `local.properties` (gitignored)
+- **Firebase config** → `google-services.json` (gitignored)
+- **Auth** → Firestore rules require `request.auth.uid == userId`
+- **Template** → `local.defaults.properties` shows what's needed
 
 ---
 
 ## 📊 Dev Reports
 
-Individual work logs for each developer are in the [`reports/`](./reports/) folder.
+Individual work logs are in the [`reports/`](./reports/) folder.
 
-| File | For | Role |
+| File | Dev | Role |
 |------|:---:|------|
-| [mynote.md](./reports/mynote.md) | Dev 1 | UI Skeleton ✅ |
-| [mynote-DEV2.md](./reports/mynote-DEV2.md) | Dev 2 | AI Chat + Camera |
-| [mynote-DEV3.md](./reports/mynote-DEV3.md) | Dev 3 | Data Layer |
-| [mynote-DEV4.md](./reports/mynote-DEV4.md) | Dev 4 | Expense Forms + Budget |
-| [mynote-DEV5.md](./reports/mynote-DEV5.md) | Dev 5 | Export + Settings + Release |
+| [mynote.md](./reports/mynote.md) | 1 | UI Skeleton ✅ |
+| [mynote-DEV2.md](./reports/mynote-DEV2.md) | 2 | AI Chat + Camera |
+| [mynote-DEV3.md](./reports/mynote-DEV3.md) | 3 | Data Layer |
+| [mynote-DEV4.md](./reports/mynote-DEV4.md) | 4 | Expense Forms + Budget |
+| [mynote-DEV5.md](./reports/mynote-DEV5.md) | 5 | Export + Settings + Release |
 
 ---
 
