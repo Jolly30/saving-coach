@@ -37,30 +37,42 @@
 
 ---
 
-## 🔜 Up Next
+## ✅ Already Built by Dev 1
 
-- [ ] `ai/GeminiClient.kt` — Gemini API wrapper
-- [ ] `ai/ChatParser.kt` — NLP → structured expense
-- [ ] `ai/ReceiptScanner.kt` — Vision receipt reader
-- [ ] `ui/chat/ChatScreen.kt` — Chat UI
-- [ ] `ui/chat/ChatViewModel.kt` — Chat state
-- [ ] `ui/camera/CameraScreen.kt` — CameraX receipt capture
-- [ ] `ui/camera/CameraViewModel.kt` — Camera state
+| File | Purpose |
+|------|---------|
+| `ai/GeminiProxyService.kt` | OkHttp service calling Vercel proxy |
+| `ai/AiChatRepository.kt` | ChatRepository impl with proxy + Firestore |
+| `ui/chat/ChatScreen.kt` | Chat UI with message bubbles |
+| `ui/chat/ChatViewModel.kt` | Chat state management |
+| `proxy/api/chat.js` | Vercel serverless function |
+
+---
+
+## 🔜 Up Next (4 files)
+
+| File | Task | Difficulty |
+|------|------|:----------:|
+| `ai/ChatParser.kt` | Parse text → structured expense | Medium |
+| `ai/ReceiptScanner.kt` | Scan receipt image → extract data | Medium |
+| `ui/camera/CameraScreen.kt` | CameraX UI for receipt photo | Medium |
+| `ui/camera/CameraViewModel.kt` | Camera state management | Easy |
 
 ---
 
 ## 📦 Depends On Dev 1
 - ✅ `ChatMessage.kt` + `ParsedExpense` (data model)
-- ✅ `ChatRepository` interface (for saving chat history)
+- ✅ `ChatRepository` interface
+- ✅ ChatScreen, ChatViewModel, ProxyService (all built)
+- ✅ Proxy deployed at `https://proxy-topaz-ten-36.vercel.app`
 
-## 🔗 Interfaces You Code Against
-```kotlin
-interface ChatRepository {
-    fun getChatHistory(userId: String): Flow<List<ChatMessage>>
-    suspend fun saveMessage(userId: String, message: ChatMessage)
-}
-```
-> **Note:** Dev 3 implements the real Firestore version later. Your code uses `ChatRepository` interface — the mock is already wired.
+---
+
+## 🔗 Integration with Existing Chat
+
+- Enhance `ChatViewModel` to call `ChatParser` after AI response
+- Add expense preview/confirm flow in `ChatScreen`
+- Chat messages already saved via `AiChatRepository`
 
 ---
 
