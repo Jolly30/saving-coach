@@ -313,74 +313,95 @@ saving-coach/
 
 ## 5. Dev Dependency Map
 
-### Summary: Only Dev 1 Blocks. Everyone Else Builds in Parallel.
+### Summary: Dev 1 Delivered Everything. Everyone Else Builds in Parallel.
 
-Dev 1 delivers **models + repo interfaces + nav skeleton + CI/CD** in ~1.5 hours on Day 1.  
-After that, Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobody depends on Dev 3's Firestore implementations because everyone codes against **interfaces with in-memory mocks**.
-
----
-
-### What Dev 1 Must Push First (Day 1, Hour 1-2)
-
-| Deliverable | Time | Needed By |
-|-------------|------|-----------|
-| `Expense.kt`, `Budget.kt`, `SavingChallenge.kt`, `SavingsDeposit.kt`, `SavingsAnalytics.kt`, `ChatMessage.kt` | 20 min | **All devs** |
-| `ExpenseRepository` interface | 8 min | Dev 4, Dev 5 |
-| `SavingChallengeRepository` interface | 8 min | Dev 4 |
-| `BudgetRepository` interface | 5 min | Dev 4 |
-| `ChatRepository` interface | 5 min | Dev 2 |
-| `AuthRepository` interface | 5 min | Dev 1, Dev 4, Dev 5 |
-| `Routes.kt` + `NavGraph.kt` skeleton | 20 min | **All devs** |
-| `.github/workflows/*.yml` + `proguard-rules.pro` + signing | 20 min | **All devs** (CI on first push) |
-| **Total** | **~1.5 hrs** | |
+Dev 1 has delivered **models + repo interfaces + nav skeleton + CI/CD + AI proxy + Auth + Chat UI** — complete app shell with working Gemini integration via Vercel proxy.  
+Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobody depends on anyone else because everyone codes against **interfaces with in-memory mocks**.
 
 ---
 
-### Dependency Diagram
+### What Dev 1 Has Already Delivered ✅
+
+| Deliverable | Status | Needed By |
+|-------------|--------|-----------|
+| `Expense.kt`, `Budget.kt`, `SavingChallenge.kt`, `SavingsDeposit.kt`, `SavingsAnalytics.kt`, `ChatMessage.kt` | ✅ Done | **All devs** |
+| `ExpenseRepository` interface | ✅ Done | Dev 4, Dev 5 |
+| `SavingChallengeRepository` interface | ✅ Done | Dev 4 |
+| `BudgetRepository` interface | ✅ Done | Dev 4 |
+| `ChatRepository` interface | ✅ Done | Dev 2 |
+| `AuthRepository` interface | ✅ Done | Dev 1, Dev 4, Dev 5 |
+| `Routes.kt` + `NavGraph.kt` skeleton | ✅ Done | **All devs** |
+| `.github/workflows/*.yml` + `proguard-rules.pro` + signing | ✅ Done | **All devs** (CI on first push) |
+| `FirebaseAuthRepository.kt` | ✅ Done | Dev 4, Dev 5 |
+| `GeminiProxyService.kt` + `AiChatRepository.kt` | ✅ Done | Dev 2 |
+| `ChatScreen.kt` + `ChatViewModel.kt` | ✅ Done | Dev 2 |
+| Vercel proxy deployed | ✅ Done | Dev 2 |
+
+---
+
+### Dependency Diagram (Current State)
 
 ```
-                  ┌────────────────────────────┐
-                  │         DEV 1              │
-                  │  Writes models, interfaces, │
-                  │  routes, CI/CD (~1.5 hrs)  │
-                  └────────────┬───────────────┘
-                               │ pushes to GitHub
-                               ▼
-         ┌─────────────────────────────────────────────┐
-         │         ALL DEVS START IN PARALLEL           │
-         │         (Hour 2 → Week 2-3)                  │
-         └─────────────────────────────────────────────┘
-               │        │        │        │
-               ▼        ▼        ▼        ▼
-         ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
-         │ DEV 2  │ │ DEV 3  │ │ DEV 4  │ │ DEV 5  │
-         │        │ │        │ │        │ │        │
-         │ Chat   │ │Real    │ │Expense │ │CSV     │
-         │ Camera │ │Firestore│ │Forms   │ │Export  │
-         │ Gemini │ │Impl    │ │Budget  │ │Settings│
-         │        │ │Hilt DI │ │Savings │ │        │
-         │        │ │        │ │Screens │ │        │
-         └────────┘ └────────┘ └────────┘ └────────┘
-              │         │          │          │
-              │         ▼          │          │
-              └──── Week 2-3 ──────┘──────────┘
-                          │
-                          ▼
-                   Swap mocks → real Firestore data
-                   Integration test week
+         ┌─────────────────────────────────────────┐
+         │              DEV 1 (COMPLETE)            │
+         │  ✅ Models + Interfaces + Auth           │
+         │  ✅ Navigation + Theme + Dashboard       │
+         │  ✅ AI Proxy (Vercel) + Chat UI          │
+         │  ✅ CI/CD + ProGuard + Signing           │
+         └──────────────────┬──────────────────────┘
+                            │ all code in main branch
+                            ▼
+      ┌─────────────────────────────────────────────────┐
+      │         ALL DEVS START IN PARALLEL               │
+      │         (No blockers — all interfaces ready)     │
+      └─────────────────────────────────────────────────┘
+            │        │        │        │
+            ▼        ▼        ▼        ▼
+      ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
+      │ DEV 2  │ │ DEV 3  │ │ DEV 4  │ │ DEV 5  │
+      │        │ │        │ │        │ │        │
+      │Receipt │ │Firebase│ │Expense │ │CSV     │
+      │Scanner │ │Expense │ │Forms   │ │Export  │
+      │Camera  │ │Budget  │ │Budget  │ │Settings│
+      │        │ │Saving  │ │Saving  │ │Release │
+      │        │ │Chall.  │ │Screens │ │        │
+      └────────┘ └────────┘ └────────┘ └────────┘
+            │         │          │          │
+            │         ▼          │          │
+            └──── Week 2-3 ──────┘──────────┘
+                        │
+                        ▼
+                 Dev 3 finishes real Firestore repos
+                 Everyone swaps mocks → real data
+                 Integration test week
 ```
 
 ---
 
-### Per-Dev Dependencies Table
+### Per-Dev Dependencies Table (Current)
 
-| Dev | Needs From Dev 1 | Needs From Others? | Can Build Without Dev 3? | What They Use Instead |
-|-----|-----------------|-------------------|-------------------------|----------------------|
-| **Dev 1** | Nothing (writes it) | — | ✅ | Writes interfaces, dashboard uses mocks, proxy deployed |
-| **Dev 2** | ChatScreen, ChatViewModel, ProxyService (already built) | None | ✅ | In-memory chat list mock, proxy already works |
-| **Dev 3** | All models + interfaces + Auth (30 min) | None | ✅ N/A — they build the real thing | — |
-| **Dev 4** | 4 models + 3 repo interfaces (20 min) | None | ✅ | In-memory expense/savings mocks |
-| **Dev 5** | `Expense` model + `ExpenseRepository` (10 min) | None | ✅ | Hardcoded test data |
+| Dev | What They Get From Dev 1 | What They Build | Can Start Now? |
+|-----|-------------------------|-----------------|:--------------:|
+| **Dev 2** | ChatScreen, ChatViewModel, ProxyService, proxy deployed | Receipt scanner, CameraX, ChatParser | ✅ Yes |
+| **Dev 3** | All interfaces, Auth done, DI setup | Firebase repos for Expense, Budget, SavingChallenge | ✅ Yes |
+| **Dev 4** | 4 models + 3 repo interfaces | Expense forms, Budget settings, Saving screens | ✅ Yes |
+| **Dev 5** | Expense model, ExpenseRepository, CI/CD | CSV export, Settings, APK release | ✅ Yes |
+
+---
+
+### What Each Dev Should Pull
+
+```bash
+# All devs — pull latest main
+git checkout main
+git pull origin main
+
+# Create your feature branch
+git checkout -b feature/ai-chat-receipt    # Dev 2
+git checkout -b feature/data-layer         # Dev 3
+git checkout -b feature/expense-budget     # Dev 4
+git checkout -b feature/export-settings    # Dev 5
+```
 
 ---
 
@@ -402,16 +423,16 @@ After that, Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobod
 ### Timeline
 
 ```
-Day 1, Hour 1-2   ── Dev 1 writes everything, pushes
-Day 1, Hour 2+    ── Dev 2, 3, 4, 5 all start coding
-Week 2-3          ── Dev 3 finishes real Firestore repos
-Week 3            ── Everyone swaps mocks → real data
-Week 3-4          ── Integration testing + bug fixes
-Week 5-6          ── Polish, edge cases, offline testing
-Week 7            ── CI/CD final check, beta release
+Day 1-2          ── Dev 1: Complete app shell + Auth + Dashboard + AI Proxy ✅ DONE
+Day 3+           ── Dev 2, 3, 4, 5 all start coding (no blockers)
+Week 2-3         ── Dev 3 finishes real Firestore repos
+Week 3           ── Everyone swaps mocks → real data
+Week 3-4         ── Integration testing + bug fixes
+Week 5-6         ── Polish, edge cases, offline testing
+Week 7           ── CI/CD final check, beta release
 ```
 
-**Bottom line:** Only Dev 1's ~1.5 hours of setup is a true dependency. After that, all 5 devs build in parallel for 2-3 weeks before needing to integrate.
+**Bottom line:** Dev 1 has delivered everything — all interfaces, auth, dashboard, AI proxy, chat UI, CI/CD. All 4 remaining devs can start immediately with zero blockers.
 
 
 ---
