@@ -376,9 +376,9 @@ After that, Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobod
 
 | Dev | Needs From Dev 1 | Needs From Others? | Can Build Without Dev 3? | What They Use Instead |
 |-----|-----------------|-------------------|-------------------------|----------------------|
-| **Dev 1** | Nothing (writes it) | — | ✅ | Writes interfaces, dashboard uses mocks |
-| **Dev 2** | `ChatMessage` + `ChatRepository` (10 min) | None | ✅ | In-memory chat list mock |
-| **Dev 3** | All models + interfaces (30 min) | None | ✅ N/A — they build the real thing | — |
+| **Dev 1** | Nothing (writes it) | — | ✅ | Writes interfaces, dashboard uses mocks, proxy deployed |
+| **Dev 2** | ChatScreen, ChatViewModel, ProxyService (already built) | None | ✅ | In-memory chat list mock, proxy already works |
+| **Dev 3** | All models + interfaces + Auth (30 min) | None | ✅ N/A — they build the real thing | — |
 | **Dev 4** | 4 models + 3 repo interfaces (20 min) | None | ✅ | In-memory expense/savings mocks |
 | **Dev 5** | `Expense` model + `ExpenseRepository` (10 min) | None | ✅ | Hardcoded test data |
 
@@ -390,10 +390,12 @@ After that, Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobod
 |---------|-------------|------|-----------|
 | Dev 1 ⟷ Dev 3 | Repo interface signatures match implementations | **HIGH** | Dev 1 freezes interfaces after Day 1. Dev 3 must not change method names |
 | Dev 1 ⟷ Dev 4 | UI components (BudgetProgressBar, etc.) | **LOW** | Dev 4 builds temporary versions, swaps in 10 min |
-| Dev 2 ⟷ Dev 3 | ChatRepository mock vs real | **LOW** | Interface contract is fixed. Just plug and play |
+| Dev 2 ⟷ Dev 1 | ChatScreen/ViewModel already built | **LOW** | Dev 2 enhances with receipt scanning, not replaces |
+| Dev 3 ⟷ Dev 2 | ChatRepository → AiChatRepository | **LOW** | AiChatRepository already implements ChatRepository interface |
 | Dev 4 ⟷ Dev 3 | ExpenseRepository mock vs real | **LOW** | Same pattern |
 | Dev 5 ⟷ Dev 3 | ExpenseRepository mock vs real | **LOW** | Same pattern |
 | Dev 1 ⟷ All | NavGraph route names | **MEDIUM** | Agree on route strings before Dev 1 writes NavGraph |
+| All ⟷ Dev 1 | Proxy URL (Vercel) | **LOW** | URL is in `local.defaults.properties`, all devs use same proxy |
 
 ---
 
@@ -550,13 +552,13 @@ Each day cell based on: daily_spending / (monthly_budget / 30)
 
 ### Dev 2: AI Chat + Receipt Scanner
 
+> **Note:** ChatScreen, ChatViewModel, GeminiProxyService, and AiChatRepository are already built by Dev 1 as part of the proxy setup. Dev 2 focuses on receipt scanning and advanced chat parsing.
+
 **Files owned:**
 - `ai/ChatParser.kt`                       # NLP → structured expense
 - `ai/ReceiptScanner.kt`                  # Vision receipt reader
 - `ui/camera/CameraScreen.kt`             # CameraX receipt photo
 - `ui/camera/CameraViewModel.kt`          # Camera + image capture state
-
-> **Note:** ChatScreen, ChatViewModel, and GeminiProxyService are already built by Dev 1 as part of the proxy setup. Dev 2 focuses on receipt scanning and advanced chat parsing.
 
 **What to build:**
 1. **Receipt parsing** — structured output via Gemini Function Calling:
@@ -571,41 +573,93 @@ Each day cell based on: daily_spending / (monthly_budget / 30)
    ```
 2. **CameraX Screen** — take receipt photo → crop → Gemini Vision → structured result
 3. **Enhance ChatParser** — parse natural language into structured expenses
-4. **Chat history** — persist via ChatRepository (uses AiChatRepository from Dev 1)
+4. **Integrate with ChatViewModel** — add expense parsing after AI response
+5. **Chat history** — already handled by AiChatRepository (Dev 1)
+
+**Already built by Dev 1:**
+| File | Purpose |
+|------|---------|
+| `ai/GeminiProxyService.kt` | OkHttp service calling Vercel proxy |
+| `ai/AiChatRepository.kt` | ChatRepository impl with proxy + Firestore |
+| `ui/chat/ChatScreen.kt` | Chat UI with message bubbles |
+| `ui/chat/ChatViewModel.kt` | Chat state management |
+| `proxy/api/chat.js` | Vercel serverless function |
+
+**How to test the chat:**
+```bash
+# Test proxy directly
+curl -X POST https://proxy-topaz-ten-36.vercel.app/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Hello!"}]}'
+```
+
+**Integration points:**
+- ChatScreen uses `ChatViewModel` which calls `AiChatRepository`
+- AiChatRepository calls `GeminiProxyService` → Vercel proxy → Gemini API
+- Chat messages are saved to Firestore via `AiChatRepository.saveMessage()`
 
 ---
 
-### Dev 3: Data Layer — Auth + Firestore + Repositories
+### Dev 3: Data Layer — Firestore + Repositories
+
+> **Note:** Auth is already implemented by Dev 1 (FirebaseAuthRepository). AI chat is handled by AiChatRepository (Dev 1). Dev 3 focuses on Firestore repositories for expenses, budgets, and saving challenges.
 
 **Files owned:**
-- `data/model/Expense.kt`                  # Expense data class
-- `data/model/Budget.kt`                   # Budget data class
-- `data/model/ChatMessage.kt`              # Chat message data class
-- `data/repository/AuthRepository.kt`      # Firebase Auth wrapper
-- `data/repository/ExpenseRepository.kt`   # Expenses CRUD + real-time sync
-- `data/repository/BudgetRepository.kt`    # Budget CRUD + spending totals
-- `data/repository/ChatRepository.kt`      # Chat history read/write
+- `data/repository/FirebaseExpenseRepository.kt`   # Expenses CRUD + real-time sync
+- `data/repository/FirebaseBudgetRepository.kt`    # Budget CRUD + spending totals
+- `data/repository/FirebaseSavingChallengeRepository.kt`  # Saving challenges CRUD
 - `data/firestore/FirestoreModule.kt`      # Firestore DI provider
 - `data/firestore/FirestorePaths.kt`       # Collection/document path constants
-- `di/AppModule.kt`                        # Hilt app-wide bindings
-- `di/RepositoryModule.kt`                 # Hilt repository bindings
+
+**Already built by Dev 1:**
+| File | Purpose |
+|------|---------|
+| `data/repository/AuthRepository.kt` | Auth interface |
+| `data/repository/FirebaseAuthRepository.kt` | Real Firebase Auth (Google + Email) |
+| `data/repository/ChatRepository.kt` | Chat interface |
+| `ai/AiChatRepository.kt` | Chat impl with proxy + Firestore |
+| `di/AppModule.kt` | Hilt providers (FirebaseAuth, FirebaseFirestore, OkHttp, proxyUrl) |
+| `di/RepositoryModule.kt` | Repo bindings (currently uses mocks for Expense/Budget/Savings) |
 
 **What to build:**
-1. All data classes (Expense, Budget, ChatMessage) with `@Serializable`
-2. Firebase Auth — Google Sign-In + Email/Password
-3. Firestore CRUD — create, read, update, delete for expenses
-4. Firestore real-time sync — `SnapshotListener` for live updates
-5. Budget logic — compute `totalSpent` from expense list for current month
-6. Offline persistence — Firestore disk cache enabled
-7. Hilt modules — bind all repositories, Firestore, Auth
+1. **FirebaseExpenseRepository** — implement `ExpenseRepository` interface
+   - CRUD operations for expenses
+   - Real-time sync with `SnapshotListener`
+   - Query by month, date, category
+2. **FirebaseBudgetRepository** — implement `BudgetRepository` interface
+   - Set/get/update budget limits
+   - Compute `totalSpent` from expenses for current month
+3. **FirebaseSavingChallengeRepository** — implement `SavingChallengeRepository` interface
+   - Create/delete challenges
+   - Add/track deposits
+   - Complete challenges
+4. **FirestorePaths.kt** — define collection paths:
+   ```kotlin
+   object FirestorePaths {
+       fun expenses(userId: String) = "users/$userId/expenses"
+       fun budgets(userId: String) = "users/$userId/budgets"
+       fun challenges(userId: String) = "users/$userId/challenges"
+       fun deposits(userId: String, challengeId: String) = "users/$userId/challenges/$challengeId/deposits"
+   }
+   ```
+5. **Offline persistence** — enable Firestore disk cache
+6. **Update RepositoryModule.kt** — swap mocks → real Firestore implementations
 
 **Key decisions:**
 - Data path: `users/{userId}/expenses/{expenseId}`
 - Budget path: `users/{userId}/budgets/{YYYY-MM}`
-- Chat path: `users/{userId}/chat/{messageId}`
+- Challenge path: `users/{userId}/challenges/{challengeId}`
 - Use Firestore `SnapshotListener` for real-time dashboard updates
 - Repositories return `Flow<T>` for reactive ViewModels
 - Implement the interface contracts defined by Dev 1
+
+**How to swap mocks → real repos:**
+```kotlin
+// In RepositoryModule.kt, change:
+@Binds abstract fun bindExpenseRepository(impl: MockExpenseRepository): ExpenseRepository
+// To:
+@Binds abstract fun bindExpenseRepository(impl: FirebaseExpenseRepository): ExpenseRepository
+```
 
 ---
 
@@ -662,11 +716,20 @@ enum class ExpenseCategory(val displayName: String) {
 - `ui/settings/SettingsScreen.kt`          # Profile + export + about
 - `ui/settings/SettingsViewModel.kt`       # Settings state
 
+**Already built by Dev 1:**
+| File | Purpose |
+|------|---------|
+| `proxy/` | Vercel serverless proxy for Gemini API |
+| `.github/workflows/` | CI/CD pipelines |
+| `app/proguard-rules.pro` | ProGuard rules |
+| `app/build.gradle.kts` | Signing config (release) |
+
 **What to build:**
 1. **CSV Export**
    - Export all expenses (or filtered by month) as CSV
    - Columns: Date, Category, Merchant, Amount, Currency, Notes
    - Save to Downloads via Storage Access Framework (SAF)
+   - Use `ExpenseRepository` (from Dev 3) to get expenses
 2. **Share / Email**
    - Share CSV via Android share intent (Gmail, Telegram, etc.)
    - Direct email with CSV attachment
@@ -676,6 +739,24 @@ enum class ExpenseCategory(val displayName: String) {
    - Sign out button → navigate to Auth
    - App version + "About" section
 4. **APK distribution** — Upload signed builds to GitHub Releases for beta testers
+5. **Proxy maintenance** — If proxy URL changes, update `local.defaults.properties`
+
+**Key integration points:**
+- CSV export uses `ExpenseRepository` from Dev 3
+- Profile data comes from `FirebaseAuthRepository` (Dev 1)
+- Sign out calls `AuthRepository.signOut()`
+- Proxy URL is in `local.defaults.properties` (update if Vercel project changes)
+
+**Proxy deployment reference:**
+```bash
+# If you need to redeploy the proxy
+cd proxy
+vercel --prod
+
+# If you need to update the API key
+vercel env add GEMINI_API_KEY production
+vercel --prod
+```
 
 ---
 
