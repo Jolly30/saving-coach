@@ -91,9 +91,6 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.crashlytics)
 
-    // Gemini AI
-    implementation(libs.generative.ai)
-
     // CameraX
     implementation(libs.camerax.core)
     implementation(libs.camerax.camera2)

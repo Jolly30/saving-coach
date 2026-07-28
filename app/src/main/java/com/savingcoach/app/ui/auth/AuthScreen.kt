@@ -37,9 +37,18 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+
+fun Context.getActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.getActivity()
+    else -> null
+}
 
 @Composable
 fun AuthScreen(
@@ -185,13 +194,20 @@ fun AuthScreen(
                                     GetGoogleIdOption.Builder()
                                         .setFilterByAuthorizedAccounts(false)
                                         .setServerClientId(webClientId)
+                                        .setAutoSelectEnabled(true)
                                         .build()
                                 )
                                 .build()
 
+                            val activity = context.getActivity()
+                            if (activity == null) {
+                                viewModel.onGoogleSignInError("Error: Could not find Activity context.")
+                                return@launch
+                            }
+
                             val result = credentialManager.getCredential(
                                 request = request,
-                                context = context,
+                                context = activity,
                             )
 
                             val credential = result.credential
@@ -200,7 +216,8 @@ fun AuthScreen(
                                 viewModel.onGoogleIdTokenReceived(googleCredential.idToken)
                             }
                         } catch (e: GetCredentialCancellationException) {
-                            // User cancelled — do nothing
+                            // User cancelled or MIUI instantly killed it
+                            viewModel.onGoogleSignInError("Sign-in cancelled or blocked by phone settings")
                         } catch (e: Exception) {
                             viewModel.onGoogleSignInError(e.message ?: "Google sign-in failed")
                         }

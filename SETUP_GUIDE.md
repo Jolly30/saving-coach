@@ -14,7 +14,7 @@
 5. [Dependency Map — Do This First](#5-dependency-map--do-this-first)
 6. [Feature Breakdown by Developer](#6-feature-breakdown-by-developer)
 7. [Firebase Setup Guide](#7-firebase-setup-guide)
-8. [Gemini API Setup](#8-gemini-api-setup)
+8. [Gemini API Setup (Proxy for Myanmar)](#8-gemini-api-setup-proxy-for-myanmar)
 9. [Data Models (Firestore Schema)](#9-data-models-firestore-schema)
 10. [Navigation Routes](#10-navigation-routes)
 11. [Build & Run](#11-build--run)
@@ -212,10 +212,18 @@ saving-coach/
 ├── build.gradle.kts                    # Root build file (plugins)
 ├── settings.gradle.kts                 # Project settings
 ├── gradle.properties                   # JVM + AndroidX settings
-├── local.properties                    # SDK path + API keys (gitignored)
+├── local.properties                    # SDK path + proxy URL (gitignored)
+├── local.defaults.properties           # Template for local.properties (committed)
 ├── .gitignore
 ├── gradle/
 │   └── libs.versions.toml              # Version catalog
+├── proxy/                              # Gemini API proxy (Vercel serverless)
+│   ├── api/
+│   │   └── chat.js                     # Serverless function — forwards to Gemini
+│   ├── vercel.json                     # Vercel deployment config
+│   ├── package.json                    # Minimal dependencies
+│   ├── .env.example                    # Template for env vars
+│   └── .gitignore                      # Ignores node_modules, .env, .vercel
 ├── app/
 │   ├── build.gradle.kts                # App module build config
 │   └── src/
@@ -408,7 +416,7 @@ Week 7            ── CI/CD final check, beta release
 
 ## 6. Feature Breakdown by Developer
 
-### Dev 1: UI Skeleton — Theme + Nav + Auth + Dashboard
+### Dev 1: UI Skeleton — Theme + Nav + Auth + Dashboard + AI Proxy
 
 This dev builds the **app shell** first. Everyone else depends on it.
 
@@ -429,6 +437,11 @@ This dev builds the **app shell** first. Everyone else depends on it.
 - `ui/components/BudgetProgressBar.kt`     # Green/yellow/red progress bar
 - `ui/components/SpendingChart.kt`         # Category pie/bar chart
 - `ui/components/LoadingOverlay.kt`        # Loading spinner overlay
+- `ui/chat/ChatScreen.kt`                  # AI chat UI (message bubbles, input)
+- `ui/chat/ChatViewModel.kt`               # Chat state management
+- `ai/GeminiProxyService.kt`               # OkHttp service — calls proxy endpoint
+- `ai/AiChatRepository.kt`                 # ChatRepository impl — uses proxy + Firestore
+- `proxy/`                                 # Vercel serverless proxy (separate folder)
 - `res/values/strings.xml`                 # App strings
 - `res/values/colors.xml`                  # Theme colors XML
 - `res/values/themes.xml`                  # XML theme fallback
@@ -451,6 +464,8 @@ This dev builds the **app shell** first. Everyone else depends on it.
 | 6 | Reusable components (`BudgetProgressBar.kt`, `SpendingChart.kt`, `LoadingOverlay.kt`) | Shared UI building blocks |
 | 7 | Repository interface contracts | Define these **before** step 1 — Dev 2/4/5 code against them |
 | 8 | CI/CD GitHub Actions + ProGuard + signing config | Create `.github/workflows/ci-pr-check.yml`, `ci-release.yml`, `proguard-rules.pro`, and `build.gradle.kts` signing config — set up once, rarely changes |
+| 9 | **Gemini API Proxy** (`proxy/` folder) | Deploy Vercel serverless function to bypass Myanmar geo-restriction — see [Section 8](#8-gemini-api-setup-proxy-for-myanmar) |
+| 10 | **AI Chat integration** (`ai/`, `ui/chat/`) | OkHttp proxy service + ChatRepository + ChatScreen + ChatViewModel |
 
 ### 🧩 Repository Interface Contracts (Define First)
 
@@ -536,21 +551,15 @@ Each day cell based on: daily_spending / (monthly_budget / 30)
 ### Dev 2: AI Chat + Receipt Scanner
 
 **Files owned:**
-- `ai/GeminiClient.kt`                    # Gemini API wrapper
 - `ai/ChatParser.kt`                       # NLP → structured expense
 - `ai/ReceiptScanner.kt`                  # Vision receipt reader
-- `ui/chat/ChatScreen.kt`                 # Chat UI (messages, input, typing)
-- `ui/chat/ChatViewModel.kt`              # Chat + expense parsing state
 - `ui/camera/CameraScreen.kt`             # CameraX receipt photo
 - `ui/camera/CameraViewModel.kt`          # Camera + image capture state
 
+> **Note:** ChatScreen, ChatViewModel, and GeminiProxyService are already built by Dev 1 as part of the proxy setup. Dev 2 focuses on receipt scanning and advanced chat parsing.
+
 **What to build:**
-1. **GeminiClient** — wrapper around Gemini 2.5 Flash API
-   - Load API key from `local.properties` via Secrets Gradle Plugin
-   - `parseExpenseFromText(message: String): ParsedExpense?`
-   - `scanReceipt(imageBitmap: Bitmap): ParsedExpense?`
-   - `getAdvice(query: String, context: BudgetContext): String`
-2. **Receipt parsing** — structured output via Gemini Function Calling:
+1. **Receipt parsing** — structured output via Gemini Function Calling:
    ```json
    {
      "merchant": "Cafe A",
@@ -560,12 +569,9 @@ Each day cell based on: daily_spending / (monthly_budget / 30)
      "items": ["Iced Coffee - 2500", "Sandwich - 2000"]
    }
    ```
-3. **Chat Screen** — message list with typing indicator
-   - "Spent 4500 on lunch at Cafe" → parses → preview → confirm → saves to Firestore
-   - "Do I have enough for iced coffee?" → AI checks budget → responds
-   - Chat history persisted
-4. **CameraX Screen** — take receipt photo → crop → Gemini Vision → structured result
-5. **Chat history** — persist via ChatRepository (defined by Dev 3)
+2. **CameraX Screen** — take receipt photo → crop → Gemini Vision → structured result
+3. **Enhance ChatParser** — parse natural language into structured expenses
+4. **Chat history** — persist via ChatRepository (uses AiChatRepository from Dev 1)
 
 ---
 
@@ -736,59 +742,132 @@ service cloud.firestore {
 
 ---
 
-## 8. Gemini API Setup
+## 8. Gemini API Setup (Proxy for Myanmar)
+
+### ⚠️ Important: Myanmar Geo-Restriction
+
+The Gemini API is **not officially supported in Myanmar**. Google blocks API requests from Myanmar IP addresses. To work around this, we use a **proxy server** hosted in a supported region (e.g., Singapore, US).
+
+### Architecture
+
+```
+Android App → Vercel Proxy (supported region) → Gemini API
+                    ↑
+            API key stored here (server-side)
+```
+
+- The Android app **never** calls Gemini directly
+- The API key is stored as a Vercel environment variable (encrypted)
+- The proxy forwards requests and returns responses
 
 ### Get an API Key
 
 1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
 2. Click **Create API Key**
-3. Copy the key
+3. Copy the key (you'll need this for Vercel deployment)
 
-### Add to local.properties
+### Deploy Proxy to Vercel
 
-```
-gemini.api.key=AIzaSyYourActualKeyHere
-```
+The proxy is a serverless function in the `proxy/` folder. To deploy:
 
-### Secrets Gradle Plugin
+```bash
+# Install Vercel CLI (if not installed)
+npm install -g vercel
 
-The plugin reads `gemini.api.key` from `local.properties` and exposes it as a BuildConfig field:
+# Login to Vercel
+vercel login
 
-```kotlin
-// In app/build.gradle.kts:
-secrets {
-    propertiesFileName = "local.properties"
-    defaultPropertiesFileName = "local.defaults.properties"
-}
-```
+# Deploy from the proxy directory
+cd proxy
+vercel
 
-Then in code:
-
-```kotlin
-val apiKey = BuildConfig.GEMINI_API_KEY
+# Follow prompts:
+# - Set scope: jolly30s-projects
+# - Set environment variable: GEMINI_API_KEY = your_key_here
+# - Deploy to production
 ```
 
-> **⚠️ Security Warning:** `local.properties` is listed in `.gitignore`. It NEVER gets committed. The API key is only on local dev machines.
+After deployment, you'll get a URL like:
+```
+https://proxy-topaz-ten-36.vercel.app
+```
 
-### 🔄 How Other Devs Get Their Keys
+### Disable Vercel Auth Protection
 
-Since `local.properties` and `google-services.json` are **gitignored**, each dev must set up their own:
+By default, Vercel enables SSO protection. Disable it so the app can access the API:
+
+```bash
+vercel project protection disable --sso --scope jolly30s-projects
+```
+
+### Update local.properties
+
+Replace the placeholder with your deployed proxy URL:
+
+```properties
+sdk.dir=/Users/yourname/Library/Android/sdk
+proxy.url=https://proxy-topaz-ten-36.vercel.app
+```
+
+> **⚠️ Security:** The API key is NOT in `local.properties` — it's stored securely in Vercel. The app only knows the proxy URL.
+
+### 🔄 How Other Devs Connect
+
+Since `local.properties` is **gitignored**, each dev must set up their own:
 
 | File | How to get it | Committed? |
 |------|--------------|:----------:|
-| `local.properties` | Copy `local.defaults.properties` → `local.properties`, then fill in your SDK path + Gemini API key | ❌ No |
+| `local.properties` | Copy `local.defaults.properties` → `local.properties`, then fill in SDK path + proxy URL | ❌ No |
 | `google-services.json` | Download from Firebase Console (`Project Settings → Your apps → Download`) | ❌ No |
-| `local.defaults.properties` | ✅ **Already in repo** — contains placeholder template | ✅ **Yes** |
+| `local.defaults.properties` | ✅ **Already in repo** — contains proxy URL template | ✅ **Yes** |
 
 **Quick setup for a new dev machine:**
 ```bash
 cp local.defaults.properties local.properties
 # Then edit local.properties:
 #   sdk.dir=/Users/yourname/Library/Android/sdk
-#   gemini.api.key=AIzaSy...
+#   proxy.url=https://proxy-topaz-ten-36.vercel.app
 ```
 
-> **Tip:** The Google Services Gradle plugin generates a `BuildConfig` field for the API key automatically. No need to share keys in chat — each dev uses their own. 
+### Test the Proxy
+
+Before building the app, verify the proxy works:
+
+```bash
+curl -X POST https://proxy-topaz-ten-36.vercel.app/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Hello!"}]}'
+```
+
+Expected response: `{ "reply": "Hello! How can I help you..." }`
+
+### How It Works in Code
+
+1. **`GeminiProxyService.kt`** — OkHttp service that calls the proxy endpoint
+2. **`AiChatRepository.kt`** — Implements `ChatRepository`, uses proxy for AI + Firestore for history
+3. **`ChatViewModel.kt`** — Manages chat state, calls repository
+4. **`ChatScreen.kt`** — UI with message bubbles, input field, auto-scroll
+
+The proxy URL is injected via Hilt:
+```kotlin
+// In AppModule.kt
+@Provides
+@Singleton
+fun provideProxyUrl(): String = BuildConfig.proxyurl
+```
+
+### Proxy Endpoint
+
+```
+POST /api/chat
+Body: {
+  "messages": [{"role": "user", "content": "..."}],
+  "systemPrompt": "..."  // optional
+}
+Response: {
+  "reply": "..."
+}
+```
 
 ---
 
@@ -1327,20 +1406,23 @@ main
 | Issue | Solution |
 |-------|----------|
 | `Failed to resolve: com.google.firebase` | Ensure `google-services.json` is in `app/` folder |
-| Gemini API `PERMISSION_DENIED` | Check API key in `local.properties` and enable Generative Language API in Google Cloud Console |
+| Gemini API `PERMISSION_DENIED` | Check API key in Vercel env vars, not `local.properties`. The app only knows the proxy URL. |
+| Gemini API `QUOTA_EXCEEDED` | Free tier limit reached. Wait for reset or upgrade at [aistudio.google.com](https://aistudio.google.com) |
+| Proxy returns 404 in browser | Expected — proxy only handles `POST /api/chat`. Use `curl` to test, not browser. |
+| Proxy returns `GEMINI_API_KEY not configured` | Set the env var in Vercel dashboard: `GEMINI_API_KEY = your_key` |
 | Firestore too slow on first launch | Enable offline persistence: `FirebaseFirestore.getInstance().firestoreSettings = FirebaseFirestoreSettings.Builder().setPersistenceEnabled(true).build()` |
 | CameraX preview not showing | Add `android:usesCleartextTraffic="true"` to manifest (for dev) |
 | Compose recompilation issues | Run `./gradlew clean` and rebuild |
 | Gradle sync failed | Check internet connection, then `File → Invalidate Caches → Restart` |
 | `java.io.IOException: Cleartext HTTP traffic` | Add `android:usesCleartextTraffic="true"` in AndroidManifest.xml for dev, or implement network_security_config.xml |
-| `Could not find generativeai:1.1.0` | Guide had wrong version — use `0.9.0` (check latest on Google Maven) |
 | Hilt `@HiltAndroidApp` fails | Add `kotlin("kapt")` to plugins and `kapt(libs.hilt.compiler)` to dependencies in `app/build.gradle.kts` |
 | Firebase "No matching client" error | Remove `applicationIdSuffix = ".debug"` — Firebase package must match exactly |
 | Dagger "MissingBinding" errors | Create mock repos + `RepositoryModule.kt` with `@Binds` — see Mock Repositories section above |
+| `BuildConfig.PROXY_URL` unresolved | The secrets plugin generates `proxyurl` (lowercase, no dots). Use `BuildConfig.proxyurl` instead. |
 
 ---
 
-> **Next Step for You:** Create the Firebase project, download `google-services.json`, place it in `app/`, and tell the team to run `./gradlew assembleDebug` to verify the build works. Then branch out!
+> **Next Step for You:** Create the Firebase project, download `google-services.json`, place it in `app/`, and tell the team to run `./gradlew assembleDebug` to verify the build works. The Gemini proxy is already deployed and ready to use. Then branch out!
 
 ---
 

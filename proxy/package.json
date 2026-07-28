@@ -1,0 +1,6 @@
+{
+  "name": "saving-coach-gemini-proxy",
+  "version": "1.0.0",
+  "description": "Vercel serverless proxy for Gemini API (bypasses Myanmar geo-restriction)",
+  "private": true
+}

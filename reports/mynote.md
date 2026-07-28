@@ -1,6 +1,6 @@
 # 👤 Dev 1 — Work Log
 
-> Last updated: 2026-07-25
+> Last updated: 2026-07-28
 
 ---
 
@@ -81,6 +81,15 @@
 - **Cause:** Emulator wasn't signed into any Google account
 - **Fix:** Sign into a Google account on the emulator first
 
+### 9. Physical Device Testing & Xiaomi Quirks
+- **Problem:** Tapping "Continue with Google" on a physical Xiaomi/Redmi device showed a blank screen, or the app crashed instantly upon successful login.
+- **Cause:** Jetpack Compose `LocalContext` bugs, Xiaomi's aggressive popup blocker, and an `IllegalStateException` on the Dashboard screen caused by nesting infinite scrolling items.
+- **Fixes Applied:**
+  - Unwrapped the Jetpack Compose Context to a raw `Activity` in `AuthScreen.kt`.
+  - Added `.setAutoSelectEnabled(true)` to `GetGoogleIdOption` to bypass Xiaomi's pop-up blocker for single-account devices.
+  - Added error-catching UI (Snackbar) for `GetCredentialCancellationException`.
+  - Fixed infinite height constraints on `CalendarHeatmap.kt` by setting `.heightIn(max = 320.dp)` on the `LazyVerticalGrid`.
+
 ---
 
 ## 🔧 Firebase Console Setup — DONE ✅
@@ -109,11 +118,109 @@
 
 ---
 
+## 🔧 Session 3 — Gemini API Proxy for Myanmar (2026-07-28)
+
+### Problem
+Gemini API is not officially supported in Myanmar. Google blocks API requests from Myanmar IP addresses. Users in the app cannot use the AI chat feature without a workaround.
+
+### Solution
+Set up a proxy server hosted in a supported region (e.g., Singapore, US) via Vercel. The app sends requests to the proxy → proxy forwards to Gemini API → returns response. This also keeps the API key server-side (more secure).
+
+### What Was Done
+
+#### 1. Created Proxy Server (`proxy/` folder)
+
+| File | Purpose |
+|------|---------|
+| `api/chat.js` | Vercel serverless function — accepts chat messages, forwards to Gemini API, returns response |
+| `vercel.json` | Vercel deployment config (routes + build settings) |
+| `package.json` | Minimal — no Express needed for Vercel serverless |
+| `.env.example` | Template showing `GEMINI_API_KEY` variable |
+| `.gitignore` | Ignores `node_modules/`, `.env`, `.vercel/` |
+
+**Endpoint:**
+```
+POST /api/chat
+Body: { "messages": [{"role": "user", "content": "..."}], "systemPrompt": "..." }
+Response: { "reply": "..." }
+```
+
+#### 2. Updated Android App
+
+**Modified files:**
+
+| File | Change |
+|------|--------|
+| `app/build.gradle.kts` | Removed `libs.generative.ai` dependency (no more direct Gemini SDK calls) |
+| `local.properties` | Replaced `gemini.api.key` → `proxy.url` |
+| `local.defaults.properties` | Replaced `gemini.api.key` → `proxy.url` (template for other devs) |
+| `di/AppModule.kt` | Added `OkHttpClient`, `FirebaseFirestore`, and `proxyUrl` providers |
+| `di/RepositoryModule.kt` | Swapped `MockChatRepository` → `AiChatRepository` |
+| `navigation/NavGraph.kt` | Wired `ChatScreen` to the Chat route (was placeholder) |
+
+**New files:**
+
+| File | Purpose |
+|------|---------|
+| `ai/GeminiProxyService.kt` | OkHttp service that calls the proxy endpoint |
+| `ai/AiChatRepository.kt` | Implements `ChatRepository` — uses proxy for AI + Firestore for chat history |
+| `ui/chat/ChatViewModel.kt` | ViewModel — manages messages, loading state, error handling |
+| `ui/chat/ChatScreen.kt` | Chat UI — message bubbles, input field, auto-scroll |
+
+#### 3. Build Verification
+- `./gradlew assembleDebug` → **BUILD SUCCESSFUL**
+- Fixed 2 compilation errors during the process:
+  - `BuildConfig.PROXY_URL` → `BuildConfig.proxyurl` (secrets plugin naming convention)
+  - Missing `FirebaseFirestore` Hilt provider — added to `AppModule.kt`
+
+---
+
+## ✅ Proxy Deployment — COMPLETE ✅
+
+| Step | Status | Details |
+|------|--------|---------|
+| Deploy proxy to Vercel | ✅ Done | `https://proxy-topaz-ten-36.vercel.app` |
+| Set `GEMINI_API_KEY` env var | ✅ Done | Stored in Vercel (not hardcoded) |
+| Disable SSO protection | ✅ Done | App can access API without auth |
+| Update `local.properties` | ✅ Done | `proxy.url=https://proxy-topaz-ten-36.vercel.app` |
+| Update `local.defaults.properties` | ✅ Done | Same URL for other devs |
+| Build app | ✅ Done | `./gradlew assembleDebug` — **BUILD SUCCESSFUL** |
+| Test proxy | ✅ Done | Proxy forwards to Gemini API successfully |
+
+### Proxy Details
+
+| Item | Value |
+|------|-------|
+| **Production URL** | `https://proxy-topaz-ten-36.vercel.app` |
+| **Vercel Dashboard** | [vercel.com/jolly30s-projects/proxy](https://vercel.com/jolly30s-projects/proxy) |
+| **API Endpoint** | `POST /api/chat` |
+| **API Key Storage** | Vercel environment variable (encrypted) |
+| **Gemini Free Tier** | ⚠️ Quota exceeded — needs reset or upgrade |
+
+### Security
+
+- API key is **NOT hardcoded** in any source file
+- Key is stored as a Vercel environment variable (`process.env.GEMINI_API_KEY`)
+- Android app only knows the proxy URL, never the Gemini key
+- `.env.example` is a template only — no real keys committed
+
+### What's Left
+
+1. **Gemini API quota** — Free tier limit reached. Options:
+   - Wait for quota reset
+   - Upgrade plan at [aistudio.google.com](https://aistudio.google.com)
+   - Generate a new API key
+
+2. **Test chat on device** — Once quota is available, run the app and try the AI Chat screen
+
+---
+
 ## 📝 Scratch Notes
 
 ```
 Project: Saving Coach | Package: com.savingcoach.app
 Repo: https://github.com/Jolly30/saving-coach
 Dev 1 Role: UI Skeleton — Theme + Nav + Auth + Dashboard + CI/CD
-Status: ✅ ALL 48 TASKS COMPLETE + Real Auth Implemented
+Status: ✅ ALL 48 TASKS COMPLETE + Real Auth + Gemini Proxy (Deployed)
+Proxy URL: https://proxy-topaz-ten-36.vercel.app
 ```

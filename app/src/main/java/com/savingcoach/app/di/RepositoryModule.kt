@@ -2,9 +2,9 @@ package com.savingcoach.app.di
 
 import com.savingcoach.app.data.repository.FirebaseAuthRepository
 import com.savingcoach.app.data.mock.MockBudgetRepository
-import com.savingcoach.app.data.mock.MockChatRepository
 import com.savingcoach.app.data.mock.MockExpenseRepository
 import com.savingcoach.app.data.mock.MockSavingChallengeRepository
+import com.savingcoach.app.ai.AiChatRepository
 import com.savingcoach.app.data.repository.AuthRepository
 import com.savingcoach.app.data.repository.BudgetRepository
 import com.savingcoach.app.data.repository.ChatRepository
@@ -35,7 +35,7 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindChatRepository(
-        impl: MockChatRepository
+        impl: AiChatRepository
     ): ChatRepository
 
     @Binds

@@ -10,6 +10,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.savingcoach.app.ui.auth.AuthScreen
+import com.savingcoach.app.ui.chat.ChatScreen
 import com.savingcoach.app.ui.dashboard.DashboardScreen
 
 @Composable
@@ -47,8 +48,7 @@ fun NavGraph(
         }
 
         composable(Routes.Chat.route) {
-            // TODO: Dev 2 — Replace with ChatScreen
-            PlaceholderScreen("Chat")
+            ChatScreen()
         }
 
         composable(Routes.Camera.route) {
