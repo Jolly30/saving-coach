@@ -42,50 +42,172 @@
 
 ## 🚀 Quick Start
 
-### Prerequisites (One-Time Setup)
+### Step 1: Install Prerequisites
 
-1. **Android Studio** — [Download Ladybug (2024.3+)](https://developer.android.com/studio) → SDK Manager → Install **Android SDK API 35**
-2. **JDK 17**
-   - Mac: `brew install openjdk@17`
-   - Windows: Download from [Oracle](https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html) or `choco install openjdk.17`
-3. **API Keys**
-   - Firebase: [console.firebase.google.com](https://console.firebase.google.com) → Project Settings → Download `google-services.json`
+| Tool | Version | How to Install |
+|------|---------|----------------|
+| **Android Studio** | Ladybug (2024.3+) | [Download](https://developer.android.com/studio) |
+| **JDK** | 17 LTS | See below |
+| **Android SDK** | API 35 | Android Studio → SDK Manager → Install API 35 |
+| **Git** | Latest | See below |
 
-### Project Setup
+**Mac:**
+```bash
+brew install openjdk@17
+brew install git
+```
 
+**Windows (Git Bash):**
+```bash
+choco install openjdk.17
+choco install git
+```
+
+---
+
+### Step 2: Clone & Setup Project
+
+**Mac / Windows (Git Bash):**
 ```bash
 git clone https://github.com/Jolly30/saving-coach.git
 cd saving-coach
 cp local.defaults.properties local.properties
 ```
 
-Edit `local.properties`:
+---
+
+### Step 3: Edit local.properties
+
+Open `local.properties` and fill in your SDK path:
+
+**Mac:**
 ```properties
 sdk.dir=/Users/YOUR_USERNAME/Library/Android/sdk
 proxy.url=https://proxy-topaz-ten-36.vercel.app
 ```
 
-Place `google-services.json` in `app/` folder.
+**Windows:**
+```properties
+sdk.dir=C:/Users/YOUR_USERNAME/AppData/Local/Android/sdk
+proxy.url=https://proxy-topaz-ten-36.vercel.app
+```
 
-### Google Sign-In Setup
+> ⚠️ Replace `YOUR_USERNAME` with your actual username.
 
-Google Sign-In requires your **SHA-1 fingerprint** registered in Firebase Console.
+---
 
+### Step 4: Get Firebase Config
+
+1. Ask team lead for `google-services.json`
+2. Place it in `app/` folder:
+   ```
+   saving-coach/app/google-services.json
+   ```
+
+---
+
+### Step 5: Setup Physical Phone (WiFi)
+
+#### 5a. Enable Developer Options
+
+1. Go to **Settings → About Phone**
+2. Tap **Build Number** 7 times
+3. You'll see "You are now a developer!"
+
+#### 5b. Enable WiFi Debugging
+
+1. Go to **Settings → Developer Options**
+2. Turn on **Wireless Debugging** (or **WiFi Debugging**)
+3. Tap **Allow** when prompted
+
+#### 5c. Pair Phone with Computer
+
+**Mac:**
+```bash
+# Find your phone's IP address (shown in Developer Options → Wireless Debugging)
+adb pair YOUR_PHONE_IP:PAIRING_PORT
+# Enter the pairing code shown on your phone
+
+# Connect to your phone
+adb connect YOUR_PHONE_IP:CONNECT_PORT
+```
+
+**Windows (Git Bash):**
+```bash
+# Find your phone's IP address (shown in Developer Options → Wireless Debugging)
+adb pair YOUR_PHONE_IP:PAIRING_PORT
+# Enter the pairing code shown on your phone
+
+# Connect to your phone
+adb connect YOUR_PHONE_IP:CONNECT_PORT
+```
+
+#### 5d. Verify Connection
+
+```bash
+adb devices
+```
+
+Should show your phone like:
+```
+List of devices attached
+192.168.1.xxx:5555    device
+```
+
+#### 5e. Install Google Account (for Google Sign-In)
+
+1. Make sure you're signed into a Google account on your phone
+2. Go to **Settings → Accounts → Google** → verify you're signed in
+
+---
+
+### Step 6: Get SHA-1 Fingerprint
+
+**Mac / Windows (Git Bash):**
 ```bash
 ./gradlew signingReport
 ```
 
-Copy the `SHA1` from the `debug` variant → send to team lead → they add it in Firebase Console → Project Settings → Your Android App → **SHA certificate fingerprints**.
+Copy the `SHA1` from the `debug` variant → send to team lead → they add it in Firebase Console.
 
 > ⚠️ **Without this, Google Sign-In fails** with error `12500` or `10`.
 
-### Build & Run
+---
 
+### Step 7: Build & Install on Phone
+
+**Mac / Windows (Git Bash):**
 ```bash
+# Build the app
 ./gradlew assembleDebug
+
+# Install on your phone (phone must be connected via WiFi)
+./gradlew installDebug
 ```
 
-Open in Android Studio → Run on emulator or device.
+Or open in Android Studio → Click **Run** → Select your phone.
+
+---
+
+### Step 8: Test the App
+
+1. Open **Saving Coach** app on your phone
+2. Tap **Continue with Google**
+3. Sign in with your Google account
+4. You should see the **Dashboard**
+
+---
+
+## 🔧 Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `adb devices` shows nothing | Check WiFi debugging is on, phone and computer on same WiFi |
+| Google Sign-In fails (error 12500) | SHA-1 not registered in Firebase. Send your SHA-1 to team lead |
+| `google-services.json` not found | Make sure it's in `app/` folder, not `app/src/` |
+| Build fails with "SDK not found" | Edit `local.properties` → set correct `sdk.dir` path |
+| App crashes on launch | Check Logcat in Android Studio for error details |
+| WiFi pairing fails | Make sure phone and computer are on same WiFi network |
 
 ---
 
