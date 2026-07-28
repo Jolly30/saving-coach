@@ -573,29 +573,7 @@ Each day cell based on: daily_spending / (monthly_budget / 30)
 
 ### Dev 2: AI Chat + Receipt Scanner
 
-> **Note:** ChatScreen, ChatViewModel, GeminiProxyService, and AiChatRepository are already built by Dev 1 as part of the proxy setup. Dev 2 focuses on receipt scanning and advanced chat parsing.
-
-**Files owned:**
-- `ai/ChatParser.kt`                       # NLP → structured expense
-- `ai/ReceiptScanner.kt`                  # Vision receipt reader
-- `ui/camera/CameraScreen.kt`             # CameraX receipt photo
-- `ui/camera/CameraViewModel.kt`          # Camera + image capture state
-
-**What to build:**
-1. **Receipt parsing** — structured output via Gemini Function Calling:
-   ```json
-   {
-     "merchant": "Cafe A",
-     "amount": 4500,
-     "category": "Food",
-     "date": "2026-07-24",
-     "items": ["Iced Coffee - 2500", "Sandwich - 2000"]
-   }
-   ```
-2. **CameraX Screen** — take receipt photo → crop → Gemini Vision → structured result
-3. **Enhance ChatParser** — parse natural language into structured expenses
-4. **Integrate with ChatViewModel** — add expense parsing after AI response
-5. **Chat history** — already handled by AiChatRepository (Dev 1)
+> **Note:** Chat, ViewModel, and proxy are all done by Dev 1. Dev 2 focuses on receipt scanning and chat parsing.
 
 **Already built by Dev 1:**
 | File | Purpose |
@@ -606,77 +584,61 @@ Each day cell based on: daily_spending / (monthly_budget / 30)
 | `ui/chat/ChatViewModel.kt` | Chat state management |
 | `proxy/api/chat.js` | Vercel serverless function |
 
-**How to test the chat:**
+**What to build (4 files):**
+
+| File | Task | Difficulty |
+|------|------|:----------:|
+| `ChatParser.kt` | Parse natural language → structured expense | Medium |
+| `ReceiptScanner.kt` | Scan receipt image → extract data | Medium |
+| `CameraScreen.kt` | CameraX UI for receipt photo | Medium |
+| `CameraViewModel.kt` | Camera state management | Easy |
+
+**Integration with existing chat:**
+- Enhance `ChatViewModel` to call `ChatParser` after AI response
+- Add expense preview/confirm flow in `ChatScreen`
+
+**Test the proxy:**
 ```bash
-# Test proxy directly
 curl -X POST https://proxy-topaz-ten-36.vercel.app/api/chat \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
-**Integration points:**
-- ChatScreen uses `ChatViewModel` which calls `AiChatRepository`
-- AiChatRepository calls `GeminiProxyService` → Vercel proxy → Gemini API
-- Chat messages are saved to Firestore via `AiChatRepository.saveMessage()`
-
 ---
 
-### Dev 3: Data Layer — Firestore + Repositories
+### Dev 3: Data Layer — Firestore Repositories
 
-> **Note:** Auth is already implemented by Dev 1 (FirebaseAuthRepository). AI chat is handled by AiChatRepository (Dev 1). Dev 3 focuses on Firestore repositories for expenses, budgets, and saving challenges.
-
-**Files owned:**
-- `data/repository/FirebaseExpenseRepository.kt`   # Expenses CRUD + real-time sync
-- `data/repository/FirebaseBudgetRepository.kt`    # Budget CRUD + spending totals
-- `data/repository/FirebaseSavingChallengeRepository.kt`  # Saving challenges CRUD
-- `data/firestore/FirestoreModule.kt`      # Firestore DI provider
-- `data/firestore/FirestorePaths.kt`       # Collection/document path constants
+> **Note:** Auth, Chat, DI, and Firestore setup are all done by Dev 1. Dev 3 only needs to implement the 3 Firestore repositories.
 
 **Already built by Dev 1:**
 | File | Purpose |
 |------|---------|
 | `data/repository/AuthRepository.kt` | Auth interface |
-| `data/repository/FirebaseAuthRepository.kt` | Real Firebase Auth (Google + Email) |
+| `data/repository/FirebaseAuthRepository.kt` | Real Firebase Auth |
 | `data/repository/ChatRepository.kt` | Chat interface |
 | `ai/AiChatRepository.kt` | Chat impl with proxy + Firestore |
 | `di/AppModule.kt` | Hilt providers (FirebaseAuth, FirebaseFirestore, OkHttp, proxyUrl) |
-| `di/RepositoryModule.kt` | Repo bindings (currently uses mocks for Expense/Budget/Savings) |
+| `di/RepositoryModule.kt` | Repo bindings (currently uses mocks) |
 
-**What to build:**
-1. **FirebaseExpenseRepository** — implement `ExpenseRepository` interface
-   - CRUD operations for expenses
-   - Real-time sync with `SnapshotListener`
-   - Query by month, date, category
-2. **FirebaseBudgetRepository** — implement `BudgetRepository` interface
-   - Set/get/update budget limits
-   - Compute `totalSpent` from expenses for current month
-3. **FirebaseSavingChallengeRepository** — implement `SavingChallengeRepository` interface
-   - Create/delete challenges
-   - Add/track deposits
-   - Complete challenges
-4. **FirestorePaths.kt** — define collection paths:
-   ```kotlin
-   object FirestorePaths {
-       fun expenses(userId: String) = "users/$userId/expenses"
-       fun budgets(userId: String) = "users/$userId/budgets"
-       fun challenges(userId: String) = "users/$userId/challenges"
-       fun deposits(userId: String, challengeId: String) = "users/$userId/challenges/$challengeId/deposits"
-   }
-   ```
-5. **Offline persistence** — enable Firestore disk cache
-6. **Update RepositoryModule.kt** — swap mocks → real Firestore implementations
+**What to build (3 files):**
 
-**Key decisions:**
-- Data path: `users/{userId}/expenses/{expenseId}`
-- Budget path: `users/{userId}/budgets/{YYYY-MM}`
-- Challenge path: `users/{userId}/challenges/{challengeId}`
-- Use Firestore `SnapshotListener` for real-time dashboard updates
-- Repositories return `Flow<T>` for reactive ViewModels
-- Implement the interface contracts defined by Dev 1
+| File | Task | Difficulty |
+|------|------|:----------:|
+| `FirebaseExpenseRepository.kt` | CRUD + real-time sync for expenses | Medium |
+| `FirebaseBudgetRepository.kt` | Budget limits + spending totals | Easy |
+| `FirebaseSavingChallengeRepository.kt` | Challenges + deposits CRUD | Easy |
 
-**How to swap mocks → real repos:**
+**Firestore structure:**
+```
+users/{userId}/expenses/{expenseId}
+users/{userId}/budgets/{YYYY-MM}
+users/{userId}/challenges/{challengeId}
+```
+
+**How to finish:**
+Swap mocks → real repos in `RepositoryModule.kt`:
 ```kotlin
-// In RepositoryModule.kt, change:
+// Change:
 @Binds abstract fun bindExpenseRepository(impl: MockExpenseRepository): ExpenseRepository
 // To:
 @Binds abstract fun bindExpenseRepository(impl: FirebaseExpenseRepository): ExpenseRepository
@@ -731,52 +693,34 @@ enum class ExpenseCategory(val displayName: String) {
 
 ### Dev 5: Export, Settings + Release
 
-**Files owned:**
-- `export/CsvExporter.kt`                  # CSV generation from expenses
-- `export/ShareManager.kt`                 # Android share + email intent
-- `ui/settings/SettingsScreen.kt`          # Profile + export + about
-- `ui/settings/SettingsViewModel.kt`       # Settings state
+> **Note:** CI/CD, ProGuard, and signing config are done by Dev 1. Dev 5 focuses on CSV export and settings screen.
 
 **Already built by Dev 1:**
 | File | Purpose |
 |------|---------|
-| `proxy/` | Vercel serverless proxy for Gemini API |
+| `proxy/` | Vercel serverless proxy |
 | `.github/workflows/` | CI/CD pipelines |
 | `app/proguard-rules.pro` | ProGuard rules |
 | `app/build.gradle.kts` | Signing config (release) |
 
-**What to build:**
-1. **CSV Export**
-   - Export all expenses (or filtered by month) as CSV
-   - Columns: Date, Category, Merchant, Amount, Currency, Notes
-   - Save to Downloads via Storage Access Framework (SAF)
-   - Use `ExpenseRepository` (from Dev 3) to get expenses
-2. **Share / Email**
-   - Share CSV via Android share intent (Gmail, Telegram, etc.)
-   - Direct email with CSV attachment
-3. **Settings Screen**
-   - Profile card: name, email, photo (from Google Auth)
-   - Export data button → triggers CSV export
-   - Sign out button → navigate to Auth
-   - App version + "About" section
-4. **APK distribution** — Upload signed builds to GitHub Releases for beta testers
-5. **Proxy maintenance** — If proxy URL changes, update `local.defaults.properties`
+**What to build (4 files):**
 
-**Key integration points:**
+| File | Task | Difficulty |
+|------|------|:----------:|
+| `CsvExporter.kt` | Generate CSV from expenses | Easy |
+| `ShareManager.kt` | Android share/email intent | Easy |
+| `SettingsScreen.kt` | Profile + export + sign out | Easy |
+| `SettingsViewModel.kt` | Settings state | Easy |
+
+**Integration:**
 - CSV export uses `ExpenseRepository` from Dev 3
-- Profile data comes from `FirebaseAuthRepository` (Dev 1)
+- Profile data from `FirebaseAuthRepository` (Dev 1)
 - Sign out calls `AuthRepository.signOut()`
-- Proxy URL is in `local.defaults.properties` (update if Vercel project changes)
 
-**Proxy deployment reference:**
+**If proxy URL changes:**
 ```bash
-# If you need to redeploy the proxy
-cd proxy
-vercel --prod
-
-# If you need to update the API key
-vercel env add GEMINI_API_KEY production
-vercel --prod
+# Update local.defaults.properties
+proxy.url=https://new-vercel-url.vercel.app
 ```
 
 ---
