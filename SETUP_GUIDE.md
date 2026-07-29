@@ -941,8 +941,8 @@ Settings → Export → Select Month → Select Type (Spending/Saving) → Downl
 |------|----------|----------|--------------|-------|
 
 **Excel Columns (Saving):**
-| Date | Challenge Name | Deposit Amount (MMK) | Total Saved (MMK) |
-|------|----------------|----------------------|-------------------|
+| Start Date | End Date | Challenge Name | Deposit Amount (MMK) | Target Amount (MMK) |
+|------------|----------|----------------|----------------------|---------------------|
 
 **Theme Options:**
 
