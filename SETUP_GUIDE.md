@@ -746,12 +746,23 @@ enum class ExpenseCategory(val displayName: String) {
 
 **Onboarding Screen (After Sign Up):**
 
-| Field | Type | Example | Required |
+| Field | Type | Options | Required |
 |-------|------|---------|:--------:|
 | Career | Text | "Software Engineer" | ✅ |
-| Average Salary | Number | "500,000 MMK" | ✅ |
 | Age | Number | "25" | ✅ |
-| Gender | Select | "Male" / "Female" | ✅ |
+| Gender | Select | "Male", "Female", "Rather not answer" | ✅ |
+| Salary Range | Select | See below | ✅ |
+
+**Salary Range Options:**
+| Range | Value |
+|-------|-------|
+| Less than 100k | `< 100,000 MMK` |
+| 100k - 200k | `100,000 - 200,000 MMK` |
+| 200k - 300k | `200,000 - 300,000 MMK` |
+| 300k - 500k | `300,000 - 500,000 MMK` |
+| 500k - 1M | `500,000 - 1,000,000 MMK` |
+| More than 1M | `> 1,000,000 MMK` |
+| Prefer not to say | `null` |
 
 **Onboarding Flow:**
 ```

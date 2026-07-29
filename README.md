@@ -342,12 +342,12 @@ User can filter calendar to see:
 ### Onboarding (After Sign Up)
 
 New users fill in profile:
-| Field | Type | Example |
+| Field | Type | Options |
 |-------|------|---------|
 | Career | Text | "Software Engineer" |
-| Average Salary | Number | "500,000 MMK" |
 | Age | Number | "25" |
-| Gender | Select | "Male" / "Female" |
+| Gender | Select | "Male", "Female", "Rather not answer" |
+| Salary Range | Select | "< 100k", "100k-200k", "200k-300k", "300k-500k", "500k-1M", "> 1M", "Prefer not to say" |
 
 This data is stored in user profile for personalized advice.
 
