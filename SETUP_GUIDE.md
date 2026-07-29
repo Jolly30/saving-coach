@@ -677,11 +677,30 @@ Swap mocks → real repos in `RepositoryModule.kt`:
    - Edit existing limit
    - Reset for new month
 4. **Challenges Screen**
-   - List of active saving challenges
-   - Create new challenge (name, target amount, deadline)
-   - View challenge details + deposit history
-   - Add deposit to challenge
-   - Complete/delete challenge
+
+   **Preset Challenges (4 built-in):**
+
+   | Challenge | Goal | UI |
+   |-----------|------|-----|
+   | **$1 a Day** | Deposit $1/day for 30 days ($30 target) | 30-day dot grid, tap to mark, turns green |
+   | **7-Day Sprint** | Deposit anything for 7 days | 7-day timeline + "Log Any Deposit" button |
+   | **100 Envelope** | $5,050 target | 10x10 grid, "Draw Random Envelope" with flip animation |
+   | **No-Spend Week** | Resist impulse spending | 7-day countdown + "Log Resisted Impulse" button |
+
+   **Custom Challenge Wizard:**
+
+   | Step | Fields |
+   |------|--------|
+   | **1. Goal Details** | Name, Target Amount, Emoji/Icon Picker |
+   | **2. Deposit Style** | Envelope Grid / Constant Saving / Flexible |
+   | **3. Duration** | Timeline (1 week - 1 year) + pace projection |
+
+   **CRUD Operations:**
+   - Create new challenge (preset or custom)
+   - Read/view challenge details
+   - Update challenge settings
+   - Delete challenge
+   - Track deposits with history
 5. **Calendar Heatmap (Enhanced)**
    - Click on a day → show saving/expense details
    - Filter by: All, Budget, Expenses, Savings
