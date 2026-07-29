@@ -1,6 +1,6 @@
 # 👤 Dev 5 — Work Log
 
-> **Role:** Export, Settings + Release  
+> **Role:** Settings, Onboarding + Release  
 > **Branch:** `feature/export-settings-ci`
 
 ---
@@ -46,10 +46,11 @@
 | `app/proguard-rules.pro` | ProGuard rules |
 | `app/build.gradle.kts` | Signing config (release) |
 | `ui/theme/Theme.kt` | Material 3 theme |
+| `ui/auth/AuthScreen.kt` | Login screen |
 
 ---
 
-## 🔜 Up Next (6 files)
+## 🔜 Up Next (8 files)
 
 | File | Task | Difficulty |
 |------|------|:----------:|
@@ -59,6 +60,40 @@
 | `ui/settings/SettingsViewModel.kt` | Settings state + preferences | Medium |
 | `data/repository/SettingsRepository.kt` | Save/load user preferences | Easy |
 | `ui/theme/ThemeManager.kt` | Switch between themes | Easy |
+| `ui/onboarding/OnboardingScreen.kt` | New user profile form | Medium |
+| `ui/onboarding/OnboardingViewModel.kt` | Onboarding state | Easy |
+
+---
+
+## 👤 Onboarding Screen (After Sign Up)
+
+### User Profile Fields
+
+| Field | Type | Example | Required |
+|-------|------|---------|:--------:|
+| Career | Text | "Software Engineer" | ✅ |
+| Average Salary | Number | "500,000 MMK" | ✅ |
+| Age | Number | "25" | ✅ |
+| Gender | Select | "Male" / "Female" | ✅ |
+
+### Onboarding Flow
+```
+Sign Up → Onboarding Screen → Dashboard
+                ↓
+        Save profile to Firestore
+        users/{userId}/profile
+```
+
+### Firestore Profile Structure
+```
+users/{userId}/profile {
+    career: "Software Engineer",
+    averageSalary: 500000,
+    age: 25,
+    gender: "male",
+    createdAt: timestamp
+}
+```
 
 ---
 
@@ -66,7 +101,7 @@
 
 | Section | Options | Implementation |
 |---------|---------|----------------|
-| **Profile** | Name, email, photo | From `FirebaseAuthRepository` |
+| **Profile** | Name, email, photo, career, salary, age, gender | From `FirebaseAuthRepository` + profile |
 | **Theme** | Light, Pink, Dark | `ThemeManager.kt` + DataStore |
 | **Language** | English, Myanmar | Android locale switching |
 | **Notifications** | On/Off toggle | `SettingsRepository.kt` + DataStore |
@@ -102,6 +137,7 @@
 - ✅ CI/CD pipelines ready
 - ✅ Signing config ready
 - ✅ Theme.kt ready
+- ✅ AuthScreen.kt ready
 
 ---
 
@@ -113,6 +149,7 @@
 - Theme switching via `ThemeManager.kt` in `ui/theme/`
 - Language switching via Android locale API
 - Settings stored in DataStore
+- Onboarding saves profile to Firestore
 
 ---
 

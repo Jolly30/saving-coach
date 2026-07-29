@@ -293,13 +293,63 @@ saving-coach/
 | Screen | Route | Status |
 |--------|-------|:------:|
 | Auth / Login | `auth` | ✅ Done |
+| Onboarding (Profile) | `onboarding` | ⏳ Dev 5 |
 | Dashboard | `dashboard` | ✅ Done |
-| AI Chat | `chat` | ✅ Done |
-| Expense List | `expenses` | ⏳ Dev 4 |
+| Expenses & Budget | `expenses` | ⏳ Dev 4 |
 | Add Expense | `add_expense` | ⏳ Dev 4 |
+| AI Chat | `chat` | ✅ Done |
 | Receipt Camera | `camera` | ⏳ Dev 2 |
-| Budget Settings | `budget` | ⏳ Dev 4 |
 | Settings | `settings` | ⏳ Dev 5 |
+
+### Dashboard Features
+
+| Feature | Description |
+|---------|-------------|
+| **Budget Progress** | Monthly budget vs spent with color indicator |
+| **Saving Challenges** | Active challenges with progress bars |
+| **Expense Chart** | Pie/bar chart of expenses by category |
+| **Calendar Heatmap** | Daily spending with color rating (green/yellow/red) |
+
+### Calendar Heatmap — Click to See Details
+
+When user clicks a day (e.g., July 1st):
+```
+┌─────────────────────────────────┐
+│  📅 July 1, 2026                │
+├─────────────────────────────────┤
+│  💰 Saving:    10,000 MMK       │
+│  💸 Expense:    5,000 MMK       │
+│  📊 Net:        5,000 MMK       │
+└─────────────────────────────────┘
+```
+
+**Color Rating:**
+| Daily Spending vs Budget | Color |
+|--------------------------|-------|
+| < 50% | 🟢 Green |
+| 50-80% | 🟡 Yellow |
+| 80-100% | 🟠 Orange |
+| > 100% | 🔴 Red |
+
+### Calendar Filters
+
+User can filter calendar to see:
+- **All** — Combined view
+- **Budget** — Budget progress only
+- **Expenses** — Expenses only
+- **Savings** — Savings only
+
+### Onboarding (After Sign Up)
+
+New users fill in profile:
+| Field | Type | Example |
+|-------|------|---------|
+| Career | Text | "Software Engineer" |
+| Average Salary | Number | "500,000 MMK" |
+| Age | Number | "25" |
+| Gender | Select | "Male" / "Female" |
+
+This data is stored in user profile for personalized advice.
 
 ---
 

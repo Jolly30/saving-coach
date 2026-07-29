@@ -646,7 +646,9 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 
 ---
 
-### Dev 4: Expense Forms + Budget Settings
+### Dev 4: Expenses & Budget (Combined Page)
+
+> **Note:** Dev 4 builds the combined Expenses & Budget page with calendar heatmap.
 
 **Files owned:**
 - `ui/expenses/ExpenseListScreen.kt`       # Expense list with search/filter
@@ -654,6 +656,7 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 - `ui/expenses/ExpenseViewModel.kt`        # Expense list + add state
 - `ui/budget/BudgetScreen.kt`              # Budget limit setting
 - `ui/budget/BudgetViewModel.kt`           # Budget state
+- `ui/dashboard/CalendarHeatmap.kt`        # Enhanced calendar with click + filters
 
 **What to build:**
 1. **Expense List Screen**
@@ -671,9 +674,32 @@ Swap mocks → real repos in `RepositoryModule.kt`:
    - View current spending vs limit
    - Edit existing limit
    - Reset for new month
-4. **Threshold Alerts**
+4. **Calendar Heatmap (Enhanced)**
+   - Click on a day → show saving/expense details
+   - Filter by: All, Budget, Expenses, Savings
+   - Color rating: Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%)
+5. **Threshold Alerts**
    - Local notification at 75% and 90% of budget
    - Dashboard banner when over budget (uses Dev 1's components)
+
+**Calendar Click Detail Popup:**
+```
+┌─────────────────────────────────┐
+│  📅 July 1, 2026                │
+├─────────────────────────────────┤
+│  💰 Saving:    10,000 MMK       │
+│  💸 Expense:    5,000 MMK       │
+│  📊 Net:        5,000 MMK       │
+└─────────────────────────────────┘
+```
+
+**Calendar Filters:**
+| Filter | Shows |
+|--------|-------|
+| All | Combined view |
+| Budget | Budget progress only |
+| Expenses | Expenses only |
+| Savings | Savings only |
 
 **Expense categories:**
 ```kotlin
@@ -691,9 +717,9 @@ enum class ExpenseCategory(val displayName: String) {
 
 ---
 
-### Dev 5: Export, Settings + Release
+### Dev 5: Settings, Onboarding + Release
 
-> **Note:** CI/CD, ProGuard, and signing config are done by Dev 1. Dev 5 focuses on CSV export and settings screen.
+> **Note:** CI/CD, ProGuard, and signing config are done by Dev 1. Dev 5 focuses on settings, onboarding, and release.
 
 **Already built by Dev 1:**
 | File | Purpose |
@@ -703,23 +729,43 @@ enum class ExpenseCategory(val displayName: String) {
 | `app/proguard-rules.pro` | ProGuard rules |
 | `app/build.gradle.kts` | Signing config (release) |
 | `ui/theme/Theme.kt` | Material 3 theme |
+| `ui/auth/AuthScreen.kt` | Login screen |
 
-**What to build (6 files):**
+**What to build (8 files):**
 
 | File | Task | Difficulty |
 |------|------|:----------:|
-| `CsvExporter.kt` | Generate CSV from expenses | Easy |
-| `ShareManager.kt` | Android share/email intent | Easy |
-| `SettingsScreen.kt` | Profile + export + settings | Medium |
-| `SettingsViewModel.kt` | Settings state + preferences | Medium |
-| `SettingsRepository.kt` | Save/load user preferences | Easy |
+| `export/CsvExporter.kt` | Generate CSV from expenses | Easy |
+| `export/ShareManager.kt` | Android share/email intent | Easy |
+| `ui/settings/SettingsScreen.kt` | Profile + export + settings | Medium |
+| `ui/settings/SettingsViewModel.kt` | Settings state + preferences | Medium |
+| `data/repository/SettingsRepository.kt` | Save/load user preferences | Easy |
 | `ui/theme/ThemeManager.kt` | Switch between themes | Easy |
+| `ui/onboarding/OnboardingScreen.kt` | New user profile form | Medium |
+| `ui/onboarding/OnboardingViewModel.kt` | Onboarding state | Easy |
+
+**Onboarding Screen (After Sign Up):**
+
+| Field | Type | Example | Required |
+|-------|------|---------|:--------:|
+| Career | Text | "Software Engineer" | ✅ |
+| Average Salary | Number | "500,000 MMK" | ✅ |
+| Age | Number | "25" | ✅ |
+| Gender | Select | "Male" / "Female" | ✅ |
+
+**Onboarding Flow:**
+```
+Sign Up → Onboarding Screen → Dashboard
+                ↓
+        Save profile to Firestore
+        users/{userId}/profile
+```
 
 **Settings Screen Sections:**
 
 | Section | Options | Implementation |
 |---------|---------|----------------|
-| **Profile** | Name, email, photo | From `FirebaseAuthRepository` |
+| **Profile** | Name, email, photo, career, salary, age, gender | From `FirebaseAuthRepository` + profile |
 | **Theme** | Light, Pink, Dark | `ThemeManager.kt` + DataStore |
 | **Language** | English, Myanmar | Android locale switching |
 | **Notifications** | On/Off toggle | `SettingsRepository.kt` + DataStore |
@@ -747,6 +793,7 @@ enum class ExpenseCategory(val displayName: String) {
 - Sign out calls `AuthRepository.signOut()`
 - Theme switching via `ThemeManager.kt` in `ui/theme/`
 - Language switching via Android locale API
+- Onboarding saves profile to Firestore
 
 **If proxy URL changes:**
 ```bash

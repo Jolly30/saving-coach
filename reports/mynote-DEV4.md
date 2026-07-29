@@ -1,6 +1,6 @@
 # 👤 Dev 4 — Work Log
 
-> **Role:** Expense Forms + Budget Settings + Savings Screens  
+> **Role:** Expenses & Budget (Combined Page)  
 > **Branch:** `feature/expense-budget`
 
 ---
@@ -37,15 +37,65 @@
 
 ---
 
-## 🔜 Up Next
+## ✅ Already Built by Dev 1
 
-- [ ] `ui/expenses/ExpenseListScreen.kt` — List with search/filter/swipe-delete
-- [ ] `ui/expenses/AddExpenseScreen.kt` — Manual add form
-- [ ] `ui/expenses/ExpenseViewModel.kt` — Expense list + add state
-- [ ] `ui/budget/BudgetScreen.kt` — Budget limit settings
-- [ ] `ui/budget/BudgetViewModel.kt` — Budget state
+| File | Purpose |
+|------|---------|
+| `data/repository/ExpenseRepository.kt` | Expense interface |
+| `data/repository/BudgetRepository.kt` | Budget interface |
+| `data/repository/SavingChallengeRepository.kt` | Saving challenge interface |
+| `ui/dashboard/DashboardScreen.kt` | Dashboard with calendar heatmap |
+| `ui/components/BudgetProgressBar.kt` | Progress bar component |
+| `ui/components/SpendingChart.kt` | Chart component |
 
-### 📋 Expense Categories
+---
+
+## 🔜 Up Next (6 files)
+
+| File | Task | Difficulty |
+|------|------|:----------:|
+| `ui/expenses/ExpenseListScreen.kt` | Expense list with search/filter | Medium |
+| `ui/expenses/AddExpenseScreen.kt` | Manual expense form | Medium |
+| `ui/expenses/ExpenseViewModel.kt` | Expense state management | Medium |
+| `ui/budget/BudgetScreen.kt` | Budget limit setting | Easy |
+| `ui/budget/BudgetViewModel.kt` | Budget state | Easy |
+| `ui/dashboard/CalendarHeatmap.kt` | Enhanced calendar with click + filters | Medium |
+
+---
+
+## 📅 Calendar Heatmap Requirements
+
+### Click on a Day
+When user clicks a day (e.g., July 1st):
+```
+┌─────────────────────────────────┐
+│  📅 July 1, 2026                │
+├─────────────────────────────────┤
+│  💰 Saving:    10,000 MMK       │
+│  💸 Expense:    5,000 MMK       │
+│  📊 Net:        5,000 MMK       │
+└─────────────────────────────────┘
+```
+
+### Color Rating
+| Daily Spending vs Budget | Color |
+|--------------------------|-------|
+| < 50% | 🟢 Green |
+| 50-80% | 🟡 Yellow |
+| 80-100% | 🟠 Orange |
+| > 100% | 🔴 Red |
+
+### Calendar Filters
+| Filter | Shows |
+|--------|-------|
+| All | Combined view |
+| Budget | Budget progress only |
+| Expenses | Expenses only |
+| Savings | Savings only |
+
+---
+
+## 💰 Expense Categories
 ```kotlin
 enum class ExpenseCategory(val displayName: String) {
     FOOD("Food & Drinks"),
@@ -62,14 +112,12 @@ enum class ExpenseCategory(val displayName: String) {
 ---
 
 ## 📦 Depends On Dev 1
-- ✅ `Expense.kt` (data model)
-- ✅ `Budget.kt` (data model)
-- ✅ `SavingChallenge.kt` + `SavingsDeposit.kt` (data models)
-- ✅ `ExpenseRepository` interface
-- ✅ `BudgetRepository` interface
-- ✅ `SavingChallengeRepository` interface
-- ✅ `DashboardScreen.kt` (your screens navigate to/from here)
-- ✅ `BudgetProgressBar`, `SpendingChart`, `LoadingOverlay` (reuse these!)
+- ✅ All data models (Expense, Budget, SavingChallenge)
+- ✅ Repository interfaces
+- ✅ Dashboard with calendar heatmap
+- ✅ Reusable components (BudgetProgressBar, SpendingChart)
+
+---
 
 ## 🔗 Interfaces You Code Against
 ```kotlin
