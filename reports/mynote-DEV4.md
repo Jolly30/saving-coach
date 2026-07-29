@@ -50,18 +50,91 @@
 
 ---
 
-## 🔜 Up Next (8 files)
+## 🔜 Up Next (6 files)
 
 | File | Task | Difficulty |
 |------|------|:----------:|
-| `ui/expenses/ExpenseListScreen.kt` | Expense list with search/filter | Medium |
+| `ui/expenses/ExpenseScreen.kt` | Budget & Expense Hub (combined) | Hard |
 | `ui/expenses/AddExpenseScreen.kt` | Manual expense form | Medium |
-| `ui/expenses/ExpenseViewModel.kt` | Expense state management | Medium |
-| `ui/budget/BudgetScreen.kt` | Budget limit setting | Easy |
-| `ui/budget/BudgetViewModel.kt` | Budget state | Easy |
-| `ui/challenges/ChallengesScreen.kt` | Challenge cards + wizard | Hard |
+| `ui/expenses/ExpenseViewModel.kt` | Expense + budget state | Medium |
+| `ui/challenges/ChallengesScreen.kt` | Challenge cards + detail view | Hard |
 | `ui/challenges/ChallengeViewModel.kt` | Challenges state | Medium |
 | `ui/dashboard/CalendarHeatmap.kt` | Enhanced calendar with click + filters | Medium |
+
+---
+
+## 💰 Budget & Expense Hub (Expense Tab)
+
+### Screen Layout
+
+```
+┌─────────────────────────────────────────┐
+│  BUDGET & EXPENSE HUB                   │
+├─────────────────────────────────────────┤
+│  🎯 Monthly Overall Budget    [Edit ⚙️] │
+│  $1,850 Spent  /  $3,000 Target        │
+│  =========================>  61% Used   │
+│  Remaining: $1,150  |  12 Days Left     │
+├─────────────────────────────────────────┤
+│  📁 CATEGORIES            [+ New]       │
+│                                         │
+│  🍔 Food & Dining                       │
+│  ================>  $320 / $600 target  │
+│                                         │
+│  🚗 Transportation                      │
+│  ======>  $110 / $300 target            │
+├─────────────────────────────────────────┤
+│  📋 RECENT EXPENSES                     │
+│  (Tap category above to filter)         │
+│                                         │
+│  ☕ Starbucks         -$4.50  Today     │
+│  🛒 Target Store     -$68.20  Yesterday │
+│  ⛽ Shell Gas        -$45.00  Jul 26   │
+└─────────────────────────────────────────┘
+```
+
+### Section 1: Monthly Overall Budget
+
+| Element | Description |
+|---------|-------------|
+| **Title** | "Monthly Overall Budget" |
+| **Spent / Target** | "$1,850 / $3,000" |
+| **Progress Bar** | Color: Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%) |
+| **Percentage** | "61% Used" |
+| **Remaining** | "$1,150 left" |
+| **Days Left** | "12 Days Left" in month |
+| **Edit Button** | Opens budget editor |
+
+### Section 2: Categories
+
+| Element | Description |
+|---------|-------------|
+| **Header** | "📁 CATEGORIES" + "+ New" button |
+| **Category Card** | Emoji + Name + Progress bar + Spent / Target |
+| **Tap Category** | Filters recent expenses below |
+| **"+ New"** | Add custom category |
+
+**Default Categories:**
+| Emoji | Category | Default Target |
+|-------|----------|----------------|
+| 🍔 | Food & Dining | $600 |
+| 🚗 | Transportation | $300 |
+| 🛍️ | Shopping | $400 |
+| 📱 | Bills & Utilities | $200 |
+| 🎬 | Entertainment | $200 |
+| 📚 | Education | $150 |
+| 💊 | Health | $150 |
+| 📦 | Other | $200 |
+
+### Section 3: Recent Expenses
+
+| Element | Description |
+|---------|-------------|
+| **Header** | "📋 RECENT EXPENSES" |
+| **Filter Note** | "Tap any category above to filter" |
+| **Expense Item** | Icon + Merchant + Amount + Date |
+| **Tap Expense** | Opens edit screen |
+| **Swipe Left** | Delete with confirmation |
 
 ---
 

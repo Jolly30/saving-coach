@@ -651,66 +651,128 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 > **Note:** Dev 4 builds the Expense tab, Challenges tab, and calendar heatmap.
 
 **Files owned:**
-- `ui/expenses/ExpenseListScreen.kt`       # Expense list with search/filter
-- `ui/expenses/AddExpenseScreen.kt`        # Manual expense form
-- `ui/expenses/ExpenseViewModel.kt`        # Expense list + add state
-- `ui/budget/BudgetScreen.kt`              # Budget limit setting
-- `ui/budget/BudgetViewModel.kt`           # Budget state
-- `ui/challenges/ChallengesScreen.kt`      # Saving challenges list
-- `ui/challenges/ChallengeViewModel.kt`    # Challenges state
-- `ui/dashboard/CalendarHeatmap.kt`        # Enhanced calendar with click + filters
+- `ui/expenses/ExpenseScreen.kt`          # Budget & Expense Hub (combined)
+- `ui/expenses/AddExpenseScreen.kt`       # Manual expense form
+- `ui/expenses/ExpenseViewModel.kt`       # Expense + budget state
+- `ui/challenges/ChallengesScreen.kt`     # Challenge cards + detail
+- `ui/challenges/ChallengeViewModel.kt`   # Challenges state
+- `ui/dashboard/CalendarHeatmap.kt`       # Enhanced calendar with click + filters
 
-**What to build:**
-1. **Expense List Screen**
-   - Paginated list (newest first), pull-to-refresh
-   - Swipe-to-delete with confirmation dialog
-   - Tap to edit existing expense
-   - Filter by category dropdown and month picker
-   - Search by merchant name
-2. **Add Expense Screen (Manual)**
-   - Form: Amount, Category dropdown with icons, Merchant, Date picker, Notes
-   - Validation: amount > 0, category required
-   - Save → calls ExpenseRepository (from Dev 3)
-3. **Budget Settings Screen**
-   - Set monthly limit (numeric keyboard, formatted as currency)
-   - View current spending vs limit
-   - Edit existing limit
-   - Reset for new month
-4. **Challenges Screen**
+---
 
-   **Challenge Flow:**
-   ```
-   Challenges Tab → Challenge Cards → Click Card → Detail View
-   ```
+## 💰 Budget & Expense Hub (Expense Tab)
 
-   **Challenge Cards View (Grid/List):**
-   | Card | Shows |
-   |------|-------|
-   | Preset cards | $1 a Day, 7-Day Sprint, 100 Envelope, No-Spend Week |
-   | Custom cards | User-created challenges |
-   | "+ Create" card | Opens custom challenge wizard |
+### Screen Layout
 
-   **Card Content:**
-   - Emoji/Icon
-   - Challenge name
-   - Progress bar (deposited / target)
-   - Days remaining
+```
+┌─────────────────────────────────────────┐
+│  BUDGET & EXPENSE HUB                   │
+├─────────────────────────────────────────┤
+│  🎯 Monthly Overall Budget    [Edit ⚙️] │
+│  $1,850 Spent  /  $3,000 Target        │
+│  =========================>  61% Used   │
+│  Remaining: $1,150  |  12 Days Left     │
+├─────────────────────────────────────────┤
+│  📁 CATEGORIES            [+ New]       │
+│                                         │
+│  🍔 Food & Dining                       │
+│  ================>  $320 / $600 target  │
+│                                         │
+│  🚗 Transportation                      │
+│  ======>  $110 / $300 target            │
+├─────────────────────────────────────────┤
+│  📋 RECENT EXPENSES                     │
+│  (Tap category above to filter)         │
+│                                         │
+│  ☕ Starbucks         -$4.50  Today     │
+│  🛒 Target Store     -$68.20  Yesterday │
+│  ⛽ Shell Gas        -$45.00  Jul 26   │
+└─────────────────────────────────────────┘
+```
 
-   **Detail View (When card clicked):**
-   - Challenge-specific UI (dot grid, envelope grid, timeline, etc.)
-   - Deposit history list
-   - Add deposit button
-   - Settings/edit button
-   - Delete button
-5. **Calendar Heatmap (Enhanced)**
-   - Click on a day → show saving/expense details
-   - Filter by: All, Budget, Expenses, Savings
-   - Color rating: Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%)
-6. **Threshold Alerts**
-   - Local notification at 75% and 90% of budget
-   - Dashboard banner when over budget (uses Dev 1's components)
+### Section 1: Monthly Overall Budget
 
-**Calendar Click Detail Popup:**
+| Element | Description |
+|---------|-------------|
+| **Title** | "Monthly Overall Budget" |
+| **Spent / Target** | "$1,850 / $3,000" |
+| **Progress Bar** | Color: Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%) |
+| **Percentage** | "61% Used" |
+| **Remaining** | "$1,150 left" |
+| **Days Left** | "12 Days Left" in month |
+| **Edit Button** | Opens budget editor |
+
+### Section 2: Categories
+
+| Element | Description |
+|---------|-------------|
+| **Header** | "📁 CATEGORIES" + "+ New" button |
+| **Category Card** | Emoji + Name + Progress bar + Spent / Target |
+| **Tap Category** | Filters recent expenses below |
+| **"+ New"** | Add custom category |
+
+**Default Categories:**
+| Emoji | Category | Default Target |
+|-------|----------|----------------|
+| 🍔 | Food & Dining | $600 |
+| 🚗 | Transportation | $300 |
+| 🛍️ | Shopping | $400 |
+| 📱 | Bills & Utilities | $200 |
+| 🎬 | Entertainment | $200 |
+| 📚 | Education | $150 |
+| 💊 | Health | $150 |
+| 📦 | Other | $200 |
+
+### Section 3: Recent Expenses
+
+| Element | Description |
+|---------|-------------|
+| **Header** | "📋 RECENT EXPENSES" |
+| **Filter Note** | "Tap any category above to filter" |
+| **Expense Item** | Icon + Merchant + Amount + Date |
+| **Tap Expense** | Opens edit screen |
+| **Swipe Left** | Delete with confirmation |
+
+---
+
+## 🎯 Challenges Screen
+
+### User Flow
+```
+Challenges Tab → Challenge Cards → Click Card → Detail View
+```
+
+**Challenge Cards View (Grid/List):**
+| Card | Shows |
+|------|-------|
+| Preset cards | $1 a Day, 7-Day Sprint, 100 Envelope, No-Spend Week |
+| Custom cards | User-created challenges |
+| "+ Create" card | Opens custom challenge wizard |
+
+**Card Content:**
+- Emoji/Icon
+- Challenge name
+- Progress bar (deposited / target)
+- Days remaining
+
+**Detail View (When card clicked):**
+- Challenge-specific UI (dot grid, envelope grid, timeline, etc.)
+- Deposit history list
+- Add deposit button
+- Settings/edit button
+- Delete button
+
+---
+
+## 📅 Calendar Heatmap (Enhanced)
+
+| Feature | Description |
+|---------|-------------|
+| **Click Day** | Show saving/expense details |
+| **Filters** | All, Budget, Expenses, Savings |
+| **Color Rating** | Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%) |
+
+**Click Detail Popup:**
 ```
 ┌─────────────────────────────────┐
 │  📅 July 1, 2026                │
@@ -721,27 +783,15 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 └─────────────────────────────────┘
 ```
 
-**Calendar Filters:**
-| Filter | Shows |
-|--------|-------|
-| All | Combined view |
-| Budget | Budget progress only |
-| Expenses | Expenses only |
-| Savings | Savings only |
+---
 
-**Expense categories:**
-```kotlin
-enum class ExpenseCategory(val displayName: String) {
-    FOOD("Food & Drinks"),
-    TRANSPORT("Transport"),
-    SHOPPING("Shopping"),
-    BILLS("Bills & Utilities"),
-    ENTERTAINMENT("Entertainment"),
-    EDUCATION("Education"),
-    HEALTH("Health"),
-    OTHER("Other")
-}
-```
+## 🔔 Threshold Alerts
+
+| Alert | Trigger |
+|-------|---------|
+| **Warning** | 75% of budget spent |
+| **Critical** | 90% of budget spent |
+| **Over Budget** | 100%+ spent |
 
 ---
 
