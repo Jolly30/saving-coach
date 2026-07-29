@@ -72,24 +72,24 @@
 │  BUDGET & EXPENSE HUB                   │
 ├─────────────────────────────────────────┤
 │  🎯 Monthly Overall Budget    [Edit ⚙️] │
-│  $1,850 Spent  /  $3,000 Target        │
+│  1,850 MMK Spent  /  3,000 MMK Target  │
 │  =========================>  61% Used   │
-│  Remaining: $1,150  |  12 Days Left     │
+│  Remaining: 1,150 MMK  |  12 Days Left │
 ├─────────────────────────────────────────┤
 │  📁 CATEGORIES            [+ New]       │
 │                                         │
 │  🍔 Food & Dining                       │
-│  ================>  $320 / $600 target  │
+│  ================>  320 / 600 MMK       │
 │                                         │
 │  🚗 Transportation                      │
-│  ======>  $110 / $300 target            │
+│  ======>  110 / 300 MMK                 │
 ├─────────────────────────────────────────┤
 │  📋 RECENT EXPENSES                     │
 │  (Tap category above to filter)         │
 │                                         │
-│  ☕ Starbucks         -$4.50  Today     │
-│  🛒 Target Store     -$68.20  Yesterday │
-│  ⛽ Shell Gas        -$45.00  Jul 26   │
+│  ☕ Starbucks       -4,500 MMK  Today   │
+│  🛒 Target Store   -68,200 MMK  Y'day  │
+│  ⛽ Shell Gas      -45,000 MMK  Jul 26 │
 └─────────────────────────────────────────┘
 ```
 
@@ -98,10 +98,10 @@
 | Element | Description |
 |---------|-------------|
 | **Title** | "Monthly Overall Budget" |
-| **Spent / Target** | "$1,850 / $3,000" |
+| **Spent / Target** | "1,850 MMK / 3,000 MMK" |
 | **Progress Bar** | Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%) |
 | **Percentage** | "61% Used" or "108%" when over |
-| **Remaining** | "$1,150 left" or "-$250" when over |
+| **Remaining** | "1,150 MMK left" or "-250 MMK" when over |
 | **Days Left** | "12 Days Left" in month |
 | **Edit Button** | Opens budget editor |
 
@@ -117,16 +117,16 @@
 ```
 ┌─────────────────────────────────────────┐
 │  🎯 Monthly Overall Budget    [Edit ⚙️] │
-│  $3,250 Spent  /  $3,000 Target        │
+│  3,250 MMK Spent  /  3,000 MMK Target  │
 │  ==========================> 🔴 108%    │
-│  Remaining: -$250  |  5 Days Left       │
+│  Remaining: -250 MMK  |  5 Days Left   │
 └─────────────────────────────────────────┘
 ```
 
 **Push Notification:**
 ```
 ⚠️ Saving Coach — Budget Alert
-You've exceeded your monthly budget by $250!
+You've exceeded your monthly budget by 250,000 MMK!
 ```
 
 ### Section 2: Categories
@@ -141,14 +141,14 @@ You've exceeded your monthly budget by $250!
 **Default Categories:**
 | Emoji | Category | Default Target |
 |-------|----------|----------------|
-| 🍔 | Food & Dining | $600 |
-| 🚗 | Transportation | $300 |
-| 🛍️ | Shopping | $400 |
-| 📱 | Bills & Utilities | $200 |
-| 🎬 | Entertainment | $200 |
-| 📚 | Education | $150 |
-| 💊 | Health | $150 |
-| 📦 | Other | $200 |
+| 🍔 | Food & Dining | 600,000 MMK |
+| 🚗 | Transportation | 300,000 MMK |
+| 🛍️ | Shopping | 400,000 MMK |
+| 📱 | Bills & Utilities | 200,000 MMK |
+| 🎬 | Entertainment | 200,000 MMK |
+| 📚 | Education | 150,000 MMK |
+| 💊 | Health | 150,000 MMK |
+| 📦 | Other | 200,000 MMK |
 
 ### Section 3: Recent Expenses
 

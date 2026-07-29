@@ -672,7 +672,7 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 | **Calendar** | Expense heatmap | Not shown |
 | **Affects Each Other** | ❌ No | ❌ No |
 
-> Saving $1,000 does NOT reduce your expense total. Spending $5,000 does NOT reduce your savings. They are separate systems.
+> Saving 1,000 MMK does NOT reduce your expense total. Spending 5,000 MMK does NOT reduce your savings. They are separate systems.
 
 ---
 
@@ -685,24 +685,24 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 │  BUDGET & EXPENSE HUB                   │
 ├─────────────────────────────────────────┤
 │  🎯 Monthly Overall Budget    [Edit ⚙️] │
-│  $1,850 Spent  /  $3,000 Target        │
+│  1,850 MMK Spent  /  3,000 MMK Target  │
 │  =========================>  61% Used   │
-│  Remaining: $1,150  |  12 Days Left     │
+│  Remaining: 1,150 MMK  |  12 Days Left │
 ├─────────────────────────────────────────┤
 │  📁 CATEGORIES            [+ New]       │
 │                                         │
 │  🍔 Food & Dining                       │
-│  ================>  $320 / $600 target  │
+│  ================>  320 / 600 MMK       │
 │                                         │
 │  🚗 Transportation                      │
-│  ======>  $110 / $300 target            │
+│  ======>  110 / 300 MMK                 │
 ├─────────────────────────────────────────┤
 │  📋 RECENT EXPENSES                     │
 │  (Tap category above to filter)         │
 │                                         │
-│  ☕ Starbucks         -$4.50  Today     │
-│  🛒 Target Store     -$68.20  Yesterday │
-│  ⛽ Shell Gas        -$45.00  Jul 26   │
+│  ☕ Starbucks       -4,500 MMK  Today   │
+│  🛒 Target Store   -68,200 MMK  Y'day  │
+│  ⛽ Shell Gas      -45,000 MMK  Jul 26 │
 └─────────────────────────────────────────┘
 ```
 
@@ -711,10 +711,10 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 | Element | Description |
 |---------|-------------|
 | **Title** | "Monthly Overall Budget" |
-| **Spent / Target** | "$1,850 / $3,000" |
+| **Spent / Target** | "1,850 MMK / 3,000 MMK" |
 | **Progress Bar** | Color: Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%) |
 | **Percentage** | "61% Used" |
-| **Remaining** | "$1,150 left" |
+| **Remaining** | "1,150 MMK left" |
 | **Days Left** | "12 Days Left" in month |
 | **Edit Button** | Opens budget editor |
 
@@ -730,14 +730,14 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 **Default Categories:**
 | Emoji | Category | Default Target |
 |-------|----------|----------------|
-| 🍔 | Food & Dining | $600 |
-| 🚗 | Transportation | $300 |
-| 🛍️ | Shopping | $400 |
-| 📱 | Bills & Utilities | $200 |
-| 🎬 | Entertainment | $200 |
-| 📚 | Education | $150 |
-| 💊 | Health | $150 |
-| 📦 | Other | $200 |
+| 🍔 | Food & Dining | 600,000 MMK |
+| 🚗 | Transportation | 300,000 MMK |
+| 🛍️ | Shopping | 400,000 MMK |
+| 📱 | Bills & Utilities | 200,000 MMK |
+| 🎬 | Entertainment | 200,000 MMK |
+| 📚 | Education | 150,000 MMK |
+| 💊 | Health | 150,000 MMK |
+| 📦 | Other | 200,000 MMK |
 
 ### Section 3: Recent Expenses
 
@@ -764,20 +764,20 @@ Challenges Tab → Challenge Cards → Click Card → Detail View
 ┌─────────────────────────────────────────┐
 │  SAVING CHALLENGES                      │
 ├─────────────────────────────────────────┤
-│  💰 Total Saved: $1,250                 │
+│  💰 Total Saved: 1,250,000 MMK          │
 │  📊 3 Active  |  1 Completed            │
 ├─────────────────────────────────────────┤
 │  🎯 Challenge Cards                     │
 │                                         │
 │  ┌─────────┐  ┌─────────┐              │
-│  │ $1/Day  │  │ 7-Day   │              │
-│  │ $12/$30 │  │ $45/$100│              │
+│  │1K/Day   │  │ 7-Day   │              │
+│  │12k/30k  │  │ 45k/100k│              │
 │  │ ████░░░ │  │ █████░░ │              │
 │  └─────────┘  └─────────┘              │
 │                                         │
 │  ┌─────────┐  ┌─────────┐              │
 │  │100 Env. │  │ + New   │              │
-│  │$2k/$5k  │  │ Create  │              │
+│  │2M/5M    │  │ Create  │              │
 │  │████░░░░ │  │ Challenge│              │
 │  └─────────┘  └─────────┘              │
 └─────────────────────────────────────────┘
@@ -791,7 +791,7 @@ Challenges Tab → Challenge Cards → Click Card → Detail View
 **Challenge Cards View (Grid/List):**
 | Card | Shows |
 |------|-------|
-| Preset cards | $1 a Day, 7-Day Sprint, 100 Envelope, No-Spend Week |
+| Preset cards | 1K a Day, 7-Day Sprint, 100 Envelope, No-Spend Week |
 | Custom cards | User-created challenges |
 | "+ Create" card | Opens custom challenge wizard |
 
@@ -843,16 +843,16 @@ Challenges Tab → Challenge Cards → Click Card → Detail View
 ```
 ┌─────────────────────────────────────────┐
 │  🎯 Monthly Overall Budget    [Edit ⚙️] │
-│  $3,250 Spent  /  $3,000 Target        │
+│  3,250 MMK Spent  /  3,000 MMK Target  │
 │  ==========================> 🔴 108%    │
-│  Remaining: -$250  |  5 Days Left       │
+│  Remaining: -250 MMK  |  5 Days Left   │
 └─────────────────────────────────────────┘
 ```
 
 **Push Notification:**
 ```
 ⚠️ Saving Coach — Budget Alert
-You've exceeded your monthly budget by $250!
+You've exceeded your monthly budget by 250,000 MMK!
 Tap to view details.
 ```
 

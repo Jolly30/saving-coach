@@ -330,7 +330,7 @@ saving-coach/
 | **Calendar** | Expense heatmap | Not shown |
 | **Affects Each Other** | ❌ No | ❌ No |
 
-> Saving $1,000 does NOT reduce your expense total. Spending $5,000 does NOT reduce your savings. They are separate systems.
+> Saving 1,000 MMK does NOT reduce your expense total. Spending 5,000 MMK does NOT reduce your savings. They are separate systems.
 
 ### Other Screens
 
