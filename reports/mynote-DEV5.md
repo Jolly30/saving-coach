@@ -54,7 +54,7 @@
 
 | File | Task | Difficulty |
 |------|------|:----------:|
-| `export/CsvExporter.kt` | Generate CSV from expenses | Easy |
+| `export/ExcelExporter.kt` | Generate Excel from expenses + savings | Medium |
 | `export/ShareManager.kt` | Android share/email intent | Easy |
 | `ui/settings/SettingsScreen.kt` | Profile + export + settings | Medium |
 | `ui/settings/SettingsViewModel.kt` | Settings state + preferences | Medium |
@@ -116,8 +116,32 @@ users/{userId}/profile {
 | **Theme** | Light, Pink, Dark | `ThemeManager.kt` + DataStore |
 | **Language** | English, Myanmar | Android locale switching |
 | **Notifications** | On/Off toggle | `SettingsRepository.kt` + DataStore |
-| **Export** | CSV export button | `CsvExporter.kt` |
+| **Export** | Monthly history (spending + saving) in Excel | `ExcelExporter.kt` |
 | **Account** | Sign out | `AuthRepository.signOut()` |
+
+---
+
+## 📊 Export Feature
+
+### Export Types
+
+| Export | Content | Format |
+|--------|---------|--------|
+| **Spending History** | Expenses per month | `.xlsx` Excel |
+| **Saving History** | Challenge deposits per month | `.xlsx` Excel |
+
+### Export Flow
+```
+Settings → Export → Select Month → Select Type (Spending/Saving) → Download Excel
+```
+
+### Excel Columns (Spending)
+| Date | Category | Merchant | Amount (MMK) | Notes |
+|------|----------|----------|--------------|-------|
+
+### Excel Columns (Saving)
+| Date | Challenge Name | Deposit Amount (MMK) | Total Saved (MMK) |
+|------|----------------|----------------------|-------------------|
 
 ---
 
