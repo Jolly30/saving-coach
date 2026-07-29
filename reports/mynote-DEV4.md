@@ -99,11 +99,35 @@
 |---------|-------------|
 | **Title** | "Monthly Overall Budget" |
 | **Spent / Target** | "$1,850 / $3,000" |
-| **Progress Bar** | Color: Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%) |
-| **Percentage** | "61% Used" |
-| **Remaining** | "$1,150 left" |
+| **Progress Bar** | Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%) |
+| **Percentage** | "61% Used" or "108%" when over |
+| **Remaining** | "$1,150 left" or "-$250" when over |
 | **Days Left** | "12 Days Left" in month |
 | **Edit Button** | Opens budget editor |
+
+### Over Budget Alerts
+
+| Alert | Trigger | UI |
+|-------|---------|-----|
+| **Warning** | 75% spent | 🟡 Yellow banner |
+| **Critical** | 90% spent | 🟠 Orange banner |
+| **Over Budget** | 100%+ spent | 🔴 Red banner + push notification |
+
+**Over Budget Example:**
+```
+┌─────────────────────────────────────────┐
+│  🎯 Monthly Overall Budget    [Edit ⚙️] │
+│  $3,250 Spent  /  $3,000 Target        │
+│  ==========================> 🔴 108%    │
+│  Remaining: -$250  |  5 Days Left       │
+└─────────────────────────────────────────┘
+```
+
+**Push Notification:**
+```
+⚠️ Saving Coach — Budget Alert
+You've exceeded your monthly budget by $250!
+```
 
 ### Section 2: Categories
 

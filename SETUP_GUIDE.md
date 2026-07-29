@@ -787,11 +787,28 @@ Challenges Tab → Challenge Cards → Click Card → Detail View
 
 ## 🔔 Threshold Alerts
 
-| Alert | Trigger |
-|-------|---------|
-| **Warning** | 75% of budget spent |
-| **Critical** | 90% of budget spent |
-| **Over Budget** | 100%+ spent |
+| Alert | Trigger | UI |
+|-------|---------|-----|
+| **Warning** | 75% of budget spent | 🟡 Yellow banner |
+| **Critical** | 90% of budget spent | 🟠 Orange banner |
+| **Over Budget** | 100%+ spent | 🔴 Red banner + push notification |
+
+**Over Budget UI (Remaining goes negative):**
+```
+┌─────────────────────────────────────────┐
+│  🎯 Monthly Overall Budget    [Edit ⚙️] │
+│  $3,250 Spent  /  $3,000 Target        │
+│  ==========================> 🔴 108%    │
+│  Remaining: -$250  |  5 Days Left       │
+└─────────────────────────────────────────┘
+```
+
+**Push Notification:**
+```
+⚠️ Saving Coach — Budget Alert
+You've exceeded your monthly budget by $250!
+Tap to view details.
+```
 
 ---
 
