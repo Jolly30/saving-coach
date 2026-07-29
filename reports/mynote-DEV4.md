@@ -67,6 +67,32 @@
 
 ## 🎯 Challenges Feature — Detailed Requirements
 
+### User Flow
+```
+Challenges Tab → Challenge Cards → Click Card → Detail View
+```
+
+**Challenge Cards View:**
+- Grid/list of challenge cards
+- Preset cards (4 built-in)
+- Custom cards (user-created)
+- "+ Create" card → opens wizard
+
+**Card Content:**
+- Emoji/Icon
+- Challenge name
+- Progress bar (deposited / target)
+- Days remaining
+
+**Detail View (When card clicked):**
+- Challenge-specific UI (dot grid, envelope grid, timeline, etc.)
+- Deposit history list
+- Add deposit button
+- Settings/edit button
+- Delete button
+
+---
+
 ### 1. PRESET CHALLENGES
 
 #### $1 a Day for 1 Month (Constant Saving)

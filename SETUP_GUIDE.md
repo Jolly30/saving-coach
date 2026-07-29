@@ -678,29 +678,30 @@ Swap mocks → real repos in `RepositoryModule.kt`:
    - Reset for new month
 4. **Challenges Screen**
 
-   **Preset Challenges (4 built-in):**
+   **Challenge Flow:**
+   ```
+   Challenges Tab → Challenge Cards → Click Card → Detail View
+   ```
 
-   | Challenge | Goal | UI |
-   |-----------|------|-----|
-   | **$1 a Day** | Deposit $1/day for 30 days ($30 target) | 30-day dot grid, tap to mark, turns green |
-   | **7-Day Sprint** | Deposit anything for 7 days | 7-day timeline + "Log Any Deposit" button |
-   | **100 Envelope** | $5,050 target | 10x10 grid, "Draw Random Envelope" with flip animation |
-   | **No-Spend Week** | Resist impulse spending | 7-day countdown + "Log Resisted Impulse" button |
+   **Challenge Cards View (Grid/List):**
+   | Card | Shows |
+   |------|-------|
+   | Preset cards | $1 a Day, 7-Day Sprint, 100 Envelope, No-Spend Week |
+   | Custom cards | User-created challenges |
+   | "+ Create" card | Opens custom challenge wizard |
 
-   **Custom Challenge Wizard:**
+   **Card Content:**
+   - Emoji/Icon
+   - Challenge name
+   - Progress bar (deposited / target)
+   - Days remaining
 
-   | Step | Fields |
-   |------|--------|
-   | **1. Goal Details** | Name, Target Amount, Emoji/Icon Picker |
-   | **2. Deposit Style** | Envelope Grid / Constant Saving / Flexible |
-   | **3. Duration** | Timeline (1 week - 1 year) + pace projection |
-
-   **CRUD Operations:**
-   - Create new challenge (preset or custom)
-   - Read/view challenge details
-   - Update challenge settings
-   - Delete challenge
-   - Track deposits with history
+   **Detail View (When card clicked):**
+   - Challenge-specific UI (dot grid, envelope grid, timeline, etc.)
+   - Deposit history list
+   - Add deposit button
+   - Settings/edit button
+   - Delete button
 5. **Calendar Heatmap (Enhanced)**
    - Click on a day → show saving/expense details
    - Filter by: All, Budget, Expenses, Savings
