@@ -288,18 +288,44 @@ saving-coach/
 
 ---
 
-## 📱 Screens
+## 📱 Navigation
 
-| Screen | Route | Status |
-|--------|-------|:------:|
-| Auth / Login | `auth` | ✅ Done |
-| Onboarding (Profile) | `onboarding` | ⏳ Dev 5 |
-| Dashboard | `dashboard` | ✅ Done |
-| Expenses & Budget | `expenses` | ⏳ Dev 4 |
-| Add Expense | `add_expense` | ⏳ Dev 4 |
-| AI Chat | `chat` | ✅ Done |
-| Receipt Camera | `camera` | ⏳ Dev 2 |
-| Settings | `settings` | ⏳ Dev 5 |
+### Bottom Nav (4 tabs)
+
+```
+┌─────────────────────────────────────────┐
+│  💰 Saving Coach           🔔 (notif)  │
+├─────────────────────────────────────────┤
+│                                         │
+│         Content Area                    │
+│                                    💬   │ ← Chat bubble (FAB)
+│                                         │
+├─────────────────────────────────────────┤
+│  📊      🧾      🎯      ⚙️           │
+│ Dashboard Expense Challenges Settings   │
+└─────────────────────────────────────────┘
+```
+
+| Tab | Icon | What's Inside | Status |
+|-----|------|---------------|:------:|
+| **Dashboard** | 📊 | Budget progress, spending overview, calendar heatmap | ✅ Done |
+| **Expense** | 🧾 | Expense list + budget settings | ⏳ Dev 4 |
+| **Challenges** | 🎯 | Saving challenges, deposits, progress | ⏳ Dev 4 |
+| **Settings** | ⚙️ | Profile, theme, language, notifications, export | ⏳ Dev 5 |
+
+**Chat Bubble (FAB):**
+- Floating button on all screens
+- Tap to open AI chat
+- Can be dragged or fixed position
+
+### Other Screens
+
+| Screen | Route | Access | Status |
+|--------|-------|--------|:------:|
+| Auth / Login | `auth` | Start | ✅ Done |
+| Onboarding | `onboarding` | After sign up | ⏳ Dev 5 |
+| Add Expense | `add_expense` | From Expense tab | ⏳ Dev 4 |
+| Receipt Camera | `camera` | From Chat | ⏳ Dev 2 |
 
 ### Dashboard Features
 

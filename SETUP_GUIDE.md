@@ -646,9 +646,9 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 
 ---
 
-### Dev 4: Expenses & Budget (Combined Page)
+### Dev 4: Expenses, Budget & Challenges
 
-> **Note:** Dev 4 builds the combined Expenses & Budget page with calendar heatmap.
+> **Note:** Dev 4 builds the Expense tab, Challenges tab, and calendar heatmap.
 
 **Files owned:**
 - `ui/expenses/ExpenseListScreen.kt`       # Expense list with search/filter
@@ -656,6 +656,8 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 - `ui/expenses/ExpenseViewModel.kt`        # Expense list + add state
 - `ui/budget/BudgetScreen.kt`              # Budget limit setting
 - `ui/budget/BudgetViewModel.kt`           # Budget state
+- `ui/challenges/ChallengesScreen.kt`      # Saving challenges list
+- `ui/challenges/ChallengeViewModel.kt`    # Challenges state
 - `ui/dashboard/CalendarHeatmap.kt`        # Enhanced calendar with click + filters
 
 **What to build:**
@@ -674,11 +676,17 @@ Swap mocks → real repos in `RepositoryModule.kt`:
    - View current spending vs limit
    - Edit existing limit
    - Reset for new month
-4. **Calendar Heatmap (Enhanced)**
+4. **Challenges Screen**
+   - List of active saving challenges
+   - Create new challenge (name, target amount, deadline)
+   - View challenge details + deposit history
+   - Add deposit to challenge
+   - Complete/delete challenge
+5. **Calendar Heatmap (Enhanced)**
    - Click on a day → show saving/expense details
    - Filter by: All, Budget, Expenses, Savings
    - Color rating: Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%)
-5. **Threshold Alerts**
+6. **Threshold Alerts**
    - Local notification at 75% and 90% of budget
    - Dashboard banner when over budget (uses Dev 1's components)
 
@@ -1051,12 +1059,13 @@ Response: {
 ```kotlin
 sealed class Route(val route: String) {
     object Auth : Route("auth")
+    object Onboarding : Route("onboarding")
     object Dashboard : Route("dashboard")
     object Expenses : Route("expenses")
+    object Challenges : Route("challenges")
     object AddExpense : Route("add_expense")
     object Chat : Route("chat")
     object Camera : Route("camera")
-    object Budget : Route("budget")
     object Settings : Route("settings")
 }
 ```
@@ -1065,44 +1074,50 @@ sealed class Route(val route: String) {
 
 ```
                     ┌─────────────┐
-                    │   Splash    │
-                    │  (optional) │
+                    │    Auth     │
+                    │  (Login)    │
+                    └──────┬──────┘
+                           │ sign in
+                    ┌──────▼──────┐
+                    │  Onboarding │ (new users only)
+                    │  Profile    │
                     └──────┬──────┘
                            │
                     ┌──────▼──────┐
-              ┌─────│  Authenticated? │─────┐
-              │     └──────┬──────┘     │
-              │            │ yes        │ no
-              │     ┌──────▼──────┐     │
-              │     │  Main Screen│     │
-              │     │ (Nav Host)  │     │
+              ┌─────│  Main Screen │─────┐
+              │     │  (Nav Host)  │     │
               │     └──────┬──────┘     │
               │            │            │
-        ┌─────┼─────┬──────┼──────┬─────┼─────┐
-        │     │     │      │      │     │     │
-   ┌────▼──┐ ┌▼───┐ ┌▼───┐ ┌▼───┐ ┌▼───┐ ┌▼───┐
-   │Dashboard│ │Exp.│ │Chat│ │Cam.│ │Budg│ │Sett.│
-   │        │ │List│ │    │ │    │ │et  │ │ings │
-   └────────┘ └──┬─┘ └──┬─┘ └────┘ └────┘ └─────┘
-                 │      │
-           ┌─────▼──┐   │
-           │Add Exp.│   │
-           │(Manual)│   │
-           └────────┘   │
-                   ┌────▼────┐
-                   │Receipt  │
-                   │Result   │
-                   └─────────┘
+        ┌─────┼─────┬──────┼─────┬─────┐
+        │     │     │      │     │     │
+   ┌────▼──┐ ┌▼───┐ ┌▼───┐ ┌▼───┐ ┌▼───┐
+   │Dashboard│ │Exp.│ │Chal│ │Sett│ │ 💬 │
+   │        │ │    │ │len.│ │ings│ │ FAB │
+   └────────┘ └──┬─┘ └────┘ └────┘ └─────┘
+                 │
+           ┌─────▼──┐
+           │Add Exp.│
+           │(Manual)│
+           └────────┘
 ```
 
-### Bottom Navigation Tabs
+### Bottom Navigation Tabs (4 tabs)
 
-| Tab | Icon | Route | Badge |
-|-----|------|-------|-------|
-| Dashboard | `Icons.Dashboard` | `dashboard` | — |
-| Expenses | `Icons.Receipt` | `expenses` | Count of today's expenses |
-| Chat | `Icons.Chat` | `chat` | — |
-| Settings | `Icons.Settings` | `settings` | — |
+| Tab | Icon | Route | What's Inside |
+|-----|------|-------|---------------|
+| Dashboard | `Icons.Dashboard` | `dashboard` | Budget progress, spending overview, calendar heatmap |
+| Expense | `Icons.Receipt` | `expenses` | Expense list + budget settings |
+| Challenges | `Icons.EmojiEvents` | `challenges` | Saving challenges, deposits, progress |
+| Settings | `Icons.Settings` | `settings` | Profile, theme, language, notifications, export |
+
+### Chat Bubble (FAB)
+
+| Element | Implementation |
+|---------|----------------|
+| **Position** | Floating on all screens (bottom-right) |
+| **Icon** | `Icons.Default.Chat` |
+| **Action** | Tap → navigate to Chat screen |
+| **Visibility** | Hidden on Auth, Onboarding, and Chat screens |
 
 ---
 

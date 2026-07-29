@@ -1,6 +1,6 @@
 # 👤 Dev 4 — Work Log
 
-> **Role:** Expenses & Budget (Combined Page)  
+> **Role:** Expenses, Budget & Challenges  
 > **Branch:** `feature/expense-budget`
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 🔜 Up Next (6 files)
+## 🔜 Up Next (8 files)
 
 | File | Task | Difficulty |
 |------|------|:----------:|
@@ -59,6 +59,8 @@
 | `ui/expenses/ExpenseViewModel.kt` | Expense state management | Medium |
 | `ui/budget/BudgetScreen.kt` | Budget limit setting | Easy |
 | `ui/budget/BudgetViewModel.kt` | Budget state | Easy |
+| `ui/challenges/ChallengesScreen.kt` | Saving challenges list | Medium |
+| `ui/challenges/ChallengeViewModel.kt` | Challenges state | Easy |
 | `ui/dashboard/CalendarHeatmap.kt` | Enhanced calendar with click + filters | Medium |
 
 ---
