@@ -742,6 +742,36 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 Challenges Tab → Challenge Cards → Click Card → Detail View
 ```
 
+### Screen Layout
+
+```
+┌─────────────────────────────────────────┐
+│  SAVING CHALLENGES                      │
+├─────────────────────────────────────────┤
+│  💰 Total Saved: $1,250                 │
+│  📊 3 Active  |  1 Completed            │
+├─────────────────────────────────────────┤
+│  🎯 Challenge Cards                     │
+│                                         │
+│  ┌─────────┐  ┌─────────┐              │
+│  │ $1/Day  │  │ 7-Day   │              │
+│  │ $12/$30 │  │ $45/$100│              │
+│  │ ████░░░ │  │ █████░░ │              │
+│  └─────────┘  └─────────┘              │
+│                                         │
+│  ┌─────────┐  ┌─────────┐              │
+│  │100 Env. │  │ + New   │              │
+│  │$2k/$5k  │  │ Create  │              │
+│  │████░░░░ │  │ Challenge│              │
+│  └─────────┘  └─────────┘              │
+└─────────────────────────────────────────┘
+```
+
+**Summary Header:**
+- 💰 **Total Saved:** Sum of all deposits across all challenges
+- 📊 **Active:** Number of active challenges
+- ✅ **Completed:** Number of completed challenges
+
 **Challenge Cards View (Grid/List):**
 | Card | Shows |
 |------|-------|
@@ -752,8 +782,8 @@ Challenges Tab → Challenge Cards → Click Card → Detail View
 **Card Content:**
 - Emoji/Icon
 - Challenge name
-- Progress bar (deposited / target)
-- Days remaining
+- Progress: deposited / target
+- Progress bar
 
 **Detail View (When card clicked):**
 - Challenge-specific UI (dot grid, envelope grid, timeline, etc.)
