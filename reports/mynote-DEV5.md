@@ -41,36 +41,56 @@
 
 | File | Purpose |
 |------|---------|
-| `proxy/` | Vercel serverless proxy for Gemini API |
+| `proxy/` | Vercel serverless proxy |
 | `.github/workflows/` | CI/CD pipelines |
 | `app/proguard-rules.pro` | ProGuard rules |
 | `app/build.gradle.kts` | Signing config (release) |
+| `ui/theme/Theme.kt` | Material 3 theme |
 
 ---
 
-## 🔜 Up Next (4 files)
+## 🔜 Up Next (6 files)
 
 | File | Task | Difficulty |
 |------|------|:----------:|
 | `export/CsvExporter.kt` | Generate CSV from expenses | Easy |
 | `export/ShareManager.kt` | Android share/email intent | Easy |
-| `ui/settings/SettingsScreen.kt` | Profile + export + sign out | Easy |
-| `ui/settings/SettingsViewModel.kt` | Settings state | Easy |
+| `ui/settings/SettingsScreen.kt` | Profile + export + settings | Medium |
+| `ui/settings/SettingsViewModel.kt` | Settings state + preferences | Medium |
+| `data/repository/SettingsRepository.kt` | Save/load user preferences | Easy |
+| `ui/theme/ThemeManager.kt` | Switch between themes | Easy |
 
 ---
 
-## 📋 CSV Export Columns
-```
-Date, Category, Merchant, Amount, Currency, Notes
-```
+## 📋 Settings Screen Sections
+
+| Section | Options | Implementation |
+|---------|---------|----------------|
+| **Profile** | Name, email, photo | From `FirebaseAuthRepository` |
+| **Theme** | Light, Pink, Dark | `ThemeManager.kt` + DataStore |
+| **Language** | English, Myanmar | Android locale switching |
+| **Notifications** | On/Off toggle | `SettingsRepository.kt` + DataStore |
+| **Export** | CSV export button | `CsvExporter.kt` |
+| **Account** | Sign out | `AuthRepository.signOut()` |
 
 ---
 
-## 📋 Settings Sections
-- Profile card (name, email, photo from Google Auth)
-- Export data button → CSV
-- Sign out → navigate to Auth
-- App version + About
+## 🎨 Theme Options
+
+| Theme | Mode | Colors |
+|-------|------|--------|
+| Light | `ThemeMode.Light` | White background, dark text |
+| Pink | `ThemeMode.Light` | Pink primary color, light background |
+| Dark | `ThemeMode.Dark` | Dark background, light text |
+
+---
+
+## 🌐 Language Options
+
+| Language | Locale Code | Resources |
+|----------|-------------|-----------|
+| English | `en` | `res/values/` (default) |
+| Myanmar | `my` | `res/values-my/` (need to create) |
 
 ---
 
@@ -81,6 +101,7 @@ Date, Category, Merchant, Amount, Currency, Notes
 - ✅ Theme + reusable components
 - ✅ CI/CD pipelines ready
 - ✅ Signing config ready
+- ✅ Theme.kt ready
 
 ---
 
@@ -89,15 +110,9 @@ Date, Category, Merchant, Amount, Currency, Notes
 - CSV export uses `ExpenseRepository` from Dev 3
 - Profile data from `FirebaseAuthRepository` (Dev 1)
 - Sign out calls `AuthRepository.signOut()`
-
----
-
-## 🔗 If Proxy URL Changes
-
-```bash
-# Update local.defaults.properties
-proxy.url=https://new-vercel-url.vercel.app
-```
+- Theme switching via `ThemeManager.kt` in `ui/theme/`
+- Language switching via Android locale API
+- Settings stored in DataStore
 
 ---
 
