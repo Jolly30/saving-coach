@@ -660,6 +660,22 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 
 ---
 
+## ⚠️ Important: Saving vs Expense & Budget
+
+**Saving challenges are COMPLETELY ISOLATED from expenses and budget.**
+
+| Feature | Expense & Budget | Saving Challenges |
+|---------|:----------------:|:-----------------:|
+| **Tracks** | Spending (money OUT) | Savings (money SET ASIDE) |
+| **Budget** | Monthly limit | No limit |
+| **Categories** | Yes (Food, Transport, etc.) | No |
+| **Calendar** | Expense heatmap | Not shown |
+| **Affects Each Other** | ❌ No | ❌ No |
+
+> Saving $1,000 does NOT reduce your expense total. Spending $5,000 does NOT reduce your savings. They are separate systems.
+
+---
+
 ## 💰 Budget & Expense Hub (Expense Tab)
 
 ### Screen Layout
