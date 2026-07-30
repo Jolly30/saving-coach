@@ -14,10 +14,11 @@
 | 📊 **Dashboard** | Budget progress, calendar heatmap, spending overview | ✅ Done |
 | 🔐 **Auth** | Google Sign-In + Email/Password | ✅ Done |
 | 🤖 **AI Chat** | Natural language expense logging via Gemini AI | ✅ Done |
+| 🔥 **Firestore Repositories** | Real Firebase data layer (Expense, Budget, SavingChallenge) | ⏳ Dev 1 |
 | 📸 **Receipt Scanner** | Snap a receipt → AI extracts data automatically | ⏳ Dev 2 |
-| 💰 **Expense Tracker** | Manual add, edit, swipe-delete, search & filter | ⏳ Dev 4 |
+| 💰 **Budget & Expense Hub** | Monthly budget tracker, category progress, recent expenses, log new expense | ⏳ Dev 4 |
 | 📅 **Budget Planner** | Set monthly limits, track spending vs budget | ⏳ Dev 4 |
-| 🎯 **Saving Challenges** | Set goals, track deposits, visualize progress | ⏳ Dev 4 |
+| 🎯 **Saving Challenges** | Set goals, track deposits, visualize progress | ⏳ Dev 3 |
 | 📤 **CSV Export** | Export data, share via email | ⏳ Dev 5 |
 | ⚙️ **Settings** | Profile, export, sign out | ⏳ Dev 5 |
 
@@ -221,6 +222,8 @@ Android App → Vercel Proxy (Singapore) → Gemini API
 
 **Proxy URL:** `https://proxy-topaz-ten-36.vercel.app`
 
+> ✅ **No setup needed for other devs!** The proxy is already deployed. Just run `cp local.defaults.properties local.properties` — the proxy URL is pre-filled.
+
 The API key is stored securely in Vercel (not in the app). See [SETUP_GUIDE.md](SETUP_GUIDE.md#8-gemini-api-setup-proxy-for-myanmar) for details.
 
 ---
@@ -229,10 +232,10 @@ The API key is stored securely in Vercel (not in the app). See [SETUP_GUIDE.md](
 
 | Dev | Role | Branch | Status |
 |:---:|------|--------|:------:|
-| **1** | UI Skeleton + Auth + Dashboard + AI Proxy | `main` | ✅ Done |
+| **1** | UI Skeleton + Auth + Dashboard + AI Proxy + Firestore | `main` | ✅ Done |
 | **2** | Receipt Scanner + Camera | `feature/ai-chat-receipt` | ⏳ Pending |
-| **3** | Firestore Repositories | `feature/data-layer` | ⏳ Pending |
-| **4** | Expense Forms + Budget | `feature/expense-budget` | ⏳ Pending |
+| **3** | Saving Challenges | `feature/saving-challenges` | ⏳ Pending |
+| **4** | Budget & Expense Hub | `feature/expense-budget` | ⏳ Pending |
 | **5** | Export + Settings | `feature/export-settings-ci` | ⏳ Pending |
 
 ### Dev 1 Delivered ✅
@@ -309,8 +312,8 @@ saving-coach/
 | Tab | Icon | What's Inside | Status |
 |-----|------|---------------|:------:|
 | **Dashboard** | 📊 | Budget progress, spending overview, calendar heatmap | ✅ Done |
-| **Expense** | 🧾 | Expense list + budget settings | ⏳ Dev 4 |
-| **Challenges** | 🎯 | Saving challenges, deposits, progress | ⏳ Dev 4 |
+| **Expense** | 🧾 | Budget & Expense Hub — monthly budget, categories, recent expenses, log new expense | ⏳ Dev 4 |
+| **Challenges** | 🎯 | Saving challenges, deposits, progress | ⏳ Dev 3 |
 | **Settings** | ⚙️ | Profile, theme, language, notifications, export | ⏳ Dev 5 |
 
 **Chat Bubble (FAB):**
@@ -318,7 +321,64 @@ saving-coach/
 - Tap to open AI chat
 - Can be dragged or fixed position
 
-### ⚠️ Important: Saving vs Expense & Budget
+### Budget & Expense Hub (Expense Tab)
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                     BUDGET & EXPENSE HUB                         │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │ 🎯 Monthly Overall Budget                 [ Edit Budget ⚙️ ] │  │
+│  │                                                            │  │
+│  │ 1,850 MMK Spent  /  3,000 MMK Target                      │  │
+│  │ ==========================>................   61% Used     │  │
+│  │                                                            │  │
+│  │ Remaining: 1,150 MMK  |  12 Days Left                      │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│            ┌────────────────────────────────────────┐            │
+│            │        ➕ LOG NEW EXPENSE               │            │
+│            └────────────────────────────────────────┘            │
+│                                                                  │
+│  🏷️ CATEGORIES                                [ + New Category ] │
+│                                                                  │
+│  🍔 Food & Dining                                                │
+│  =======================>...................  320 / 600 MMK      │
+│                                                                  │
+│  🚗 Transportation                                              │
+│  =========>.................................  110 / 300 MMK      │
+│                                                                  │
+├──────────────────────────────────────────────────────────────────┤
+│ 🧾 RECENT EXPENSES                                               │
+│ (Tap any category above to filter this list)                     │
+│                                                                  │
+│  ☕ Starbucks                          -4,500 MMK  │ Today       │
+│  🛒 Target Store                     -68,200 MMK  │ Yesterday   │
+│  ⛽ Shell Gas Station               -45,000 MMK  │ Jul 26      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Log Expense Bottom Sheet:**
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ ➕ Log Expense                           [✕ Close]              │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Amount (MMK):                                                   │
+│  [ 0                                                         ]  │
+│                                                                  │
+│  Select Category (Required):                                     │
+│  [ 🍔 Food ]  [ 🚗 Trans. ]  [ 🛒 Groceries ]  [ 🎬 Fun ]      │
+│                                                                  │
+│  Note / Merchant (Optional):                                     │
+│  [ e.g., Starbucks Coffee                                      ]│
+│                                                                  │
+│  [ Save Expense ]                                                │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+> ⚠️ Important: Saving vs Expense & Budget
 
 **Saving challenges are COMPLETELY ISOLATED from expenses and budget.**
 
@@ -411,7 +471,7 @@ Individual work logs are in the [`reports/`](./reports/) folder.
 | [mynote.md](./reports/mynote.md) | 1 | UI Skeleton + Auth + Dashboard + AI Proxy ✅ |
 | [mynote-DEV2.md](./reports/mynote-DEV2.md) | 2 | Receipt Scanner + Camera |
 | [mynote-DEV3.md](./reports/mynote-DEV3.md) | 3 | Firestore Repositories |
-| [mynote-DEV4.md](./reports/mynote-DEV4.md) | 4 | Expense Forms + Budget |
+| [mynote-DEV4.md](./reports/mynote-DEV4.md) | 4 | Budget & Expense Hub |
 | [mynote-DEV5.md](./reports/mynote-DEV5.md) | 5 | Export + Settings |
 
 ---

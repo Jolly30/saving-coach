@@ -1,6 +1,6 @@
 # 👤 Dev 1 — Work Log
 
-> Last updated: 2026-07-28
+> Last updated: 2026-07-30
 
 ---
 
@@ -8,8 +8,9 @@
 
 | Task | Status | Notes |
 |------|--------|-------|
-| All Dev 1 tasks | ✅ **COMPLETE** | Repo pushed, team unblocked 🎉 |
+| All original Dev 1 tasks | ✅ **COMPLETE** | Repo pushed, team unblocked 🎉 |
 | Real Firebase Auth + Google Sign-In | ✅ **COMPLETE** | Credential Manager integrated, build passes |
+| Firestore Repositories (from Dev 3) | ⏳ **PENDING** | FirebaseExpenseRepository, FirebaseBudgetRepository, FirebaseSavingChallengeRepository |
 
 ---
 
@@ -215,12 +216,50 @@ Response: { "reply": "..." }
 
 ---
 
+## 🔧 Session 3 — Firestore Repositories (Upcoming)
+
+### New Responsibility (Moved from Dev 3)
+
+Dev 1 now owns the real Firestore repository implementations. Previously this was Dev 3's job.
+
+**3 files to build:**
+
+| File | Task | Difficulty |
+|------|------|:----------:|
+| `FirebaseExpenseRepository.kt` | CRUD + real-time sync for expenses via Firestore | Medium |
+| `FirebaseBudgetRepository.kt` | Budget limits + spending totals | Easy |
+| `FirebaseSavingChallengeRepository.kt` | Challenges + deposits CRUD | Easy |
+
+**Firestore structure:**
+```
+users/{userId}/expenses/{expenseId}
+users/{userId}/budgets/{YYYY-MM}
+users/{userId}/challenges/{challengeId}
+users/{userId}/challenges/{challengeId}/deposits/{depositId}
+```
+
+**How to finish:**
+Swap mocks → real repos in `RepositoryModule.kt`:
+```kotlin
+// Change:
+@Binds abstract fun bindExpenseRepository(impl: MockExpenseRepository): ExpenseRepository
+// To:
+@Binds abstract fun bindExpenseRepository(impl: FirebaseExpenseRepository): ExpenseRepository
+```
+
+**After this:**
+- Dev 3 (Saving Challenges), Dev 4 (Budget & Expense Hub), Dev 5 (Export) swap their mocks to real data
+- Integration test week
+
+---
+
 ## 📝 Scratch Notes
 
 ```
 Project: Saving Coach | Package: com.savingcoach.app
 Repo: https://github.com/Jolly30/saving-coach
-Dev 1 Role: UI Skeleton — Theme + Nav + Auth + Dashboard + CI/CD
-Status: ✅ ALL 48 TASKS COMPLETE + Real Auth + Gemini Proxy (Deployed)
+Dev 1 Role: UI Skeleton + Auth + Dashboard + AI Proxy + Firestore Repositories
+Status: ✅ ALL original tasks DONE + Real Auth + Gemini Proxy (Deployed)
+        ⏳ Firestore repos (next)
 Proxy URL: https://proxy-topaz-ten-36.vercel.app
 ```

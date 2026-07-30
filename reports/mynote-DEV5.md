@@ -178,7 +178,7 @@ Settings → Export → Select Month → Select Type (Spending/Saving) → Downl
 
 ## 🔗 Integration
 
-- CSV export uses `ExpenseRepository` from Dev 3
+- CSV export uses `ExpenseRepository` from Dev 1
 - Profile data from `FirebaseAuthRepository` (Dev 1)
 - Sign out calls `AuthRepository.signOut()`
 - Theme switching via `ThemeManager.kt` in `ui/theme/`

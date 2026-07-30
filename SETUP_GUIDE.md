@@ -313,9 +313,9 @@ saving-coach/
 
 ## 5. Dev Dependency Map
 
-### Summary: Dev 1 Delivered Everything. Everyone Else Builds in Parallel.
+### Summary: Dev 1 Delivered Everything + Takes Firestore. Everyone Else Builds in Parallel.
 
-Dev 1 has delivered **models + repo interfaces + nav skeleton + CI/CD + AI proxy + Auth + Chat UI** — complete app shell with working Gemini integration via Vercel proxy.  
+Dev 1 has delivered **models + repo interfaces + nav skeleton + CI/CD + AI proxy + Auth + Chat UI** — complete app shell with working Gemini integration via Vercel proxy. Dev 1 now also owns **Firestore repositories** (previously Dev 3's role).
 Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobody depends on anyone else because everyone codes against **interfaces with in-memory mocks**.
 
 ---
@@ -326,7 +326,7 @@ Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobody depends on
 |-------------|--------|-----------|
 | `Expense.kt`, `Budget.kt`, `SavingChallenge.kt`, `SavingsDeposit.kt`, `SavingsAnalytics.kt`, `ChatMessage.kt` | ✅ Done | **All devs** |
 | `ExpenseRepository` interface | ✅ Done | Dev 4, Dev 5 |
-| `SavingChallengeRepository` interface | ✅ Done | Dev 4 |
+| `SavingChallengeRepository` interface | ✅ Done | Dev 3 |
 | `BudgetRepository` interface | ✅ Done | Dev 4 |
 | `ChatRepository` interface | ✅ Done | Dev 2 |
 | `AuthRepository` interface | ✅ Done | Dev 1, Dev 4, Dev 5 |
@@ -360,20 +360,19 @@ Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobody depends on
       ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
       │ DEV 2  │ │ DEV 3  │ │ DEV 4  │ │ DEV 5  │
       │        │ │        │ │        │ │        │
-      │Receipt │ │Firebase│ │Expense │ │CSV     │
-      │Scanner │ │Expense │ │Forms   │ │Export  │
-      │Camera  │ │Budget  │ │Budget  │ │Settings│
-      │        │ │Saving  │ │Saving  │ │Release │
-      │        │ │Chall.  │ │Screens │ │        │
+      │Receipt │ │Saving  │ │Expense │ │CSV     │
+      │Scanner │ │Chall.  │ │Forms   │ │Export  │
+      │Camera  │ │Cards   │ │Budget  │ │Settings│
+      │        │ │Deposit │ │Saving  │ │Release │
+      │        │ │Detail  │ │Screens │ │        │
       └────────┘ └────────┘ └────────┘ └────────┘
             │         │          │          │
-            │         ▼          │          │
-            └──── Week 2-3 ──────┘──────────┘
-                        │
-                        ▼
-                 Dev 3 finishes real Firestore repos
-                 Everyone swaps mocks → real data
-                 Integration test week
+            └─────────┼──────────┘──────────┘
+                      │
+                      ▼
+              Dev 1 finishes Firestore repos
+              Everyone swaps mocks → real data
+              Integration test week
 ```
 
 ---
@@ -383,8 +382,8 @@ Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobody depends on
 | Dev | What They Get From Dev 1 | What They Build | Can Start Now? |
 |-----|-------------------------|-----------------|:--------------:|
 | **Dev 2** | ChatScreen, ChatViewModel, ProxyService, proxy deployed | Receipt scanner, CameraX, ChatParser | ✅ Yes |
-| **Dev 3** | All interfaces, Auth done, DI setup | Firebase repos for Expense, Budget, SavingChallenge | ✅ Yes |
-| **Dev 4** | 4 models + 3 repo interfaces | Expense forms, Budget settings, Saving screens | ✅ Yes |
+| **Dev 3** | All interfaces, Auth done, DI setup | Saving challenges UI, deposit screens, detail views | ✅ Yes |
+| **Dev 4** | 3 models + repo interfaces (Expense, Budget) | Budget & Expense Hub, categories, expense forms | ✅ Yes |
 | **Dev 5** | Expense model, ExpenseRepository, CI/CD | CSV export, Settings, APK release | ✅ Yes |
 
 ---
@@ -398,7 +397,7 @@ git pull origin main
 
 # Create your feature branch
 git checkout -b feature/ai-chat-receipt    # Dev 2
-git checkout -b feature/data-layer         # Dev 3
+git checkout -b feature/saving-challenges  # Dev 3
 git checkout -b feature/expense-budget     # Dev 4
 git checkout -b feature/export-settings    # Dev 5
 ```
@@ -409,12 +408,12 @@ git checkout -b feature/export-settings    # Dev 5
 
 | Between | Shared Thing | Risk | Mitigation |
 |---------|-------------|------|-----------|
-| Dev 1 ⟷ Dev 3 | Repo interface signatures match implementations | **HIGH** | Dev 1 freezes interfaces after Day 1. Dev 3 must not change method names |
+| Dev 1 ⟷ All | Repo interface signatures match implementations | **HIGH** | Dev 1 defines + implements Firestore repos. Other devs code against interfaces |
 | Dev 1 ⟷ Dev 4 | UI components (BudgetProgressBar, etc.) | **LOW** | Dev 4 builds temporary versions, swaps in 10 min |
 | Dev 2 ⟷ Dev 1 | ChatScreen/ViewModel already built | **LOW** | Dev 2 enhances with receipt scanning, not replaces |
-| Dev 3 ⟷ Dev 2 | ChatRepository → AiChatRepository | **LOW** | AiChatRepository already implements ChatRepository interface |
-| Dev 4 ⟷ Dev 3 | ExpenseRepository mock vs real | **LOW** | Same pattern |
-| Dev 5 ⟷ Dev 3 | ExpenseRepository mock vs real | **LOW** | Same pattern |
+| Dev 3 ⟷ Dev 1 | SavingChallengeRepository mock vs real | **LOW** | Same pattern — swap when Dev 1 finishes Firestore |
+| Dev 4 ⟷ Dev 1 | ExpenseRepository mock vs real | **LOW** | Same pattern — swap when Dev 1 finishes Firestore |
+| Dev 5 ⟷ Dev 1 | ExpenseRepository mock vs real | **LOW** | Same pattern |
 | Dev 1 ⟷ All | NavGraph route names | **MEDIUM** | Agree on route strings before Dev 1 writes NavGraph |
 | All ⟷ Dev 1 | Proxy URL (Vercel) | **LOW** | URL is in `local.defaults.properties`, all devs use same proxy |
 
@@ -424,15 +423,15 @@ git checkout -b feature/export-settings    # Dev 5
 
 ```
 Day 1-2          ── Dev 1: Complete app shell + Auth + Dashboard + AI Proxy ✅ DONE
-Day 3+           ── Dev 2, 3, 4, 5 all start coding (no blockers)
-Week 2-3         ── Dev 3 finishes real Firestore repos
+Day 3+           ── Dev 1: Firestore repos + Dev 2, 3, 4, 5 all start coding (no blockers)
+Week 2-3         ── Dev 1 finishes real Firestore repos
 Week 3           ── Everyone swaps mocks → real data
 Week 3-4         ── Integration testing + bug fixes
 Week 5-6         ── Polish, edge cases, offline testing
 Week 7           ── CI/CD final check, beta release
 ```
 
-**Bottom line:** Dev 1 has delivered everything — all interfaces, auth, dashboard, AI proxy, chat UI, CI/CD. All 4 remaining devs can start immediately with zero blockers.
+**Bottom line:** Dev 1 has delivered everything — all interfaces, auth, dashboard, AI proxy, chat UI, CI/CD. Dev 1 also owns Firestore repos. All 4 remaining devs can start immediately with zero blockers.
 
 
 ---
@@ -441,7 +440,7 @@ Week 7           ── CI/CD final check, beta release
 
 ### Dev 1: UI Skeleton — Theme + Nav + Auth + Dashboard + AI Proxy
 
-This dev builds the **app shell** first. Everyone else depends on it.
+This dev builds the **app shell** first. Everyone else depends on it. Also owns **Firestore repositories**.
 
 **Files owned:**
 - `SavingCoachApp.kt`                          # Application class (Hilt)
@@ -464,6 +463,9 @@ This dev builds the **app shell** first. Everyone else depends on it.
 - `ui/chat/ChatViewModel.kt`               # Chat state management
 - `ai/GeminiProxyService.kt`               # OkHttp service — calls proxy endpoint
 - `ai/AiChatRepository.kt`                 # ChatRepository impl — uses proxy + Firestore
+- `data/repository/FirebaseExpenseRepository.kt`      # Firestore CRUD for expenses
+- `data/repository/FirebaseBudgetRepository.kt`       # Firestore budget limits
+- `data/repository/FirebaseSavingChallengeRepository.kt` # Firestore challenges + deposits
 - `proxy/`                                 # Vercel serverless proxy (separate folder)
 - `res/values/strings.xml`                 # App strings
 - `res/values/colors.xml`                  # Theme colors XML
@@ -485,14 +487,15 @@ This dev builds the **app shell** first. Everyone else depends on it.
 | 4 | `AuthScreen.kt` + `AuthViewModel.kt` | Login with Google + Email/Password |
 | 5 | `DashboardScreen.kt` + `DashboardViewModel.kt` + `CalendarHeatmap.kt` | Main screen with calendar heatmap + budget progress |
 | 6 | Reusable components (`BudgetProgressBar.kt`, `SpendingChart.kt`, `LoadingOverlay.kt`) | Shared UI building blocks |
-| 7 | Repository interface contracts | Define these **before** step 1 — Dev 2/4/5 code against them |
+| 7 | Repository interface contracts | Define these **before** step 1 — Dev 2/3/4/5 code against them |
 | 8 | CI/CD GitHub Actions + ProGuard + signing config | Create `.github/workflows/ci-pr-check.yml`, `ci-release.yml`, `proguard-rules.pro`, and `build.gradle.kts` signing config — set up once, rarely changes |
 | 9 | **Gemini API Proxy** (`proxy/` folder) | Deploy Vercel serverless function to bypass Myanmar geo-restriction — see [Section 8](#8-gemini-api-setup-proxy-for-myanmar) |
 | 10 | **AI Chat integration** (`ai/`, `ui/chat/`) | OkHttp proxy service + ChatRepository + ChatScreen + ChatViewModel |
+| 11 | **Firestore Repositories** (`data/repository/Firebase*.kt`) | Implement real Firebase repos for Expense, Budget, SavingChallenge — swap mocks in `RepositoryModule.kt` |
 
 ### 🧩 Repository Interface Contracts (Define First)
 
-These go in `data/repository/`. Dev 1 defines the **signatures only**. Dev 3 implements the real Firestore version later. Dev 2/4/5 code against these interfaces from day 1.
+These go in `data/repository/`. Dev 1 defines the **signatures only**. Dev 1 implements the real Firestore version later. Dev 2/3/4/5 code against these interfaces from day 1.
 
 ```kotlin
 // ExpenseRepository.kt — for Dev 4 (expense forms) and Dev 5 (export)
@@ -518,7 +521,7 @@ interface ChatRepository {
     suspend fun saveMessage(userId: String, message: ChatMessage)
 }
 
-// SavingChallengeRepository.kt ← NEW — for Dev 4 (challenge/deposit screens) and Dev 1 (dashboard)
+// SavingChallengeRepository.kt ← NEW — for Dev 3 (challenge/deposit screens) and Dev 1 (dashboard)
 interface SavingChallengeRepository {
     fun getActiveChallenges(userId: String): Flow<List<SavingChallenge>>
     fun getAllChallenges(userId: String): Flow<List<SavingChallenge>>
@@ -540,7 +543,7 @@ interface AuthRepository {
 }
 ```
 
-**Why this matters:** With these interfaces defined, Dev 2 builds the chat against `ChatRepository`, Dev 4 builds expense forms against `ExpenseRepository` + saving screens against `SavingChallengeRepository`, Dev 5 builds export against `ExpenseRepository`, and Dev 1 builds the dashboard against `BudgetRepository` + `SavingChallengeRepository` — **all without waiting for Dev 3's Firestore code**.
+**Why this matters:** With these interfaces defined, Dev 2 builds the chat against `ChatRepository`, Dev 4 builds expense forms against `ExpenseRepository`, Dev 3 builds saving challenges against `SavingChallengeRepository`, Dev 5 builds export against `ExpenseRepository`, and Dev 1 builds the dashboard against `BudgetRepository` + `SavingChallengeRepository` — **all without waiting for Dev 1's Firestore code**.
 
 ### 🧪 Mock Repositories (Shipped by Dev 1)
 
@@ -555,7 +558,7 @@ Dev 1 also provides in-memory mock implementations so the app compiles and runs 
 | `MockAuthRepository` | `data/mock/MockRepositories.kt` |
 
 These are wired via `RepositoryModule.kt` (`di/RepositoryModule.kt`) using Hilt `@Binds`.
-Dev 3 replaces them with real Firestore implementations — no changes needed in ViewModels or UI.
+Dev 1 replaces them with real Firestore implementations — no changes needed in ViewModels or UI.
 
 **To swap for real repos later:** Just change the `@Binds` target in `RepositoryModule.kt`.
 
@@ -606,57 +609,285 @@ curl -X POST https://proxy-topaz-ten-36.vercel.app/api/chat \
 
 ---
 
-### Dev 3: Data Layer — Firestore Repositories
+### Dev 3: Saving Challenges
 
-> **Note:** Auth, Chat, DI, and Firestore setup are all done by Dev 1. Dev 3 only needs to implement the 3 Firestore repositories.
+> **Note:** Dev 3 builds the Saving Challenges tab — challenge cards, detail views, deposit screens.
 
 **Already built by Dev 1:**
 | File | Purpose |
 |------|---------|
-| `data/repository/AuthRepository.kt` | Auth interface |
-| `data/repository/FirebaseAuthRepository.kt` | Real Firebase Auth |
-| `data/repository/ChatRepository.kt` | Chat interface |
-| `ai/AiChatRepository.kt` | Chat impl with proxy + Firestore |
-| `di/AppModule.kt` | Hilt providers (FirebaseAuth, FirebaseFirestore, OkHttp, proxyUrl) |
-| `di/RepositoryModule.kt` | Repo bindings (currently uses mocks) |
+| `data/model/SavingChallenge.kt` | Challenge data model |
+| `data/model/SavingsDeposit.kt` | Deposit data model |
+| `data/model/SavingsAnalytics.kt` | Analytics data model |
+| `data/repository/SavingChallengeRepository.kt` | Repository interface |
+| `data/mock/MockRepositories.kt` | In-memory mock for SavingChallengeRepository |
+| `navigation/Routes.kt` | Route definitions (including `challenges`) |
+| `ui/theme/Theme.kt` | Material 3 theme |
 
-**What to build (3 files):**
+**Files owned:**
+- `ui/challenges/ChallengesScreen.kt`     # Challenge cards grid + summary header
+- `ui/challenges/ChallengeDetailScreen.kt` # Individual challenge detail view
+- `ui/challenges/ChallengeViewModel.kt`   # Challenges state management
+- `ui/challenges/CreateChallengeScreen.kt` # Custom challenge creation wizard
+- `ui/components/ChallengeCard.kt`        # Reusable challenge card composable
+
+**What to build (5 files):**
 
 | File | Task | Difficulty |
 |------|------|:----------:|
-| `FirebaseExpenseRepository.kt` | CRUD + real-time sync for expenses | Medium |
-| `FirebaseBudgetRepository.kt` | Budget limits + spending totals | Easy |
-| `FirebaseSavingChallengeRepository.kt` | Challenges + deposits CRUD | Easy |
+| `ChallengesScreen.kt` | Grid of challenge cards + total saved summary + create button | Medium |
+| `ChallengeDetailScreen.kt` | Challenge-specific UI (dot grid, envelope grid, timeline) + deposit history + add deposit | Medium |
+| `ChallengeViewModel.kt` | State management for challenges + deposits | Medium |
+| `CreateChallengeScreen.kt` | Wizard to create custom challenge (name, target, type) | Easy |
+| `ChallengeCard.kt` | Reusable card with emoji, name, progress bar, deposited/target | Easy |
 
-**Firestore structure:**
+**Screen Layout:**
+
 ```
-users/{userId}/expenses/{expenseId}
-users/{userId}/budgets/{YYYY-MM}
-users/{userId}/challenges/{challengeId}
+┌─────────────────────────────────────────┐
+│  SAVING CHALLENGES                      │
+├─────────────────────────────────────────┤
+│  💰 Total Saved: 1,250,000 MMK          │
+│  📊 3 Active  |  1 Completed            │
+├─────────────────────────────────────────┤
+│  🎯 Challenge Cards                     │
+│                                         │
+│  ┌─────────┐  ┌─────────┐              │
+│  │1K/Day   │  │ 7-Day   │              │
+│  │12k/30k  │  │ 45k/100k│              │
+│  │ ████░░░ │  │ █████░░ │              │
+│  └─────────┘  └─────────┘              │
+│                                         │
+│  ┌─────────┐  ┌─────────┐              │
+│  │100 Env. │  │ + New   │              │
+│  │2M/5M    │  │ Create  │              │
+│  │████░░░░ │  │ Challenge│              │
+│  └─────────┘  └─────────┘              │
+└─────────────────────────────────────────┘
 ```
 
-**How to finish:**
-Swap mocks → real repos in `RepositoryModule.kt`:
-```kotlin
-// Change:
-@Binds abstract fun bindExpenseRepository(impl: MockExpenseRepository): ExpenseRepository
-// To:
-@Binds abstract fun bindExpenseRepository(impl: FirebaseExpenseRepository): ExpenseRepository
-```
+**Challenge Types:**
+| Type | UI | Description |
+|------|-----|-------------|
+| **1K a Day** | Dot grid | Tap one dot per day, 30 dots = done |
+| **7-Day Sprint** | Progress ring | Deposit target in 7 days |
+| **100 Envelope** | Envelope grid | 100 envelopes, fill each with fixed amount |
+| **No-Spend Week** | Checklist | 7 days, check each no-spend day |
+| **Custom** | Progress bar | User-defined target and duration |
+
+**Preset Challenges:**
+| Name | Emoji | Target | Duration |
+|------|-------|--------|----------|
+| 1K a Day | 🎯 | 30,000 MMK | 30 days |
+| 7-Day Sprint | ⚡ | 100,000 MMK | 7 days |
+| 100 Envelope | ✉️ | 5,000,000 MMK | Flexible |
+| No-Spend Week | 🚫 | 0 MMK (save your daily budget) | 7 days |
+
+**Detail View (When card clicked):**
+- Challenge-specific visual UI (dot grid, envelope grid, timeline, etc.)
+- Deposit history list
+- Add deposit button
+- Settings/edit button
+- Delete button with confirmation
 
 ---
 
-### Dev 4: Expenses, Budget & Challenges
+### Dev 4: Budget & Expense Hub
 
-> **Note:** Dev 4 builds the Expense tab, Challenges tab, and calendar heatmap.
+> **Note:** Dev 4 builds the Expense tab — the Budget & Expense Hub with monthly budget, categories, and recent expenses.
 
 **Files owned:**
 - `ui/expenses/ExpenseScreen.kt`          # Budget & Expense Hub (combined)
-- `ui/expenses/AddExpenseScreen.kt`       # Manual expense form
-- `ui/expenses/ExpenseViewModel.kt`       # Expense + budget state
-- `ui/challenges/ChallengesScreen.kt`     # Challenge cards + detail
-- `ui/challenges/ChallengeViewModel.kt`   # Challenges state
-- `ui/dashboard/CalendarHeatmap.kt`       # Enhanced calendar with click + filters
+- `ui/expenses/LogExpenseBottomSheet.kt`  # Bottom sheet modal for logging expenses
+- `ui/expenses/AddExpenseScreen.kt`       # Manual expense form (full screen)
+- `ui/expenses/ExpenseViewModel.kt`       # Expense + budget + category state
+
+---
+
+## 💰 Budget & Expense Hub (Expense Tab)
+
+### Screen Layout
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                     BUDGET & EXPENSE HUB                         │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │ 🎯 Monthly Overall Budget                 [ Edit Budget ⚙️ ] │  │
+│  │                                                            │  │
+│  │ 1,850 MMK Spent  /  3,000 MMK Target                      │  │
+│  │ ==========================>................   61% Used     │  │
+│  │                                                            │  │
+│  │ Remaining: 1,150 MMK  |  12 Days Left                      │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│            ┌────────────────────────────────────────┐            │
+│            │        ➕ LOG NEW EXPENSE               │            │  <-- Centered Primary CTA
+│            └────────────────────────────────────────┘            │
+│                                                                  │
+│  🏷️ CATEGORIES                                [ + New Category ] │
+│                                                                  │
+│  🍔 Food & Dining                                                │
+│  =======================>...................  320 / 600 MMK      │
+│                                                                  │
+│  🚗 Transportation                                              │
+│  =========>.................................  110 / 300 MMK      │
+│                                                                  │
+├──────────────────────────────────────────────────────────────────┤
+│ 🧾 RECENT EXPENSES                                               │
+│ (Tap any category above to filter this list)                     │
+│                                                                  │
+│  ☕ Starbucks                          -4,500 MMK  │ Today       │
+│  🛒 Target Store                     -68,200 MMK  │ Yesterday   │
+│  ⛽ Shell Gas Station               -45,000 MMK  │ Jul 26      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Section 1: Monthly Overall Budget
+
+| Element | Description |
+|---------|-------------|
+| **Title** | "Monthly Overall Budget" |
+| **Edit Button** | ⚙️ icon → opens budget editor |
+| **Spent / Target** | "1,850 MMK Spent / 3,000 MMK Target" |
+| **Progress Bar** | Reuse `BudgetProgressBar` component. Color: Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%) |
+| **Percentage** | "61% Used" |
+| **Remaining** | "Remaining: 1,150 MMK" (goes negative if over budget) |
+| **Days Left** | "12 Days Left" — calculated from current day to end of month |
+
+### Section 2: Log New Expense CTA
+
+| Element | Description |
+|---------|-------------|
+| **Button** | Centered, primary filled button |
+| **Text** | "➕ LOG NEW EXPENSE" |
+| **Action** | Opens `LogExpenseBottomSheet` |
+
+### Section 3: Categories
+
+| Element | Description |
+|---------|-------------|
+| **Header** | "🏷️ CATEGORIES" + "[ + New Category ]" button on right |
+| **Category Card** | Emoji + Category Name + Progress bar + "Spent / Target MMK" |
+| **Tap Category** | Filters the Recent Expenses list below to that category |
+| **"+ New"** | Opens dialog to add custom category with name, emoji, and target |
+| **Progress Bar** | Per-category budget usage with color coding |
+
+**Default Categories:**
+
+| Emoji | Category | Default Target |
+|-------|----------|----------------|
+| 🍔 | Food & Dining | 600,000 MMK |
+| 🚗 | Transportation | 300,000 MMK |
+| 🛍️ | Shopping | 400,000 MMK |
+| 📱 | Bills & Utilities | 200,000 MMK |
+| 🎬 | Entertainment | 200,000 MMK |
+| 📚 | Education | 150,000 MMK |
+| 💊 | Health | 150,000 MMK |
+| 📦 | Other | 200,000 MMK |
+
+### Section 4: Recent Expenses
+
+| Element | Description |
+|---------|-------------|
+| **Header** | "🧾 RECENT EXPENSES" |
+| **Filter Note** | "Tap any category above to filter this list" |
+| **Expense Item** | Category Emoji + Merchant Name + Amount (negative) + Date |
+| **Date Format** | "Today" / "Yesterday" / "Jul 26" for older |
+| **Tap Expense** | Opens edit screen |
+| **Swipe Left** | Delete with confirmation dialog |
+| **Empty State** | "No expenses yet. Tap + to log your first expense!" |
+
+### Log Expense Bottom Sheet
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ ➕ Log Expense                           [✕ Close]              │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Amount (MMK):                                                   │
+│  [ 0                                                         ]  │
+│                                                                  │
+│  Select Category (Required):                                     │
+│  [ 🍔 Food ]  [ 🚗 Trans. ]  [ 🛒 Groceries ]  [ 🎬 Fun ]      │
+│                                                                  │
+│  Note / Merchant (Optional):                                     │
+│  [ e.g., Starbucks Coffee                                      ]│
+│                                                                  │
+│  [ Save Expense ]                                                │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+| Element | Description |
+|---------|-------------|
+| **Header** | "➕ Log Expense" with ✕ close button |
+| **Amount Input** | Numeric keyboard, MMK currency, required |
+| **Category Selection** | Horizontal scrollable chips with emoji + short name, required |
+| **Note/Merchant** | Optional text field with placeholder |
+| **Save Button** | Validates amount + category → saves → closes sheet → refreshes list |
+| **Validation** | Amount must be > 0, category must be selected |
+
+### ExpenseViewModel State
+
+```kotlin
+data class ExpenseUiState(
+    // Monthly budget
+    val monthlyBudget: Budget? = null,
+    val totalSpent: Double = 0.0,
+    val daysLeftInMonth: Int = 0,
+
+    // Categories
+    val categories: List<ExpenseCategory> = emptyList(),
+    val categorySpending: Map<String, Double> = emptyMap(),
+    val selectedCategoryFilter: String? = null,  // null = show all
+
+    // Recent expenses
+    val recentExpenses: List<Expense> = emptyList(),
+    val filteredExpenses: List<Expense> = emptyList(),
+
+    // Log expense bottom sheet
+    val showLogSheet: Boolean = false,
+    val logAmount: String = "",
+    val logCategory: String = "",
+    val logMerchant: String = "",
+
+    // Loading & error
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
+)
+
+data class ExpenseCategory(
+    val emoji: String,
+    val name: String,
+    val target: Double,     // category budget limit in MMK
+    val spent: Double       // computed from expenses
+)
+```
+
+### Interaction Flow
+
+```
+Expense Tab Loaded
+    │
+    ├── Fetch monthly budget from BudgetRepository
+    ├── Fetch expenses for current month from ExpenseRepository
+    ├── Compute category spending totals
+    │
+    ├── Tap "LOG NEW EXPENSE" → Opens bottom sheet
+    │       ├── Enter amount
+    │       ├── Select category
+    │       ├── Enter note (optional)
+    │       └── Tap "Save" → addExpense() → refresh list
+    │
+    ├── Tap category → Sets selectedCategoryFilter
+    │       └── Filters recentExpenses to that category
+    │
+    ├── Tap "All" category → Clears filter → shows all
+    │
+    ├── Tap expense → Opens edit screen
+    │
+    └── Swipe expense left → Delete with confirmation
+```
 
 ---
 
@@ -673,81 +904,6 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 | **Affects Each Other** | ❌ No | ❌ No |
 
 > Saving 1,000 MMK does NOT reduce your expense total. Spending 5,000 MMK does NOT reduce your savings. They are separate systems.
-
----
-
-## 💰 Budget & Expense Hub (Expense Tab)
-
-### Screen Layout
-
-```
-┌─────────────────────────────────────────┐
-│  BUDGET & EXPENSE HUB                   │
-├─────────────────────────────────────────┤
-│  🎯 Monthly Overall Budget    [Edit ⚙️] │
-│  1,850 MMK Spent  /  3,000 MMK Target  │
-│  =========================>  61% Used   │
-│  Remaining: 1,150 MMK  |  12 Days Left │
-├─────────────────────────────────────────┤
-│  📁 CATEGORIES            [+ New]       │
-│                                         │
-│  🍔 Food & Dining                       │
-│  ================>  320 / 600 MMK       │
-│                                         │
-│  🚗 Transportation                      │
-│  ======>  110 / 300 MMK                 │
-├─────────────────────────────────────────┤
-│  📋 RECENT EXPENSES                     │
-│  (Tap category above to filter)         │
-│                                         │
-│  ☕ Starbucks       -4,500 MMK  Today   │
-│  🛒 Target Store   -68,200 MMK  Y'day  │
-│  ⛽ Shell Gas      -45,000 MMK  Jul 26 │
-└─────────────────────────────────────────┘
-```
-
-### Section 1: Monthly Overall Budget
-
-| Element | Description |
-|---------|-------------|
-| **Title** | "Monthly Overall Budget" |
-| **Spent / Target** | "1,850 MMK / 3,000 MMK" |
-| **Progress Bar** | Color: Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%) |
-| **Percentage** | "61% Used" |
-| **Remaining** | "1,150 MMK left" |
-| **Days Left** | "12 Days Left" in month |
-| **Edit Button** | Opens budget editor |
-
-### Section 2: Categories
-
-| Element | Description |
-|---------|-------------|
-| **Header** | "📁 CATEGORIES" + "+ New" button |
-| **Category Card** | Emoji + Name + Progress bar + Spent / Target |
-| **Tap Category** | Filters recent expenses below |
-| **"+ New"** | Add custom category |
-
-**Default Categories:**
-| Emoji | Category | Default Target |
-|-------|----------|----------------|
-| 🍔 | Food & Dining | 600,000 MMK |
-| 🚗 | Transportation | 300,000 MMK |
-| 🛍️ | Shopping | 400,000 MMK |
-| 📱 | Bills & Utilities | 200,000 MMK |
-| 🎬 | Entertainment | 200,000 MMK |
-| 📚 | Education | 150,000 MMK |
-| 💊 | Health | 150,000 MMK |
-| 📦 | Other | 200,000 MMK |
-
-### Section 3: Recent Expenses
-
-| Element | Description |
-|---------|-------------|
-| **Header** | "📋 RECENT EXPENSES" |
-| **Filter Note** | "Tap any category above to filter" |
-| **Expense Item** | Icon + Merchant + Amount + Date |
-| **Tap Expense** | Opens edit screen |
-| **Swipe Left** | Delete with confirmation |
 
 ---
 
