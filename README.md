@@ -25,15 +25,33 @@
 
 ## 🏗 Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| **Language** | Kotlin 2.0.21 |
-| **UI** | Jetpack Compose + Material 3 |
-| **Architecture** | MVVM + Repository Pattern |
-| **DI** | Hilt 2.53.1 |
-| **Backend** | Firebase Auth + Firestore |
-| **AI** | Gemini API via Vercel Proxy (for Myanmar) |
-| **CI/CD** | GitHub Actions |
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| **Language** | Kotlin | 2.0.21 |
+| **UI** | Jetpack Compose BOM | 2024.12.01 |
+| **UI** | Material 3 | (via BOM) |
+| **Navigation** | Navigation Compose | 2.8.5 |
+| **DI** | Hilt | 2.53.1 |
+| **Backend** | Firebase Auth | 23.1.0 |
+| **Backend** | Firebase Firestore | 25.1.1 |
+| **Backend** | Firebase BOM | 33.7.0 |
+| **Backend** | Google Services Plugin | 4.4.2 |
+| **Backend** | Crashlytics Plugin | 3.0.2 |
+| **AI** | Gemini Generative AI | 0.9.0 |
+| **Camera** | CameraX | 1.4.1 |
+| **Network** | OkHttp | 4.12.0 |
+| **Auth** | Credential Manager | 1.3.0 |
+| **Auth** | Play Services Auth | 2.1.0 |
+| **Format** | Kotlin Serialization | 1.7.3 |
+| **Async** | Coroutines | 1.9.0 |
+| **Export** | Apache Commons CSV | 1.11.0 |
+| **Build** | AGP | 8.8.0 |
+| **Build** | Gradle | 8.11.1 |
+| **Build** | Secrets Plugin | 2.0.1 |
+| **Build** | JDK | 17 |
+| **Target** | compileSdk / targetSdk | 35 |
+| **Min** | minSdk | 26 |
+| **CI/CD** | GitHub Actions | — |
 
 ---
 
