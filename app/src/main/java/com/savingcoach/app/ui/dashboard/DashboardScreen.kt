@@ -137,7 +137,7 @@ private fun DashboardContent(
                     uiState.spentPercentage >= 100 -> Red
                     uiState.spentPercentage >= 90 -> Orange
                     uiState.spentPercentage >= 75 -> Yellow
-                    else -> Green
+                    else -> MaterialTheme.colorScheme.onSurface
                 },
                 modifier = Modifier.weight(1f)
             )

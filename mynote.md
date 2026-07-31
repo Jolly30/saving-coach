@@ -34,3 +34,46 @@ We completely overhauled the color rating system to unify the UI and decouple sa
 ## 4. Syntax & Bug Fixes
 * **`CalendarHistoryScreen.kt`:** Fixed an `Expecting a top level declaration` error caused by an extra trailing closing brace after restructuring the scroll layout.
 * **`CalendarHeatmap.kt`:** Fixed a structural duplication issue in the grid layout and restored missing variables (`isSelected`, `isToday`) that broke the compilation when the Green dot was removed.
+
+## 5. Notification System (Dev 1)
+Implemented a comprehensive push notification system for budget alerts, saving milestones, and daily reminders.
+
+### Notification Conditions
+
+**Budget Alerts:**
+| Threshold | Trigger | Notification Type |
+|-----------|---------|-------------------|
+| 75% | Spending reaches 75% of monthly budget | 🟡 Warning |
+| 90% | Spending reaches 90% of monthly budget | 🟠 Critical |
+| 100%+ | Spending exceeds monthly budget | 🔴 Over Budget (push notification) |
+
+**Saving Milestones:**
+| Threshold | Trigger | Notification Type |
+|-----------|---------|-------------------|
+| 50% | Saved 50% of challenge target | 🎯 Halfway |
+| 75% | Saved 75% of challenge target | 🚀 Almost There |
+| 100% | Completed challenge | 🎉 Celebration |
+
+**Daily Reminders:**
+| Reminder | Trigger | Schedule |
+|----------|---------|----------|
+| Daily Expense Log | User hasn't logged expenses today | Every day at 8:00 PM |
+| Inactive Alert | No expenses logged for 1+ days | Every day at 9:00 PM |
+| Saving Challenge | Daily reminder about active challenges | Every day at 7:00 PM |
+
+### Files Created
+* **`NotificationHelper.kt`:** Core notification manager with channel setup, permission handling, and notification builders
+* **`NotificationScheduler.kt`:** WorkManager scheduler for daily reminders and periodic checks
+* **`BudgetAlertWorker.kt`:** Background worker to check budget thresholds and trigger alerts
+* **`SavingReminderWorker.kt`:** Background worker for daily saving challenge reminders
+* **`InactiveAlertWorker.kt`:** Background worker to detect inactive periods
+
+### Android Manifest Changes
+* Added `POST_NOTIFICATIONS` permission for Android 13+
+* Added `RECEIVE_BOOT_COMPLETED` for scheduling after reboot
+
+### Integration Points
+* **DashboardViewModel:** Checks budget percentage after fetching expenses
+* **ChallengeViewModel:** Checks progress after adding deposits
+* **MainActivity:** Requests notification permission on app launch
+* **WorkManager:** Schedules periodic background checks

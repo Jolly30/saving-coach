@@ -336,6 +336,7 @@ Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobody depends on
 | `GeminiProxyService.kt` + `AiChatRepository.kt` | ✅ Done | Dev 2 |
 | `ChatScreen.kt` + `ChatViewModel.kt` | ✅ Done | Dev 2 |
 | Vercel proxy deployed | ✅ Done | Dev 2 |
+| Notification system (channels, scheduler, workers) | ✅ Done | **All devs** (budget alerts, saving milestones, daily reminders) |
 
 ---
 
@@ -348,6 +349,7 @@ Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobody depends on
          │  ✅ Navigation + Theme + Dashboard       │
          │  ✅ AI Proxy (Vercel) + Chat UI          │
          │  ✅ CI/CD + ProGuard + Signing           │
+         │  ✅ Notification System                  │
          └──────────────────┬──────────────────────┘
                             │ all code in main branch
                             ▼
@@ -431,7 +433,7 @@ Week 5-6         ── Polish, edge cases, offline testing
 Week 7           ── CI/CD final check, beta release
 ```
 
-**Bottom line:** Dev 1 has delivered everything — all interfaces, auth, dashboard, AI proxy, chat UI, CI/CD. Dev 1 also owns Firestore repos. All 4 remaining devs can start immediately with zero blockers.
+**Bottom line:** Dev 1 has delivered everything — all interfaces, auth, dashboard, AI proxy, chat UI, CI/CD, and notification system. Dev 1 also owns Firestore repos. All 4 remaining devs can start immediately with zero blockers.
 
 
 ---
@@ -466,6 +468,12 @@ This dev builds the **app shell** first. Everyone else depends on it. Also owns 
 - `data/repository/FirebaseExpenseRepository.kt`      # Firestore CRUD for expenses
 - `data/repository/FirebaseBudgetRepository.kt`       # Firestore budget limits
 - `data/repository/FirebaseSavingChallengeRepository.kt` # Firestore challenges + deposits
+- `core/notification/NotificationHelper.kt`           # Notification channel setup + builders
+- `core/notification/NotificationScheduler.kt`       # WorkManager scheduler for daily reminders
+- `workers/BudgetAlertWorker.kt`                     # Background worker for budget threshold checks
+- `workers/SavingReminderWorker.kt`                  # Worker for daily saving challenge reminders
+- `workers/InactiveAlertWorker.kt`                   # Worker for inactive period detection
+- `workers/DailyExpenseReminderWorker.kt`            # Worker for daily expense logging reminders
 - `proxy/`                                 # Vercel serverless proxy (separate folder)
 - `res/values/strings.xml`                 # App strings
 - `res/values/colors.xml`                  # Theme colors XML
@@ -492,6 +500,7 @@ This dev builds the **app shell** first. Everyone else depends on it. Also owns 
 | 9 | **Gemini API Proxy** (`proxy/` folder) | Deploy Vercel serverless function to bypass Myanmar geo-restriction — see [Section 8](#8-gemini-api-setup-proxy-for-myanmar) |
 | 10 | **AI Chat integration** (`ai/`, `ui/chat/`) | OkHttp proxy service + ChatRepository + ChatScreen + ChatViewModel |
 | 11 | **Firestore Repositories** (`data/repository/Firebase*.kt`) | Implement real Firebase repos for Expense, Budget, SavingChallenge — swap mocks in `RepositoryModule.kt` |
+| 12 | **Notification System** (`core/notification/`, `workers/`) | Push notifications for budget alerts, saving milestones, daily reminders, and inactive period alerts — see [Section 8](#8-notification-system-setup-dev-1) |
 
 ### 🧩 Repository Interface Contracts (Define First)
 
@@ -1194,7 +1203,466 @@ service cloud.firestore {
 
 ---
 
-## 8. Gemini API Setup (Proxy for Myanmar)
+## 8. Notification System Setup (Dev 1)
+
+### Overview
+
+The notification system provides push notifications for budget alerts, saving milestones, and daily reminders using Firebase Cloud Messaging (FCM) and WorkManager for background scheduling.
+
+### Prerequisites
+
+| Requirement | Version | Purpose |
+|-------------|---------|---------|
+| Firebase BOM | 33.7.0 | Firebase services integration |
+| Firebase Messaging | 24.0.0 | Push notifications (optional for future) |
+| WorkManager | 2.9.0 | Background scheduling |
+| Hilt | 2.53.1 | Dependency injection |
+
+### Step 1: Add Dependencies
+
+Add to `app/build.gradle.kts`:
+
+```kotlin
+dependencies {
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
+
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    kapt("androidx.hilt:hilt-compiler:1.2.0")
+}
+```
+
+### Step 2: Update AndroidManifest.xml
+
+```xml
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+<application>
+    <!-- Notification receiver for boot completed -->
+    <receiver
+        android:name=".core.notification.BootReceiver"
+        android:enabled="true"
+        android:exported="false">
+        <intent-filter>
+            <action android:name="android.intent.action.BOOT_COMPLETED" />
+        </intent-filter>
+    </receiver>
+</application>
+```
+
+### Step 3: Create Notification Channels
+
+Create `core/notification/NotificationHelper.kt`:
+
+```kotlin
+@Singleton
+class NotificationHelper @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    companion object {
+        const val BUDGET_CHANNEL_ID = "budget_alerts"
+        const val SAVING_CHANNEL_ID = "saving_milestones"
+        const val DAILY_REMINDER_CHANNEL_ID = "daily_reminders"
+    }
+
+    init {
+        createNotificationChannels()
+    }
+
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val budgetChannel = NotificationChannel(
+                BUDGET_CHANNEL_ID,
+                "Budget Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifications for budget threshold alerts"
+                enableVibration(true)
+            }
+
+            val savingChannel = NotificationChannel(
+                SAVING_CHANNEL_ID,
+                "Saving Milestones",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Notifications for saving goal achievements"
+            }
+
+            val reminderChannel = NotificationChannel(
+                DAILY_REMINDER_CHANNEL_ID,
+                "Daily Reminders",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Daily reminders to log expenses and check savings"
+                enableVibration(false)
+            }
+
+            val notificationManager = context.getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannels(
+                listOf(budgetChannel, savingChannel, reminderChannel)
+            )
+        }
+    }
+
+    fun showBudgetAlert(percentage: Int, overspent: Double = 0.0) {
+        val title = if (overspent > 0) "Over Budget!" else "Budget Alert"
+        val message = if (overspent > 0) {
+            "You've exceeded your budget by ${formatCurrency(overspent)}"
+        } else {
+            "You've used $percentage% of your monthly budget"
+        }
+
+        showNotification(
+            channelId = BUDGET_CHANNEL_ID,
+            title = title,
+            message = message,
+            icon = R.drawable.ic_budget_alert
+        )
+    }
+
+    fun showSavingMilestone(challengeName: String, percentage: Int) {
+        val title = when {
+            percentage >= 100 -> "Challenge Complete!"
+            percentage >= 75 -> "Almost There!"
+            percentage >= 50 -> "Halfway!"
+            else -> "Saving Progress"
+        }
+
+        showNotification(
+            channelId = SAVING_CHANNEL_ID,
+            title = title,
+            message = "You've saved $percentage% of your $challengeName goal",
+            icon = R.drawable.ic_saving_milestone
+        )
+    }
+
+    fun showDailyReminder(message: String) {
+        showNotification(
+            channelId = DAILY_REMINDER_CHANNEL_ID,
+            title = "Saving Coach",
+            message = message,
+            icon = R.drawable.ic_notification
+        )
+    }
+
+    private fun showNotification(channelId: String, title: String, message: String, icon: Int) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(icon)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+    }
+}
+```
+
+### Step 4: Create Notification Scheduler
+
+Create `core/notification/NotificationScheduler.kt`:
+
+```kotlin
+@Singleton
+class NotificationScheduler @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    private val workManager = WorkManager.getInstance(context)
+
+    companion object {
+        private const val DAILY_REMINDER_WORK = "daily_reminder_work"
+        private const val BUDGET_CHECK_WORK = "budget_check_work"
+        private const val SAVING_REMINDER_WORK = "saving_reminder_work"
+        private const val INACTIVE_CHECK_WORK = "inactive_check_work"
+    }
+
+    fun scheduleDailyReminders() {
+        // Daily expense reminder at 8:00 PM
+        val expenseReminderRequest = PeriodicWorkRequestBuilder<DailyExpenseReminderWorker>(
+            1, TimeUnit.DAYS
+        )
+            .setInitialDelay(calculateDelay(20, 0), TimeUnit.MILLISECONDS) // 8:00 PM
+            .build()
+
+        // Daily saving challenge reminder at 7:00 PM
+        val savingReminderRequest = PeriodicWorkRequestBuilder<SavingReminderWorker>(
+            1, TimeUnit.DAYS
+        )
+            .setInitialDelay(calculateDelay(19, 0), TimeUnit.MILLISECONDS) // 7:00 PM
+            .build()
+
+        // Inactive alert at 9:00 PM
+        val inactiveAlertRequest = PeriodicWorkRequestBuilder<InactiveAlertWorker>(
+            1, TimeUnit.DAYS
+        )
+            .setInitialDelay(calculateDelay(21, 0), TimeUnit.MILLISECONDS) // 9:00 PM
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            DAILY_REMINDER_WORK,
+            ExistingPeriodicWorkPolicy.KEEP,
+            expenseReminderRequest
+        )
+
+        workManager.enqueueUniquePeriodicWork(
+            SAVING_REMINDER_WORK,
+            ExistingPeriodicWorkPolicy.KEEP,
+            savingReminderRequest
+        )
+
+        workManager.enqueueUniquePeriodicWork(
+            INACTIVE_CHECK_WORK,
+            ExistingPeriodicWorkPolicy.KEEP,
+            inactiveAlertRequest
+        )
+    }
+
+    fun scheduleBudgetCheck() {
+        val budgetCheckRequest = PeriodicWorkRequestBuilder<BudgetAlertWorker>(
+            6, TimeUnit.HOURS // Check every 6 hours
+        )
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            BUDGET_CHECK_WORK,
+            ExistingPeriodicWorkPolicy.KEEP,
+            budgetCheckRequest
+        )
+    }
+
+    private fun calculateDelay(hour: Int, minute: Int): Long {
+        val now = Calendar.getInstance()
+        val target = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+        }
+        if (target.before(now)) {
+            target.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        return target.timeInMillis - now.timeInMillis
+    }
+}
+```
+
+### Step 5: Create Workers
+
+**BudgetAlertWorker.kt:**
+```kotlin
+@HiltWorker
+class BudgetAlertWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val budgetRepository: BudgetRepository,
+    private val expenseRepository: ExpenseRepository,
+    private val notificationHelper: NotificationHelper
+) : CoroutineWorker(context, workerParams) {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
+            val currentMonth = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(Date())
+
+            val budget = budgetRepository.getBudget(userId, currentMonth).first()
+            val expenses = expenseRepository.getExpensesForMonth(userId, currentMonth).first()
+
+            if (budget != null) {
+                val totalSpent = expenses.sumOf { it.amount }
+                val percentage = ((totalSpent / budget.limit) * 100).toInt()
+
+                when {
+                    percentage >= 100 -> notificationHelper.showBudgetAlert(percentage, totalSpent - budget.limit)
+                    percentage >= 90 -> notificationHelper.showBudgetAlert(percentage)
+                    percentage >= 75 -> notificationHelper.showBudgetAlert(percentage)
+                }
+            }
+
+            Result.success()
+        } catch (e: Exception) {
+            Result.failure()
+        }
+    }
+}
+```
+
+**DailyExpenseReminderWorker.kt:**
+```kotlin
+@HiltWorker
+class DailyExpenseReminderWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val expenseRepository: ExpenseRepository,
+    private val notificationHelper: NotificationHelper
+) : CoroutineWorker(context, workerParams) {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+            val todayExpenses = expenseRepository.getExpensesForDate(userId, today).first()
+
+            if (todayExpenses.isEmpty()) {
+                notificationHelper.showDailyReminder(
+                    "Don't forget to log your expenses today!"
+                )
+            }
+
+            Result.success()
+        } catch (e: Exception) {
+            Result.failure()
+        }
+    }
+}
+```
+
+**SavingReminderWorker.kt:**
+```kotlin
+@HiltWorker
+class SavingReminderWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val savingChallengeRepository: SavingChallengeRepository,
+    private val notificationHelper: NotificationHelper
+) : CoroutineWorker(context, workerParams) {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
+            val challenges = savingChallengeRepository.getActiveChallenges(userId).first()
+
+            if (challenges.isNotEmpty()) {
+                val challengeNames = challenges.joinToString(", ") { it.name }
+                notificationHelper.showDailyReminder(
+                    "You have ${challenges.size} active saving challenges: $challengeNames. Keep going!"
+                )
+            }
+
+            Result.success()
+        } catch (e: Exception) {
+            Result.failure()
+        }
+    }
+}
+```
+
+**InactiveAlertWorker.kt:**
+```kotlin
+@HiltWorker
+class InactiveAlertWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val expenseRepository: ExpenseRepository,
+    private val notificationHelper: NotificationHelper
+) : CoroutineWorker(context, workerParams) {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
+            val yesterday = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(
+                Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.time
+            )
+
+            val yesterdayExpenses = expenseRepository.getExpensesForDate(userId, yesterday).first()
+
+            if (yesterdayExpenses.isEmpty()) {
+                notificationHelper.showDailyReminder(
+                    "You haven't logged expenses yesterday. Stay on track with your budget!"
+                )
+            }
+
+            Result.success()
+        } catch (e: Exception) {
+            Result.failure()
+        }
+    }
+}
+```
+
+### Step 6: Initialize in Application Class
+
+Update `SavingCoachApp.kt`:
+
+```kotlin
+@HiltAndroidApp
+class SavingCoachApp : Application() {
+    @Inject
+    lateinit var notificationScheduler: NotificationScheduler
+
+    override fun onCreate() {
+        super.onCreate()
+        notificationScheduler.scheduleDailyReminders()
+        notificationScheduler.scheduleBudgetCheck()
+    }
+}
+```
+
+### Step 7: Request Permission in MainActivity
+
+Update `MainActivity.kt`:
+
+```kotlin
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            // User denied permission - show explanation if needed
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        requestNotificationPermission()
+        // ... rest of onCreate
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+}
+```
+
+### Testing
+
+```bash
+# Test budget alert
+adb shell am broadcast -a com.savingcoach.app.BUDGET_ALERT --ei percentage 100
+
+# Check notification channels
+adb shell dumpsys notification | grep -A 5 "budget_alerts"
+
+# Force run WorkManager tasks
+adb shell am broadcast -a "androidx.work.diagnostics.REQUEST_DIAGNOSTICS"
+```
+
+---
+
+## 9. Gemini API Setup (Proxy for Myanmar)
 
 ### ⚠️ Important: Myanmar Geo-Restriction
 
