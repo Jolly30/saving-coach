@@ -1,6 +1,6 @@
 # 👤 Dev 1 — Work Log
 
-> Last updated: 2026-07-30
+> Last updated: 2026-07-31 (Session 7)
 
 ---
 
@@ -10,7 +10,7 @@
 |------|--------|-------|
 | All original Dev 1 tasks | ✅ **COMPLETE** | Repo pushed, team unblocked 🎉 |
 | Real Firebase Auth + Google Sign-In | ✅ **COMPLETE** | Credential Manager integrated, build passes |
-| Firestore Repositories (from Dev 3) | ⏳ **PENDING** | FirebaseExpenseRepository, FirebaseBudgetRepository, FirebaseSavingChallengeRepository |
+| Firestore Repositories (from Dev 3) | ✅ **COMPLETE** | FirebaseExpenseRepository, FirebaseBudgetRepository, FirebaseSavingChallengeRepository — BUILD SUCCESSFUL |
 
 ---
 
@@ -31,6 +31,7 @@
 | — Mock Repos + Hilt DI | ✅ Done | MockRepositories.kt + RepositoryModule.kt |
 | — Package rename | ✅ Done | `com.savingcoach.app` |
 | — Build verifies | ✅ Done | `./gradlew assembleDebug` — **BUILD SUCCESSFUL** |
+| — Firestore Repos | ✅ Done | Firebase repos for Expenses, Budgets, Saving Challenges |
 
 ### 🌐 Repo
 - **GitHub:** https://github.com/Jolly30/saving-coach
@@ -115,7 +116,7 @@
 | 4 | Send your SHA-1 fingerprint to team lead (`./gradlew signingReport`) |
 | 5 | `./gradlew assembleDebug` to verify |
 | 6 | Create feature branch off `develop` |
-| 7 | Code against the **interfaces** (Dev 3 builds real Firestore later) |
+| 7 | Code against the **interfaces** — real Firestore repos are now implemented ✅ |
 
 ---
 
@@ -216,40 +217,209 @@ Response: { "reply": "..." }
 
 ---
 
-## 🔧 Session 3 — Firestore Repositories (Upcoming)
+## 🔧 Session 3 — Firestore Repositories (2026-07-31)
 
 ### New Responsibility (Moved from Dev 3)
 
 Dev 1 now owns the real Firestore repository implementations. Previously this was Dev 3's job.
 
-**3 files to build:**
+**3 files created:**
 
-| File | Task | Difficulty |
-|------|------|:----------:|
-| `FirebaseExpenseRepository.kt` | CRUD + real-time sync for expenses via Firestore | Medium |
-| `FirebaseBudgetRepository.kt` | Budget limits + spending totals | Easy |
-| `FirebaseSavingChallengeRepository.kt` | Challenges + deposits CRUD | Easy |
+| File | Description | Difficulty |
+|------|-------------|:----------:|
+| `FirebaseExpenseRepository.kt` | CRUD + real-time listeners for expenses | Medium |
+| `FirebaseBudgetRepository.kt` | Budget read/write per month | Easy |
+| `FirebaseSavingChallengeRepository.kt` | Challenges + deposits with subcollection | Easy |
 
-**Firestore structure:**
+**Firestore structure (final):**
 ```
-users/{userId}/expenses/{expenseId}
-users/{userId}/budgets/{YYYY-MM}
-users/{userId}/challenges/{challengeId}
-users/{userId}/challenges/{challengeId}/deposits/{depositId}
+expenses/{expenseId}                                   ← top-level (delete by ID works)
+users/{userId}/budgets/{YYYY-MM}                       ← budget per month
+users/{userId}/challenges/{challengeId}                 ← challenges
+users/{userId}/challenges/{challengeId}/deposits/{depositId}  ← deposits subcollection
 ```
 
-**How to finish:**
-Swap mocks → real repos in `RepositoryModule.kt`:
+**Design decisions:**
+- Expenses use a **top-level collection** with `userId` field — so `deleteExpense(expenseId)` works without needing userId (matches interface)
+- Budgets use `yearMonth` as the document ID — direct lookup, no queries needed
+- `addDeposit` auto-increments `currentAmount` on the challenge using `FieldValue.increment()`
+- `deleteChallenge` cascades — deletes all deposits first, then the challenge doc
+- All real-time listeners use `callbackFlow` + `addSnapshotListener`
+
+**DI binding swap in `RepositoryModule.kt`:**
 ```kotlin
-// Change:
-@Binds abstract fun bindExpenseRepository(impl: MockExpenseRepository): ExpenseRepository
-// To:
+// Changed:
 @Binds abstract fun bindExpenseRepository(impl: FirebaseExpenseRepository): ExpenseRepository
+@Binds abstract fun bindBudgetRepository(impl: FirebaseBudgetRepository): BudgetRepository
+@Binds abstract fun bindSavingChallengeRepository(impl: FirebaseSavingChallengeRepository): SavingChallengeRepository
 ```
+
+**Build verification:** `./gradlew assembleDebug` — **BUILD SUCCESSFUL** ✅
 
 **After this:**
 - Dev 3 (Saving Challenges), Dev 4 (Budget & Expense Hub), Dev 5 (Export) swap their mocks to real data
 - Integration test week
+
+---
+
+## 🔧 Session 4 — Dashboard Fix + Firestore Wiring (2026-07-31)
+
+### Problem
+`DashboardViewModel` had `userId` hardcoded to `"default_user"`. With real Firestore repos, all queries went to `users/default_user/...` instead of the actual authenticated user's data.
+
+### Fix
+- **Injected** `AuthRepository` into `DashboardViewModel` constructor
+- **Replaced** `"default_user"` → `authRepository.getCurrentUserId() ?: "unknown"`
+
+**Modified file:**
+
+| File | Change |
+|------|--------|
+| `ui/dashboard/DashboardViewModel.kt` | Added `AuthRepository` injection, replaced hardcoded userId with real auth UID |
+
+**Build verification:** `./gradlew assembleDebug` — **BUILD SUCCESSFUL** ✅
+
+---
+
+## 🔧 Session 5 — Crash Fixes & UI Sync (2026-07-31)
+
+### 1. Fixed Dashboard Crash on Startup (Unknown User)
+- **Problem:** Removing the hardcoded `userId` caused `DashboardViewModel` to query Firestore with `userId = "unknown"` when a user wasn't logged in. This threw a Permission Denied error from Firestore, crashing the app because the unhandled exception bubbled up through the `combine` flow.
+- **Fix:** Added an early return in `loadDashboard()` if `userId == "unknown"` and appended `.catch { }` to safely handle flow exceptions without crashing.
+
+### 2. Fixed Navigation UI to Match Setup Guide
+- **Problem:** The bottom navigation bar incorrectly included a "Chat" tab instead of "Challenges", and the Chat feature was supposed to be a Floating Action Button (FAB).
+- **Fix:** 
+  - Updated `MainActivity.kt` to replace the Chat tab with the **Challenges** tab.
+  - Added a `FloatingActionButton` for Chat in the `Scaffold`.
+  - Added the missing `Challenges` route to `Routes.kt` and `NavGraph.kt`.
+
+### 3. Synced Dashboard Threshold Alerts with Setup Guide
+- **Problem:** The Dashboard progress bar colors did not match the thresholds defined in the setup guide (75%, 90%, 100%), and the alert banners were entirely missing.
+- **Fix:** Updated `DashboardScreen.kt` to use the correct `75` (Yellow), `90` (Orange), and `100` (Red) percentage thresholds, and added the missing visual alert banners to display when these thresholds are crossed.
+
+**Modified files:**
+- `ui/dashboard/DashboardViewModel.kt`
+- `ui/dashboard/DashboardScreen.kt`
+- `MainActivity.kt`
+- `navigation/Routes.kt`
+- `navigation/NavGraph.kt`
+
+---
+
+## 🔧 Session 6 — Dashboard UI Overhaul (2026-07-31)
+
+### Problem
+Dashboard had multiple issues: unused components, no category breakdown, no expense list, hardcoded currency, dark mode issues, inconsistent color thresholds, no error handling, no pull-to-refresh.
+
+### What Was Fixed
+
+| # | Issue | Fix |
+|---|-------|-----|
+| 1 | SpendingChart never used | Wired up with category breakdown from ViewModel |
+| 2 | No category data in ViewModel | Added `categorySpending: List<CategorySpending>` grouped by category |
+| 3 | No expense list shown | Added `recentExpenses` (last 5) with category, merchant, amount, date |
+| 4 | Challenge count only | Now shows challenge cards with title, progress bar, amount, % complete |
+| 5 | BudgetProgressBar unused | Replaced inline LinearProgressIndicator with reusable BudgetProgressBar |
+| 6 | LoadingOverlay unused | Replaced inline CircularProgressIndicator with LoadingOverlay |
+| 7 | No error handling | Added `.catch { }` on all flows, sets `DashboardUiState.error` |
+| 8 | No pull-to-refresh | Added `PullToRefreshBox` wrapper |
+| 9 | Color thresholds inconsistent | Aligned BudgetProgressBar to `>= 100/90/75` matching DashboardScreen |
+| 10 | Hardcoded "MMK" currency | Now uses dynamic `currency` from first expense |
+| 11 | Dark mode CalendarHeatmap | Still uses `Color.LightGray` for empty days (minor) |
+| 12 | Today highlight unclear | Added primary color border around today's date cell |
+
+**Modified files:**
+
+| File | Change |
+|------|--------|
+| `ui/dashboard/DashboardViewModel.kt` | Added `CategorySpending` data class, category breakdown, error handling, dynamic currency |
+| `ui/dashboard/DashboardScreen.kt` | Wired SpendingChart, BudgetProgressBar, LoadingOverlay. Added expense list, challenge cards, pull-to-refresh |
+| `ui/dashboard/CalendarHeatmap.kt` | Added border on today's date for visibility |
+| `ui/components/BudgetProgressBar.kt` | Fixed color thresholds to `>= 100/90/75` |
+
+**Build verification:** `./gradlew assembleDebug` — **BUILD SUCCESSFUL** ✅
+
+---
+
+## 🔧 Session 7 — Dashboard Redesign v2 (2026-07-31)
+
+### What Was Built
+
+Redesigned dashboard to match the new ASCII mockup spec.
+
+| Feature | Implementation |
+|---------|---------------|
+| **Challenge Carousel** | Horizontal `Row` + `horizontalScroll` with swipeable cards, "See All ➔" button → navigates to Challenges tab |
+| **Filter Chips** | All / 💰 Savings / 🧾 Expenses — filter calendar display |
+| **Interactive Tooltip** | Tap any calendar day → dark floating popover with 🎯 Budget / 🧾 Expense / 💰 Saving totals |
+| **Green Dot Indicator** | Small green dot below date number on days with savings deposits |
+| **Exception-Based Colors** | Clean calendar — only color cells that are 80%+ or over budget |
+| **Calendar History** | "See All Months ➔" link → new screen with ◄ Month Year ► switcher |
+| **Selected Date Highlight** | Primary color border on tapped date |
+
+**New files:**
+
+| File | Purpose |
+|------|---------|
+| `ui/dashboard/CalendarHistoryScreen.kt` | Historical calendar with month switcher, filters, and back navigation |
+| `ui/dashboard/CalendarHistoryViewModel.kt` | ViewModel for calendar history — month navigation, data fetching |
+
+**Modified files:**
+
+| File | Change |
+|------|--------|
+| `ui/dashboard/DashboardViewModel.kt` | Added `CalendarFilter`, `TooltipData`, `dailySavings`, `selectedDate`, `onDateTap()`, `onFilterChange()`, `dismissTooltip()` |
+| `ui/dashboard/DashboardScreen.kt` | Challenge carousel, filter chips, calendar wiring, "See All" links, tooltip popup |
+| `ui/dashboard/CalendarHeatmap.kt` | Tap handler, green dot for savings, filter support, selected date highlighting, exception-based colors |
+| `navigation/Routes.kt` | Added `CalendarHistory` route |
+| `navigation/NavGraph.kt` | Added `CalendarHistoryScreen` composable, passed navigation callbacks to `DashboardScreen` |
+
+**Build verification:** `./gradlew assembleDebug` — **BUILD SUCCESSFUL** ✅
+
+---
+
+## 🔧 Session 8 — Default Challenges + Real Filters + Scroll Fix (2026-07-31)
+
+### What Was Fixed
+
+| # | Issue | Fix |
+|---|-------|-----|
+| 1 | Challenge carousel empty (Dev 3 not done) | Added 4 default challenge templates that always show on dashboard |
+| 2 | Default vs Active cards look the same | Default: surface bg, "Tap to activate", 0% progress. Active: green tint bg, "Active" badge, real progress |
+| 3 | Filters just change opacity | Real filter behavior: SAVINGS → green tint on matching days, faded others. EXPENSES → normal color on matching, faded others |
+| 4 | No filter indicator | Added "Showing days with savings/expenses" text below filter chips |
+| 5 | Legend static | Legend adapts to current filter mode |
+| 6 | Nested scroll conflicts | `LazyRow` → `Row` + `horizontalScroll`, `LazyVerticalGrid` → `Column` of `Row`s |
+
+**Default challenge templates:**
+
+| Template | Target | Shows as |
+|----------|--------|----------|
+| ✉️ 100 Envelopes | 100 | Tap to activate |
+| 📅 $1/Day Challenge | 365 | Tap to activate |
+| 🚫 No Spend Week | 7 | Tap to activate |
+| 💰 Save 20% Income | 200 | Tap to activate |
+
+**Modified files:**
+
+| File | Change |
+|------|--------|
+| `ui/dashboard/DashboardViewModel.kt` | Added `DEFAULT_CHALLENGES` companion object, `displayChallenges` merged list |
+| `ui/dashboard/DashboardScreen.kt` | `Row` + `horizontalScroll` carousel, active/default card states, filter indicator text |
+| `ui/dashboard/CalendarHeatmap.kt` | `Column`/`Row` grid (no lazy), filter-aware colors, adaptive legend |
+
+**Build verification:** `./gradlew assembleDebug` — **BUILD SUCCESSFUL** ✅
+
+---
+
+## 🔧 Session 9 — Filter UI Update (2026-07-31)
+
+### What Was Fixed
+- Replaced the horizontal `FilterChip` row on the Dashboard with a clean `DropdownMenu` for the Calendar filter to improve UI space and aesthetics.
+
+**Modified files:**
+- `ui/dashboard/DashboardScreen.kt`
 
 ---
 
@@ -259,7 +429,6 @@ Swap mocks → real repos in `RepositoryModule.kt`:
 Project: Saving Coach | Package: com.savingcoach.app
 Repo: https://github.com/Jolly30/saving-coach
 Dev 1 Role: UI Skeleton + Auth + Dashboard + AI Proxy + Firestore Repositories
-Status: ✅ ALL original tasks DONE + Real Auth + Gemini Proxy (Deployed)
-        ⏳ Firestore repos (next)
+Status: ✅ ALL tasks DONE + Real Auth + Gemini Proxy + Firestore Repositories + Dashboard Redesign v2 + Default Challenges + Filter Dropdown
 Proxy URL: https://proxy-topaz-ten-36.vercel.app
 ```

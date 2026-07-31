@@ -1,14 +1,14 @@
 package com.savingcoach.app.di
 
-import com.savingcoach.app.data.repository.FirebaseAuthRepository
-import com.savingcoach.app.data.mock.MockBudgetRepository
-import com.savingcoach.app.data.mock.MockExpenseRepository
-import com.savingcoach.app.data.mock.MockSavingChallengeRepository
 import com.savingcoach.app.ai.AiChatRepository
 import com.savingcoach.app.data.repository.AuthRepository
 import com.savingcoach.app.data.repository.BudgetRepository
 import com.savingcoach.app.data.repository.ChatRepository
 import com.savingcoach.app.data.repository.ExpenseRepository
+import com.savingcoach.app.data.repository.FirebaseAuthRepository
+import com.savingcoach.app.data.repository.FirebaseBudgetRepository
+import com.savingcoach.app.data.repository.FirebaseExpenseRepository
+import com.savingcoach.app.data.repository.FirebaseSavingChallengeRepository
 import com.savingcoach.app.data.repository.SavingChallengeRepository
 import dagger.Binds
 import dagger.Module
@@ -23,13 +23,13 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindExpenseRepository(
-        impl: MockExpenseRepository
+        impl: FirebaseExpenseRepository
     ): ExpenseRepository
 
     @Binds
     @Singleton
     abstract fun bindBudgetRepository(
-        impl: MockBudgetRepository
+        impl: FirebaseBudgetRepository
     ): BudgetRepository
 
     @Binds
@@ -41,7 +41,7 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSavingChallengeRepository(
-        impl: MockSavingChallengeRepository
+        impl: FirebaseSavingChallengeRepository
     ): SavingChallengeRepository
 
     @Binds

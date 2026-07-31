@@ -30,9 +30,9 @@ fun BudgetProgressBar(
     label: String = ""
 ) {
     val barColor = when {
-        percentage > 100 -> Red
-        percentage > 80 -> Orange
-        percentage > 50 -> Yellow
+        percentage >= 100 -> Red
+        percentage >= 90 -> Orange
+        percentage >= 75 -> Yellow
         else -> Green
     }
 

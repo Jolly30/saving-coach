@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -49,7 +51,7 @@ data class BottomNavItem(
 val bottomNavItems = listOf(
     BottomNavItem("Dashboard", Icons.Default.Dashboard, Routes.Dashboard.route),
     BottomNavItem("Expenses", Icons.Default.Receipt, Routes.Expenses.route),
-    BottomNavItem("Chat", Icons.Default.Chat, Routes.Chat.route),
+    BottomNavItem("Challenges", Icons.Default.EmojiEvents, Routes.Challenges.route),
     BottomNavItem("Settings", Icons.Default.Settings, Routes.Settings.route)
 )
 
@@ -66,6 +68,15 @@ fun MainScreen() {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        floatingActionButton = {
+            if (showBottomBar) {
+                FloatingActionButton(
+                    onClick = { navController.navigate(Routes.Chat.route) }
+                ) {
+                    Icon(Icons.Default.Chat, contentDescription = "Chat")
+                }
+            }
+        },
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {

@@ -14,7 +14,7 @@
 | 📊 **Dashboard** | Budget progress, calendar heatmap, spending overview | 1 | ✅ |
 | 🔐 **Auth** | Google Sign-In + Email/Password | 1 | ✅ |
 | 🤖 **AI Chat** | Natural language expense logging via Gemini AI | 1 | ✅ |
-| 🔥 **Firestore Repos** | Real Firebase data layer | 1 | ⏳ |
+| 🔥 **Firestore Repos** | Real Firebase data layer | 1 | ✅ |
 | 📸 **Receipt Scanner** | Snap a receipt → AI extracts data | 2 | ⏳ |
 | 💰 **Budget & Expense Hub** | Monthly budget, categories, recent expenses, log expense | 4 | ⏳ |
 | 🎯 **Saving Challenges** | Set goals, track deposits, visualize progress | 3 | ⏳ |
