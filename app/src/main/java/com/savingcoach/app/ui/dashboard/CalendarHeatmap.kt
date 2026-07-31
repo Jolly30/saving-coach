@@ -221,7 +221,7 @@ fun CalendarHeatmap(
                                 maxSavings = maxSavings,
                                 onDateTap = onDateTap
                             )
-                            if (isSelected && tooltipData != null && day.date != null) {
+                            if (isSelected && tooltipData != null) {
                                 TooltipPopup(date = selectedDate!!, tooltip = tooltipData, onDismiss = onDismissTooltip)
                             }
                         }

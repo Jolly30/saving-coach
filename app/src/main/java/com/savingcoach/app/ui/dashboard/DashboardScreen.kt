@@ -27,6 +27,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -60,7 +62,8 @@ import kotlinx.coroutines.launch
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
     onNavigateToChallenges: () -> Unit = {},
-    onNavigateToCalendarHistory: () -> Unit = {}
+    onNavigateToCalendarHistory: () -> Unit = {},
+    onNavigateToNotifications: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var isRefreshing by remember { mutableStateOf(false) }
@@ -93,7 +96,8 @@ fun DashboardScreen(
                     onFilterChange = viewModel::onFilterChange,
                     onDismissTooltip = viewModel::dismissTooltip,
                     onNavigateToChallenges = onNavigateToChallenges,
-                    onNavigateToCalendarHistory = onNavigateToCalendarHistory
+                    onNavigateToCalendarHistory = onNavigateToCalendarHistory,
+                    onNavigateToNotifications = onNavigateToNotifications
                 )
             }
         }
@@ -107,7 +111,8 @@ private fun DashboardContent(
     onFilterChange: (CalendarFilter) -> Unit,
     onDismissTooltip: () -> Unit,
     onNavigateToChallenges: () -> Unit,
-    onNavigateToCalendarHistory: () -> Unit
+    onNavigateToCalendarHistory: () -> Unit,
+    onNavigateToNotifications: () -> Unit
 ) {
     val currency = uiState.currency
 
@@ -117,11 +122,23 @@ private fun DashboardContent(
             .padding(16.dp)
     ) {
         // Header
-        Text(
-            text = "Dashboard",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Dashboard",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+            androidx.compose.material3.IconButton(onClick = onNavigateToNotifications) {
+                androidx.compose.material3.Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = "Notifications"
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 

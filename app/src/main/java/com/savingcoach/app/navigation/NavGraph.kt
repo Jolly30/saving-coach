@@ -41,6 +41,9 @@ fun NavGraph(
                 },
                 onNavigateToCalendarHistory = {
                     navController.navigate(Routes.CalendarHistory.route)
+                },
+                onNavigateToNotifications = {
+                    navController.navigate(Routes.Notifications.route)
                 }
             )
         }
@@ -81,6 +84,12 @@ fun NavGraph(
 
         composable(Routes.CalendarHistory.route) {
             CalendarHistoryScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.Notifications.route) {
+            com.savingcoach.app.ui.notifications.NotificationsScreen(
                 onBack = { navController.popBackStack() }
             )
         }

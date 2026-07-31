@@ -10,6 +10,11 @@ plugins {
     id("com.google.firebase.crashlytics") version "3.0.2"
 }
 
+secrets {
+    propertiesFileName = "local.properties"
+    defaultPropertiesFileName = "local.defaults.properties"
+}
+
 android {
     namespace = "com.savingcoach.app"
     compileSdk = 35
@@ -121,6 +126,11 @@ dependencies {
 
     // Commons CSV
     implementation(libs.commons.csv)
+
+    // WorkManager & Notifications
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    kapt("androidx.hilt:hilt-compiler:1.2.0")
 
     // Testing
     testImplementation(libs.junit)
