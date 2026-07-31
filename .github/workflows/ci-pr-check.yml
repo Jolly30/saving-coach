@@ -33,6 +33,7 @@ jobs:
         run: |
           echo "sdk.dir=${{ env.ANDROID_HOME }}" > local.properties
           echo "proxy.url=https://proxy-topaz-ten-36.vercel.app" >> local.properties
+          echo "gemini.api.key=${{ secrets.GEMINI_API_KEY }}" >> local.properties
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -71,6 +72,7 @@ jobs:
         run: |
           echo "sdk.dir=${{ env.ANDROID_HOME }}" > local.properties
           echo "proxy.url=https://proxy-topaz-ten-36.vercel.app" >> local.properties
+          echo "gemini.api.key=${{ secrets.GEMINI_API_KEY }}" >> local.properties
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
