@@ -24,14 +24,31 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
+
+fun Context.getActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.getActivity()
+    else -> null
+}
 
 @Composable
 fun AuthScreen(
@@ -40,6 +57,13 @@ fun AuthScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // TODO: Replace with your actual Firebase Web Client ID from Firebase Console > Authentication > Sign-in method > Google
+    val webClientId = "42108385419-is8ctsvtkob8uedf0pgtdlcn5lolg8gu.apps.googleusercontent.com"
+
+    val credentialManager = remember { CredentialManager.create(context) }
 
     LaunchedEffect(uiState.isSignedIn) {
         if (uiState.isSignedIn) {
@@ -163,7 +187,41 @@ fun AuthScreen(
             // Google Sign-In button
             OutlinedButton(
                 onClick = {
-                    // TODO: Integrate Google Sign-In with Credential Manager
+                    scope.launch {
+                        try {
+                            val request = GetCredentialRequest.Builder()
+                                .addCredentialOption(
+                                    GetGoogleIdOption.Builder()
+                                        .setFilterByAuthorizedAccounts(false)
+                                        .setServerClientId(webClientId)
+                                        .setAutoSelectEnabled(true)
+                                        .build()
+                                )
+                                .build()
+
+                            val activity = context.getActivity()
+                            if (activity == null) {
+                                viewModel.onGoogleSignInError("Error: Could not find Activity context.")
+                                return@launch
+                            }
+
+                            val result = credentialManager.getCredential(
+                                request = request,
+                                context = activity,
+                            )
+
+                            val credential = result.credential
+                            if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                                val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                                viewModel.onGoogleIdTokenReceived(googleCredential.idToken)
+                            }
+                        } catch (e: GetCredentialCancellationException) {
+                            // User cancelled or MIUI instantly killed it
+                            viewModel.onGoogleSignInError("Sign-in cancelled or blocked by phone settings")
+                        } catch (e: Exception) {
+                            viewModel.onGoogleSignInError(e.message ?: "Google sign-in failed")
+                        }
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()

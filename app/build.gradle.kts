@@ -7,6 +7,12 @@ plugins {
     kotlin("kapt")
     alias(libs.plugins.secrets)
     id("com.google.gms.google-services") version "4.4.2"
+    id("com.google.firebase.crashlytics") version "3.0.2"
+}
+
+secrets {
+    propertiesFileName = "local.properties"
+    defaultPropertiesFileName = "local.defaults.properties"
 }
 
 android {
@@ -90,9 +96,6 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.crashlytics)
 
-    // Gemini AI
-    implementation(libs.generative.ai)
-
     // CameraX
     implementation(libs.camerax.core)
     implementation(libs.camerax.camera2)
@@ -103,6 +106,12 @@ dependencies {
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+
+    // Google Credential Manager (Sign-In)
+    implementation(libs.credentials)
+    implementation(libs.credentials.play.services.auth)
+    implementation(libs.play.services.auth)
+    implementation(libs.google.id)
 
     // Coroutines
     implementation(libs.coroutines.core)
@@ -117,6 +126,11 @@ dependencies {
 
     // Commons CSV
     implementation(libs.commons.csv)
+
+    // WorkManager & Notifications
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    kapt("androidx.hilt:hilt-compiler:1.2.0")
 
     // Testing
     testImplementation(libs.junit)

@@ -10,6 +10,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.savingcoach.app.ui.auth.AuthScreen
+import com.savingcoach.app.ui.chat.ChatScreen
+import com.savingcoach.app.ui.dashboard.CalendarHistoryScreen
 import com.savingcoach.app.ui.dashboard.DashboardScreen
 
 @Composable
@@ -33,12 +35,27 @@ fun NavGraph(
         }
 
         composable(Routes.Dashboard.route) {
-            DashboardScreen()
+            DashboardScreen(
+                onNavigateToChallenges = {
+                    navController.navigate(Routes.Challenges.route)
+                },
+                onNavigateToCalendarHistory = {
+                    navController.navigate(Routes.CalendarHistory.route)
+                },
+                onNavigateToNotifications = {
+                    navController.navigate(Routes.Notifications.route)
+                }
+            )
         }
 
         composable(Routes.Expenses.route) {
             // TODO: Dev 4 — Replace with ExpenseListScreen
             PlaceholderScreen("Expenses")
+        }
+
+        composable(Routes.Challenges.route) {
+            // TODO: Dev 3 — Replace with ChallengesScreen
+            PlaceholderScreen("Challenges")
         }
 
         composable(Routes.AddExpense.route) {
@@ -47,8 +64,7 @@ fun NavGraph(
         }
 
         composable(Routes.Chat.route) {
-            // TODO: Dev 2 — Replace with ChatScreen
-            PlaceholderScreen("Chat")
+            ChatScreen()
         }
 
         composable(Routes.Camera.route) {
@@ -64,6 +80,18 @@ fun NavGraph(
         composable(Routes.Settings.route) {
             // TODO: Dev 5 — Replace with SettingsScreen
             PlaceholderScreen("Settings")
+        }
+
+        composable(Routes.CalendarHistory.route) {
+            CalendarHistoryScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.Notifications.route) {
+            com.savingcoach.app.ui.notifications.NotificationsScreen(
+                onBack = { navController.popBackStack() }
+            )
         }
     }
 }

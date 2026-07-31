@@ -14,7 +14,7 @@
 5. [Dependency Map — Do This First](#5-dependency-map--do-this-first)
 6. [Feature Breakdown by Developer](#6-feature-breakdown-by-developer)
 7. [Firebase Setup Guide](#7-firebase-setup-guide)
-8. [Gemini API Setup](#8-gemini-api-setup)
+8. [Gemini API Setup (Proxy for Myanmar)](#8-gemini-api-setup-proxy-for-myanmar)
 9. [Data Models (Firestore Schema)](#9-data-models-firestore-schema)
 10. [Navigation Routes](#10-navigation-routes)
 11. [Build & Run](#11-build--run)
@@ -212,10 +212,18 @@ saving-coach/
 ├── build.gradle.kts                    # Root build file (plugins)
 ├── settings.gradle.kts                 # Project settings
 ├── gradle.properties                   # JVM + AndroidX settings
-├── local.properties                    # SDK path + API keys (gitignored)
+├── local.properties                    # SDK path + proxy URL (gitignored)
+├── local.defaults.properties           # Template for local.properties (committed)
 ├── .gitignore
 ├── gradle/
 │   └── libs.versions.toml              # Version catalog
+├── proxy/                              # Gemini API proxy (Vercel serverless)
+│   ├── api/
+│   │   └── chat.js                     # Serverless function — forwards to Gemini
+│   ├── vercel.json                     # Vercel deployment config
+│   ├── package.json                    # Minimal dependencies
+│   ├── .env.example                    # Template for env vars
+│   └── .gitignore                      # Ignores node_modules, .env, .vercel
 ├── app/
 │   ├── build.gradle.kts                # App module build config
 │   └── src/
@@ -305,74 +313,96 @@ saving-coach/
 
 ## 5. Dev Dependency Map
 
-### Summary: Only Dev 1 Blocks. Everyone Else Builds in Parallel.
+### Summary: Dev 1 Delivered Everything + Takes Firestore. Everyone Else Builds in Parallel.
 
-Dev 1 delivers **models + repo interfaces + nav skeleton + CI/CD** in ~1.5 hours on Day 1.  
-After that, Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobody depends on Dev 3's Firestore implementations because everyone codes against **interfaces with in-memory mocks**.
-
----
-
-### What Dev 1 Must Push First (Day 1, Hour 1-2)
-
-| Deliverable | Time | Needed By |
-|-------------|------|-----------|
-| `Expense.kt`, `Budget.kt`, `SavingChallenge.kt`, `SavingsDeposit.kt`, `SavingsAnalytics.kt`, `ChatMessage.kt` | 20 min | **All devs** |
-| `ExpenseRepository` interface | 8 min | Dev 4, Dev 5 |
-| `SavingChallengeRepository` interface | 8 min | Dev 4 |
-| `BudgetRepository` interface | 5 min | Dev 4 |
-| `ChatRepository` interface | 5 min | Dev 2 |
-| `AuthRepository` interface | 5 min | Dev 1, Dev 4, Dev 5 |
-| `Routes.kt` + `NavGraph.kt` skeleton | 20 min | **All devs** |
-| `.github/workflows/*.yml` + `proguard-rules.pro` + signing | 20 min | **All devs** (CI on first push) |
-| **Total** | **~1.5 hrs** | |
+Dev 1 has delivered **models + repo interfaces + nav skeleton + CI/CD + AI proxy + Auth + Chat UI** — complete app shell with working Gemini integration via Vercel proxy. Dev 1 now also owns **Firestore repositories** (previously Dev 3's role).
+Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobody depends on anyone else because everyone codes against **interfaces with in-memory mocks**.
 
 ---
 
-### Dependency Diagram
+### What Dev 1 Has Already Delivered ✅
+
+| Deliverable | Status | Needed By |
+|-------------|--------|-----------|
+| `Expense.kt`, `Budget.kt`, `SavingChallenge.kt`, `SavingsDeposit.kt`, `SavingsAnalytics.kt`, `ChatMessage.kt` | ✅ Done | **All devs** |
+| `ExpenseRepository` interface | ✅ Done | Dev 4, Dev 5 |
+| `SavingChallengeRepository` interface | ✅ Done | Dev 3 |
+| `BudgetRepository` interface | ✅ Done | Dev 4 |
+| `ChatRepository` interface | ✅ Done | Dev 2 |
+| `AuthRepository` interface | ✅ Done | Dev 1, Dev 4, Dev 5 |
+| `Routes.kt` + `NavGraph.kt` skeleton | ✅ Done | **All devs** |
+| `.github/workflows/*.yml` + `proguard-rules.pro` + signing | ✅ Done | **All devs** (CI on first push) |
+| `FirebaseAuthRepository.kt` | ✅ Done | Dev 4, Dev 5 |
+| `GeminiProxyService.kt` + `AiChatRepository.kt` | ✅ Done | Dev 2 |
+| `ChatScreen.kt` + `ChatViewModel.kt` | ✅ Done | Dev 2 |
+| Vercel proxy deployed | ✅ Done | Dev 2 |
+| Notification system (channels, scheduler, workers) | ✅ Done | **All devs** (budget alerts, saving milestones, daily reminders) |
+
+---
+
+### Dependency Diagram (Current State)
 
 ```
-                  ┌────────────────────────────┐
-                  │         DEV 1              │
-                  │  Writes models, interfaces, │
-                  │  routes, CI/CD (~1.5 hrs)  │
-                  └────────────┬───────────────┘
-                               │ pushes to GitHub
-                               ▼
-         ┌─────────────────────────────────────────────┐
-         │         ALL DEVS START IN PARALLEL           │
-         │         (Hour 2 → Week 2-3)                  │
-         └─────────────────────────────────────────────┘
-               │        │        │        │
-               ▼        ▼        ▼        ▼
-         ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
-         │ DEV 2  │ │ DEV 3  │ │ DEV 4  │ │ DEV 5  │
-         │        │ │        │ │        │ │        │
-         │ Chat   │ │Real    │ │Expense │ │CSV     │
-         │ Camera │ │Firestore│ │Forms   │ │Export  │
-         │ Gemini │ │Impl    │ │Budget  │ │Settings│
-         │        │ │Hilt DI │ │Savings │ │        │
-         │        │ │        │ │Screens │ │        │
-         └────────┘ └────────┘ └────────┘ └────────┘
-              │         │          │          │
-              │         ▼          │          │
-              └──── Week 2-3 ──────┘──────────┘
-                          │
-                          ▼
-                   Swap mocks → real Firestore data
-                   Integration test week
+         ┌─────────────────────────────────────────┐
+         │              DEV 1 (COMPLETE)            │
+         │  ✅ Models + Interfaces + Auth           │
+         │  ✅ Navigation + Theme + Dashboard       │
+         │  ✅ AI Proxy (Vercel) + Chat UI          │
+         │  ✅ CI/CD + ProGuard + Signing           │
+         │  ✅ Notification System                  │
+         └──────────────────┬──────────────────────┘
+                            │ all code in main branch
+                            ▼
+      ┌─────────────────────────────────────────────────┐
+      │         ALL DEVS START IN PARALLEL               │
+      │         (No blockers — all interfaces ready)     │
+      └─────────────────────────────────────────────────┘
+            │        │        │        │
+            ▼        ▼        ▼        ▼
+      ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
+      │ DEV 2  │ │ DEV 3  │ │ DEV 4  │ │ DEV 5  │
+      │        │ │        │ │        │ │        │
+      │Receipt │ │Saving  │ │Expense │ │CSV     │
+      │Scanner │ │Chall.  │ │Forms   │ │Export  │
+      │Camera  │ │Cards   │ │Budget  │ │Settings│
+      │        │ │Deposit │ │Saving  │ │Release │
+      │        │ │Detail  │ │Screens │ │        │
+      └────────┘ └────────┘ └────────┘ └────────┘
+            │         │          │          │
+            └─────────┼──────────┘──────────┘
+                      │
+                      ▼
+              Dev 1 finishes Firestore repos
+              Everyone swaps mocks → real data
+              Integration test week
 ```
 
 ---
 
-### Per-Dev Dependencies Table
+### Per-Dev Dependencies Table (Current)
 
-| Dev | Needs From Dev 1 | Needs From Others? | Can Build Without Dev 3? | What They Use Instead |
-|-----|-----------------|-------------------|-------------------------|----------------------|
-| **Dev 1** | Nothing (writes it) | — | ✅ | Writes interfaces, dashboard uses mocks |
-| **Dev 2** | `ChatMessage` + `ChatRepository` (10 min) | None | ✅ | In-memory chat list mock |
-| **Dev 3** | All models + interfaces (30 min) | None | ✅ N/A — they build the real thing | — |
-| **Dev 4** | 4 models + 3 repo interfaces (20 min) | None | ✅ | In-memory expense/savings mocks |
-| **Dev 5** | `Expense` model + `ExpenseRepository` (10 min) | None | ✅ | Hardcoded test data |
+| Dev | What They Get From Dev 1 | What They Build | Can Start Now? |
+|-----|-------------------------|-----------------|:--------------:|
+| **Dev 2** | ChatScreen, ChatViewModel, ProxyService, proxy deployed | Receipt scanner, CameraX, ChatParser | ✅ Yes |
+| **Dev 3** | All interfaces, Auth done, DI setup | Saving challenges UI, deposit screens, detail views | ✅ Yes |
+| **Dev 4** | 3 models + repo interfaces (Expense, Budget) | Budget & Expense Hub, categories, expense forms | ✅ Yes |
+| **Dev 5** | Expense model, ExpenseRepository, CI/CD | CSV export, Settings, APK release | ✅ Yes |
+
+---
+
+### What Each Dev Should Pull
+
+```bash
+# All devs — pull latest main
+git checkout main
+git pull origin main
+
+# Create your feature branch
+git checkout -b feature/ai-chat-receipt    # Dev 2
+git checkout -b feature/saving-challenges  # Dev 3
+git checkout -b feature/expense-budget     # Dev 4
+git checkout -b feature/export-settings    # Dev 5
+```
 
 ---
 
@@ -380,37 +410,39 @@ After that, Dev 2/3/4/5 all build **simultaneously with zero waiting** — nobod
 
 | Between | Shared Thing | Risk | Mitigation |
 |---------|-------------|------|-----------|
-| Dev 1 ⟷ Dev 3 | Repo interface signatures match implementations | **HIGH** | Dev 1 freezes interfaces after Day 1. Dev 3 must not change method names |
+| Dev 1 ⟷ All | Repo interface signatures match implementations | **HIGH** | Dev 1 defines + implements Firestore repos. Other devs code against interfaces |
 | Dev 1 ⟷ Dev 4 | UI components (BudgetProgressBar, etc.) | **LOW** | Dev 4 builds temporary versions, swaps in 10 min |
-| Dev 2 ⟷ Dev 3 | ChatRepository mock vs real | **LOW** | Interface contract is fixed. Just plug and play |
-| Dev 4 ⟷ Dev 3 | ExpenseRepository mock vs real | **LOW** | Same pattern |
-| Dev 5 ⟷ Dev 3 | ExpenseRepository mock vs real | **LOW** | Same pattern |
+| Dev 2 ⟷ Dev 1 | ChatScreen/ViewModel already built | **LOW** | Dev 2 enhances with receipt scanning, not replaces |
+| Dev 3 ⟷ Dev 1 | SavingChallengeRepository mock vs real | **LOW** | Same pattern — swap when Dev 1 finishes Firestore |
+| Dev 4 ⟷ Dev 1 | ExpenseRepository mock vs real | **LOW** | Same pattern — swap when Dev 1 finishes Firestore |
+| Dev 5 ⟷ Dev 1 | ExpenseRepository mock vs real | **LOW** | Same pattern |
 | Dev 1 ⟷ All | NavGraph route names | **MEDIUM** | Agree on route strings before Dev 1 writes NavGraph |
+| All ⟷ Dev 1 | Proxy URL (Vercel) | **LOW** | URL is in `local.defaults.properties`, all devs use same proxy |
 
 ---
 
 ### Timeline
 
 ```
-Day 1, Hour 1-2   ── Dev 1 writes everything, pushes
-Day 1, Hour 2+    ── Dev 2, 3, 4, 5 all start coding
-Week 2-3          ── Dev 3 finishes real Firestore repos
-Week 3            ── Everyone swaps mocks → real data
-Week 3-4          ── Integration testing + bug fixes
-Week 5-6          ── Polish, edge cases, offline testing
-Week 7            ── CI/CD final check, beta release
+Day 1-2          ── Dev 1: Complete app shell + Auth + Dashboard + AI Proxy ✅ DONE
+Day 3+           ── Dev 1: Firestore repos + Dev 2, 3, 4, 5 all start coding (no blockers)
+Week 2-3         ── Dev 1 finishes real Firestore repos
+Week 3           ── Everyone swaps mocks → real data
+Week 3-4         ── Integration testing + bug fixes
+Week 5-6         ── Polish, edge cases, offline testing
+Week 7           ── CI/CD final check, beta release
 ```
 
-**Bottom line:** Only Dev 1's ~1.5 hours of setup is a true dependency. After that, all 5 devs build in parallel for 2-3 weeks before needing to integrate.
+**Bottom line:** Dev 1 has delivered everything — all interfaces, auth, dashboard, AI proxy, chat UI, CI/CD, and notification system. Dev 1 also owns Firestore repos. All 4 remaining devs can start immediately with zero blockers.
 
 
 ---
 
 ## 6. Feature Breakdown by Developer
 
-### Dev 1: UI Skeleton — Theme + Nav + Auth + Dashboard
+### Dev 1: UI Skeleton — Theme + Nav + Auth + Dashboard + AI Proxy
 
-This dev builds the **app shell** first. Everyone else depends on it.
+This dev builds the **app shell** first. Everyone else depends on it. Also owns **Firestore repositories**.
 
 **Files owned:**
 - `SavingCoachApp.kt`                          # Application class (Hilt)
@@ -429,6 +461,20 @@ This dev builds the **app shell** first. Everyone else depends on it.
 - `ui/components/BudgetProgressBar.kt`     # Green/yellow/red progress bar
 - `ui/components/SpendingChart.kt`         # Category pie/bar chart
 - `ui/components/LoadingOverlay.kt`        # Loading spinner overlay
+- `ui/chat/ChatScreen.kt`                  # AI chat UI (message bubbles, input)
+- `ui/chat/ChatViewModel.kt`               # Chat state management
+- `ai/GeminiProxyService.kt`               # OkHttp service — calls proxy endpoint
+- `ai/AiChatRepository.kt`                 # ChatRepository impl — uses proxy + Firestore
+- `data/repository/FirebaseExpenseRepository.kt`      # Firestore CRUD for expenses
+- `data/repository/FirebaseBudgetRepository.kt`       # Firestore budget limits
+- `data/repository/FirebaseSavingChallengeRepository.kt` # Firestore challenges + deposits
+- `core/notification/NotificationHelper.kt`           # Notification channel setup + builders
+- `core/notification/NotificationScheduler.kt`       # WorkManager scheduler for daily reminders
+- `workers/BudgetAlertWorker.kt`                     # Background worker for budget threshold checks
+- `workers/SavingReminderWorker.kt`                  # Worker for daily saving challenge reminders
+- `workers/InactiveAlertWorker.kt`                   # Worker for inactive period detection
+- `workers/DailyExpenseReminderWorker.kt`            # Worker for daily expense logging reminders
+- `proxy/`                                 # Vercel serverless proxy (separate folder)
 - `res/values/strings.xml`                 # App strings
 - `res/values/colors.xml`                  # Theme colors XML
 - `res/values/themes.xml`                  # XML theme fallback
@@ -449,12 +495,16 @@ This dev builds the **app shell** first. Everyone else depends on it.
 | 4 | `AuthScreen.kt` + `AuthViewModel.kt` | Login with Google + Email/Password |
 | 5 | `DashboardScreen.kt` + `DashboardViewModel.kt` + `CalendarHeatmap.kt` | Main screen with calendar heatmap + budget progress |
 | 6 | Reusable components (`BudgetProgressBar.kt`, `SpendingChart.kt`, `LoadingOverlay.kt`) | Shared UI building blocks |
-| 7 | Repository interface contracts | Define these **before** step 1 — Dev 2/4/5 code against them |
+| 7 | Repository interface contracts | Define these **before** step 1 — Dev 2/3/4/5 code against them |
 | 8 | CI/CD GitHub Actions + ProGuard + signing config | Create `.github/workflows/ci-pr-check.yml`, `ci-release.yml`, `proguard-rules.pro`, and `build.gradle.kts` signing config — set up once, rarely changes |
+| 9 | **Gemini API Proxy** (`proxy/` folder) | Deploy Vercel serverless function to bypass Myanmar geo-restriction — see [Section 8](#8-gemini-api-setup-proxy-for-myanmar) |
+| 10 | **AI Chat integration** (`ai/`, `ui/chat/`) | OkHttp proxy service + ChatRepository + ChatScreen + ChatViewModel |
+| 11 | **Firestore Repositories** (`data/repository/Firebase*.kt`) | Implement real Firebase repos for Expense, Budget, SavingChallenge — swap mocks in `RepositoryModule.kt` |
+| 12 | **Notification System** (`core/notification/`, `workers/`) | Push notifications for budget alerts, saving milestones, daily reminders, and inactive period alerts — see [Section 8](#8-notification-system-setup-dev-1) |
 
 ### 🧩 Repository Interface Contracts (Define First)
 
-These go in `data/repository/`. Dev 1 defines the **signatures only**. Dev 3 implements the real Firestore version later. Dev 2/4/5 code against these interfaces from day 1.
+These go in `data/repository/`. Dev 1 defines the **signatures only**. Dev 1 implements the real Firestore version later. Dev 2/3/4/5 code against these interfaces from day 1.
 
 ```kotlin
 // ExpenseRepository.kt — for Dev 4 (expense forms) and Dev 5 (export)
@@ -480,7 +530,7 @@ interface ChatRepository {
     suspend fun saveMessage(userId: String, message: ChatMessage)
 }
 
-// SavingChallengeRepository.kt ← NEW — for Dev 4 (challenge/deposit screens) and Dev 1 (dashboard)
+// SavingChallengeRepository.kt ← NEW — for Dev 3 (challenge/deposit screens) and Dev 1 (dashboard)
 interface SavingChallengeRepository {
     fun getActiveChallenges(userId: String): Flow<List<SavingChallenge>>
     fun getAllChallenges(userId: String): Flow<List<SavingChallenge>>
@@ -502,7 +552,7 @@ interface AuthRepository {
 }
 ```
 
-**Why this matters:** With these interfaces defined, Dev 2 builds the chat against `ChatRepository`, Dev 4 builds expense forms against `ExpenseRepository` + saving screens against `SavingChallengeRepository`, Dev 5 builds export against `ExpenseRepository`, and Dev 1 builds the dashboard against `BudgetRepository` + `SavingChallengeRepository` — **all without waiting for Dev 3's Firestore code**.
+**Why this matters:** With these interfaces defined, Dev 2 builds the chat against `ChatRepository`, Dev 4 builds expense forms against `ExpenseRepository`, Dev 3 builds saving challenges against `SavingChallengeRepository`, Dev 5 builds export against `ExpenseRepository`, and Dev 1 builds the dashboard against `BudgetRepository` + `SavingChallengeRepository` — **all without waiting for Dev 1's Firestore code**.
 
 ### 🧪 Mock Repositories (Shipped by Dev 1)
 
@@ -517,7 +567,7 @@ Dev 1 also provides in-memory mock implementations so the app compiles and runs 
 | `MockAuthRepository` | `data/mock/MockRepositories.kt` |
 
 These are wired via `RepositoryModule.kt` (`di/RepositoryModule.kt`) using Hilt `@Binds`.
-Dev 3 replaces them with real Firestore implementations — no changes needed in ViewModels or UI.
+Dev 1 replaces them with real Firestore implementations — no changes needed in ViewModels or UI.
 
 **To swap for real repos later:** Just change the `@Binds` target in `RepositoryModule.kt`.
 
@@ -535,141 +585,558 @@ Each day cell based on: daily_spending / (monthly_budget / 30)
 
 ### Dev 2: AI Chat + Receipt Scanner
 
-**Files owned:**
-- `ai/GeminiClient.kt`                    # Gemini API wrapper
-- `ai/ChatParser.kt`                       # NLP → structured expense
-- `ai/ReceiptScanner.kt`                  # Vision receipt reader
-- `ui/chat/ChatScreen.kt`                 # Chat UI (messages, input, typing)
-- `ui/chat/ChatViewModel.kt`              # Chat + expense parsing state
-- `ui/camera/CameraScreen.kt`             # CameraX receipt photo
-- `ui/camera/CameraViewModel.kt`          # Camera + image capture state
+> **Note:** Chat, ViewModel, and proxy are all done by Dev 1. Dev 2 focuses on receipt scanning and chat parsing.
 
-**What to build:**
-1. **GeminiClient** — wrapper around Gemini 2.5 Flash API
-   - Load API key from `local.properties` via Secrets Gradle Plugin
-   - `parseExpenseFromText(message: String): ParsedExpense?`
-   - `scanReceipt(imageBitmap: Bitmap): ParsedExpense?`
-   - `getAdvice(query: String, context: BudgetContext): String`
-2. **Receipt parsing** — structured output via Gemini Function Calling:
-   ```json
-   {
-     "merchant": "Cafe A",
-     "amount": 4500,
-     "category": "Food",
-     "date": "2026-07-24",
-     "items": ["Iced Coffee - 2500", "Sandwich - 2000"]
-   }
-   ```
-3. **Chat Screen** — message list with typing indicator
-   - "Spent 4500 on lunch at Cafe" → parses → preview → confirm → saves to Firestore
-   - "Do I have enough for iced coffee?" → AI checks budget → responds
-   - Chat history persisted
-4. **CameraX Screen** — take receipt photo → crop → Gemini Vision → structured result
-5. **Chat history** — persist via ChatRepository (defined by Dev 3)
+**Already built by Dev 1:**
+| File | Purpose |
+|------|---------|
+| `ai/GeminiProxyService.kt` | OkHttp service calling Vercel proxy |
+| `ai/AiChatRepository.kt` | ChatRepository impl with proxy + Firestore |
+| `ui/chat/ChatScreen.kt` | Chat UI with message bubbles |
+| `ui/chat/ChatViewModel.kt` | Chat state management |
+| `proxy/api/chat.js` | Vercel serverless function |
 
----
+**What to build (4 files):**
 
-### Dev 3: Data Layer — Auth + Firestore + Repositories
+| File | Task | Difficulty |
+|------|------|:----------:|
+| `ChatParser.kt` | Parse natural language → structured expense | Medium |
+| `ReceiptScanner.kt` | Scan receipt image → extract data | Medium |
+| `CameraScreen.kt` | CameraX UI for receipt photo | Medium |
+| `CameraViewModel.kt` | Camera state management | Easy |
 
-**Files owned:**
-- `data/model/Expense.kt`                  # Expense data class
-- `data/model/Budget.kt`                   # Budget data class
-- `data/model/ChatMessage.kt`              # Chat message data class
-- `data/repository/AuthRepository.kt`      # Firebase Auth wrapper
-- `data/repository/ExpenseRepository.kt`   # Expenses CRUD + real-time sync
-- `data/repository/BudgetRepository.kt`    # Budget CRUD + spending totals
-- `data/repository/ChatRepository.kt`      # Chat history read/write
-- `data/firestore/FirestoreModule.kt`      # Firestore DI provider
-- `data/firestore/FirestorePaths.kt`       # Collection/document path constants
-- `di/AppModule.kt`                        # Hilt app-wide bindings
-- `di/RepositoryModule.kt`                 # Hilt repository bindings
+**Integration with existing chat:**
+- Enhance `ChatViewModel` to call `ChatParser` after AI response
+- Add expense preview/confirm flow in `ChatScreen`
 
-**What to build:**
-1. All data classes (Expense, Budget, ChatMessage) with `@Serializable`
-2. Firebase Auth — Google Sign-In + Email/Password
-3. Firestore CRUD — create, read, update, delete for expenses
-4. Firestore real-time sync — `SnapshotListener` for live updates
-5. Budget logic — compute `totalSpent` from expense list for current month
-6. Offline persistence — Firestore disk cache enabled
-7. Hilt modules — bind all repositories, Firestore, Auth
-
-**Key decisions:**
-- Data path: `users/{userId}/expenses/{expenseId}`
-- Budget path: `users/{userId}/budgets/{YYYY-MM}`
-- Chat path: `users/{userId}/chat/{messageId}`
-- Use Firestore `SnapshotListener` for real-time dashboard updates
-- Repositories return `Flow<T>` for reactive ViewModels
-- Implement the interface contracts defined by Dev 1
-
----
-
-### Dev 4: Expense Forms + Budget Settings
-
-**Files owned:**
-- `ui/expenses/ExpenseListScreen.kt`       # Expense list with search/filter
-- `ui/expenses/AddExpenseScreen.kt`        # Manual expense form
-- `ui/expenses/ExpenseViewModel.kt`        # Expense list + add state
-- `ui/budget/BudgetScreen.kt`              # Budget limit setting
-- `ui/budget/BudgetViewModel.kt`           # Budget state
-
-**What to build:**
-1. **Expense List Screen**
-   - Paginated list (newest first), pull-to-refresh
-   - Swipe-to-delete with confirmation dialog
-   - Tap to edit existing expense
-   - Filter by category dropdown and month picker
-   - Search by merchant name
-2. **Add Expense Screen (Manual)**
-   - Form: Amount, Category dropdown with icons, Merchant, Date picker, Notes
-   - Validation: amount > 0, category required
-   - Save → calls ExpenseRepository (from Dev 3)
-3. **Budget Settings Screen**
-   - Set monthly limit (numeric keyboard, formatted as currency)
-   - View current spending vs limit
-   - Edit existing limit
-   - Reset for new month
-4. **Threshold Alerts**
-   - Local notification at 75% and 90% of budget
-   - Dashboard banner when over budget (uses Dev 1's components)
-
-**Expense categories:**
-```kotlin
-enum class ExpenseCategory(val displayName: String) {
-    FOOD("Food & Drinks"),
-    TRANSPORT("Transport"),
-    SHOPPING("Shopping"),
-    BILLS("Bills & Utilities"),
-    ENTERTAINMENT("Entertainment"),
-    EDUCATION("Education"),
-    HEALTH("Health"),
-    OTHER("Other")
-}
+**Test the proxy:**
+```bash
+curl -X POST https://proxy-topaz-ten-36.vercel.app/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
 ---
 
-### Dev 5: Export, Settings + Release
+### Dev 3: Saving Challenges
+
+> **Note:** Dev 3 builds the Saving Challenges tab — challenge cards, detail views, deposit screens.
+
+**Already built by Dev 1:**
+| File | Purpose |
+|------|---------|
+| `data/model/SavingChallenge.kt` | Challenge data model |
+| `data/model/SavingsDeposit.kt` | Deposit data model |
+| `data/model/SavingsAnalytics.kt` | Analytics data model |
+| `data/repository/SavingChallengeRepository.kt` | Repository interface |
+| `data/mock/MockRepositories.kt` | In-memory mock for SavingChallengeRepository |
+| `navigation/Routes.kt` | Route definitions (including `challenges`) |
+| `ui/theme/Theme.kt` | Material 3 theme |
 
 **Files owned:**
-- `export/CsvExporter.kt`                  # CSV generation from expenses
-- `export/ShareManager.kt`                 # Android share + email intent
-- `ui/settings/SettingsScreen.kt`          # Profile + export + about
-- `ui/settings/SettingsViewModel.kt`       # Settings state
+- `ui/challenges/ChallengesScreen.kt`     # Challenge cards grid + summary header
+- `ui/challenges/ChallengeDetailScreen.kt` # Individual challenge detail view
+- `ui/challenges/ChallengeViewModel.kt`   # Challenges state management
+- `ui/challenges/CreateChallengeScreen.kt` # Custom challenge creation wizard
+- `ui/components/ChallengeCard.kt`        # Reusable challenge card composable
 
-**What to build:**
-1. **CSV Export**
-   - Export all expenses (or filtered by month) as CSV
-   - Columns: Date, Category, Merchant, Amount, Currency, Notes
-   - Save to Downloads via Storage Access Framework (SAF)
-2. **Share / Email**
-   - Share CSV via Android share intent (Gmail, Telegram, etc.)
-   - Direct email with CSV attachment
-3. **Settings Screen**
-   - Profile card: name, email, photo (from Google Auth)
-   - Export data button → triggers CSV export
-   - Sign out button → navigate to Auth
-   - App version + "About" section
-4. **APK distribution** — Upload signed builds to GitHub Releases for beta testers
+**What to build (5 files):**
+
+| File | Task | Difficulty |
+|------|------|:----------:|
+| `ChallengesScreen.kt` | Grid of challenge cards + total saved summary + create button | Medium |
+| `ChallengeDetailScreen.kt` | Challenge-specific UI (dot grid, envelope grid, timeline) + deposit history + add deposit | Medium |
+| `ChallengeViewModel.kt` | State management for challenges + deposits | Medium |
+| `CreateChallengeScreen.kt` | Wizard to create custom challenge (name, target, type) | Easy |
+| `ChallengeCard.kt` | Reusable card with emoji, name, progress bar, deposited/target | Easy |
+
+**Screen Layout:**
+
+```
+┌─────────────────────────────────────────┐
+│  SAVING CHALLENGES                      │
+├─────────────────────────────────────────┤
+│  💰 Total Saved: 1,250,000 MMK          │
+│  📊 3 Active  |  1 Completed            │
+├─────────────────────────────────────────┤
+│  🎯 Challenge Cards                     │
+│                                         │
+│  ┌─────────┐  ┌─────────┐              │
+│  │1K/Day   │  │ 7-Day   │              │
+│  │12k/30k  │  │ 45k/100k│              │
+│  │ ████░░░ │  │ █████░░ │              │
+│  └─────────┘  └─────────┘              │
+│                                         │
+│  ┌─────────┐  ┌─────────┐              │
+│  │100 Env. │  │ + New   │              │
+│  │2M/5M    │  │ Create  │              │
+│  │████░░░░ │  │ Challenge│              │
+│  └─────────┘  └─────────┘              │
+└─────────────────────────────────────────┘
+```
+
+**Challenge Types:**
+| Type | UI | Description |
+|------|-----|-------------|
+| **1K a Day** | Dot grid | Tap one dot per day, 30 dots = done |
+| **7-Day Sprint** | Progress ring | Deposit target in 7 days |
+| **100 Envelope** | Envelope grid | 100 envelopes, fill each with fixed amount |
+| **No-Spend Week** | Checklist | 7 days, check each no-spend day |
+| **Custom** | Progress bar | User-defined target and duration |
+
+**Preset Challenges:**
+| Name | Emoji | Target | Duration |
+|------|-------|--------|----------|
+| 1K a Day | 🎯 | 30,000 MMK | 30 days |
+| 7-Day Sprint | ⚡ | 100,000 MMK | 7 days |
+| 100 Envelope | ✉️ | 5,000,000 MMK | Flexible |
+| No-Spend Week | 🚫 | 0 MMK (save your daily budget) | 7 days |
+
+**Detail View (When card clicked):**
+- Challenge-specific visual UI (dot grid, envelope grid, timeline, etc.)
+- Deposit history list
+- Add deposit button
+- Settings/edit button
+- Delete button with confirmation
+
+---
+
+### Dev 4: Budget & Expense Hub
+
+> **Note:** Dev 4 builds the Expense tab — the Budget & Expense Hub with monthly budget, categories, and recent expenses.
+
+**Files owned:**
+- `ui/expenses/ExpenseScreen.kt`          # Budget & Expense Hub (combined)
+- `ui/expenses/LogExpenseBottomSheet.kt`  # Bottom sheet modal for logging expenses
+- `ui/expenses/AddExpenseScreen.kt`       # Manual expense form (full screen)
+- `ui/expenses/ExpenseViewModel.kt`       # Expense + budget + category state
+
+---
+
+## 💰 Budget & Expense Hub (Expense Tab)
+
+### Screen Layout
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                     BUDGET & EXPENSE HUB                         │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │ 🎯 Monthly Overall Budget                 [ Edit Budget ⚙️ ] │  │
+│  │                                                            │  │
+│  │ 1,850 MMK Spent  /  3,000 MMK Target                      │  │
+│  │ ==========================>................   61% Used     │  │
+│  │                                                            │  │
+│  │ Remaining: 1,150 MMK  |  12 Days Left                      │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│            ┌────────────────────────────────────────┐            │
+│            │        ➕ LOG NEW EXPENSE               │            │  <-- Centered Primary CTA
+│            └────────────────────────────────────────┘            │
+│                                                                  │
+│  🏷️ CATEGORIES                                [ + New Category ] │
+│                                                                  │
+│  🍔 Food & Dining                                                │
+│  =======================>...................  320 / 600 MMK      │
+│                                                                  │
+│  🚗 Transportation                                              │
+│  =========>.................................  110 / 300 MMK      │
+│                                                                  │
+├──────────────────────────────────────────────────────────────────┤
+│ 🧾 RECENT EXPENSES                                               │
+│ (Tap any category above to filter this list)                     │
+│                                                                  │
+│  ☕ Starbucks                          -4,500 MMK  │ Today       │
+│  🛒 Target Store                     -68,200 MMK  │ Yesterday   │
+│  ⛽ Shell Gas Station               -45,000 MMK  │ Jul 26      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Section 1: Monthly Overall Budget
+
+| Element | Description |
+|---------|-------------|
+| **Title** | "Monthly Overall Budget" |
+| **Edit Button** | ⚙️ icon → opens budget editor |
+| **Spent / Target** | "1,850 MMK Spent / 3,000 MMK Target" |
+| **Progress Bar** | Reuse `BudgetProgressBar` component. Color: Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%) |
+| **Percentage** | "61% Used" |
+| **Remaining** | "Remaining: 1,150 MMK" (goes negative if over budget) |
+| **Days Left** | "12 Days Left" — calculated from current day to end of month |
+
+### Section 2: Log New Expense CTA
+
+| Element | Description |
+|---------|-------------|
+| **Button** | Centered, primary filled button |
+| **Text** | "➕ LOG NEW EXPENSE" |
+| **Action** | Opens `LogExpenseBottomSheet` |
+
+### Section 3: Categories
+
+| Element | Description |
+|---------|-------------|
+| **Header** | "🏷️ CATEGORIES" + "[ + New Category ]" button on right |
+| **Category Card** | Emoji + Category Name + Progress bar + "Spent / Target MMK" |
+| **Tap Category** | Filters the Recent Expenses list below to that category |
+| **"+ New"** | Opens dialog to add custom category with name, emoji, and target |
+| **Progress Bar** | Per-category budget usage with color coding |
+
+**Default Categories:**
+
+| Emoji | Category | Default Target |
+|-------|----------|----------------|
+| 🍔 | Food & Dining | 600,000 MMK |
+| 🚗 | Transportation | 300,000 MMK |
+| 🛍️ | Shopping | 400,000 MMK |
+| 📱 | Bills & Utilities | 200,000 MMK |
+| 🎬 | Entertainment | 200,000 MMK |
+| 📚 | Education | 150,000 MMK |
+| 💊 | Health | 150,000 MMK |
+| 📦 | Other | 200,000 MMK |
+
+### Section 4: Recent Expenses
+
+| Element | Description |
+|---------|-------------|
+| **Header** | "🧾 RECENT EXPENSES" |
+| **Filter Note** | "Tap any category above to filter this list" |
+| **Expense Item** | Category Emoji + Merchant Name + Amount (negative) + Date |
+| **Date Format** | "Today" / "Yesterday" / "Jul 26" for older |
+| **Tap Expense** | Opens edit screen |
+| **Swipe Left** | Delete with confirmation dialog |
+| **Empty State** | "No expenses yet. Tap + to log your first expense!" |
+
+### Log Expense Bottom Sheet
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ ➕ Log Expense                           [✕ Close]              │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Amount (MMK):                                                   │
+│  [ 0                                                         ]  │
+│                                                                  │
+│  Select Category (Required):                                     │
+│  [ 🍔 Food ]  [ 🚗 Trans. ]  [ 🛒 Groceries ]  [ 🎬 Fun ]      │
+│                                                                  │
+│  Note / Merchant (Optional):                                     │
+│  [ e.g., Starbucks Coffee                                      ]│
+│                                                                  │
+│  [ Save Expense ]                                                │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+| Element | Description |
+|---------|-------------|
+| **Header** | "➕ Log Expense" with ✕ close button |
+| **Amount Input** | Numeric keyboard, MMK currency, required |
+| **Category Selection** | Horizontal scrollable chips with emoji + short name, required |
+| **Note/Merchant** | Optional text field with placeholder |
+| **Save Button** | Validates amount + category → saves → closes sheet → refreshes list |
+| **Validation** | Amount must be > 0, category must be selected |
+
+### ExpenseViewModel State
+
+```kotlin
+data class ExpenseUiState(
+    // Monthly budget
+    val monthlyBudget: Budget? = null,
+    val totalSpent: Double = 0.0,
+    val daysLeftInMonth: Int = 0,
+
+    // Categories
+    val categories: List<ExpenseCategory> = emptyList(),
+    val categorySpending: Map<String, Double> = emptyMap(),
+    val selectedCategoryFilter: String? = null,  // null = show all
+
+    // Recent expenses
+    val recentExpenses: List<Expense> = emptyList(),
+    val filteredExpenses: List<Expense> = emptyList(),
+
+    // Log expense bottom sheet
+    val showLogSheet: Boolean = false,
+    val logAmount: String = "",
+    val logCategory: String = "",
+    val logMerchant: String = "",
+
+    // Loading & error
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
+)
+
+data class ExpenseCategory(
+    val emoji: String,
+    val name: String,
+    val target: Double,     // category budget limit in MMK
+    val spent: Double       // computed from expenses
+)
+```
+
+### Interaction Flow
+
+```
+Expense Tab Loaded
+    │
+    ├── Fetch monthly budget from BudgetRepository
+    ├── Fetch expenses for current month from ExpenseRepository
+    ├── Compute category spending totals
+    │
+    ├── Tap "LOG NEW EXPENSE" → Opens bottom sheet
+    │       ├── Enter amount
+    │       ├── Select category
+    │       ├── Enter note (optional)
+    │       └── Tap "Save" → addExpense() → refresh list
+    │
+    ├── Tap category → Sets selectedCategoryFilter
+    │       └── Filters recentExpenses to that category
+    │
+    ├── Tap "All" category → Clears filter → shows all
+    │
+    ├── Tap expense → Opens edit screen
+    │
+    └── Swipe expense left → Delete with confirmation
+```
+
+---
+
+## ⚠️ Important: Saving vs Expense & Budget
+
+**Saving challenges are COMPLETELY ISOLATED from expenses and budget.**
+
+| Feature | Expense & Budget | Saving Challenges |
+|---------|:----------------:|:-----------------:|
+| **Tracks** | Spending (money OUT) | Savings (money SET ASIDE) |
+| **Budget** | Monthly limit | No limit |
+| **Categories** | Yes (Food, Transport, etc.) | No |
+| **Calendar** | Expense heatmap | Not shown |
+| **Affects Each Other** | ❌ No | ❌ No |
+
+> Saving 1,000 MMK does NOT reduce your expense total. Spending 5,000 MMK does NOT reduce your savings. They are separate systems.
+
+---
+
+## 🎯 Challenges Screen
+
+### User Flow
+```
+Challenges Tab → Challenge Cards → Click Card → Detail View
+```
+
+### Screen Layout
+
+```
+┌─────────────────────────────────────────┐
+│  SAVING CHALLENGES                      │
+├─────────────────────────────────────────┤
+│  💰 Total Saved: 1,250,000 MMK          │
+│  📊 3 Active  |  1 Completed            │
+├─────────────────────────────────────────┤
+│  🎯 Challenge Cards                     │
+│                                         │
+│  ┌─────────┐  ┌─────────┐              │
+│  │1K/Day   │  │ 7-Day   │              │
+│  │12k/30k  │  │ 45k/100k│              │
+│  │ ████░░░ │  │ █████░░ │              │
+│  └─────────┘  └─────────┘              │
+│                                         │
+│  ┌─────────┐  ┌─────────┐              │
+│  │100 Env. │  │ + New   │              │
+│  │2M/5M    │  │ Create  │              │
+│  │████░░░░ │  │ Challenge│              │
+│  └─────────┘  └─────────┘              │
+└─────────────────────────────────────────┘
+```
+
+**Summary Header:**
+- 💰 **Total Saved:** Sum of all deposits across all challenges
+- 📊 **Active:** Number of active challenges
+- ✅ **Completed:** Number of completed challenges
+
+**Challenge Cards View (Grid/List):**
+| Card | Shows |
+|------|-------|
+| Preset cards | 1K a Day, 7-Day Sprint, 100 Envelope, No-Spend Week |
+| Custom cards | User-created challenges |
+| "+ Create" card | Opens custom challenge wizard |
+
+**Card Content:**
+- Emoji/Icon
+- Challenge name
+- Progress: deposited / target
+- Progress bar
+
+**Detail View (When card clicked):**
+- Challenge-specific UI (dot grid, envelope grid, timeline, etc.)
+- Deposit history list
+- Add deposit button
+- Settings/edit button
+- Delete button
+
+---
+
+## 📅 Calendar Heatmap (Enhanced)
+
+| Feature | Description |
+|---------|-------------|
+| **Click Day** | Show saving/expense details |
+| **Filters** | All, Budget, Expenses, Savings |
+| **Color Rating** | Green (<50%), Yellow (50-80%), Orange (80-100%), Red (>100%) |
+
+**Click Detail Popup:**
+```
+┌─────────────────────────────────┐
+│  📅 July 1, 2026                │
+├─────────────────────────────────┤
+│  💰 Saving:    10,000 MMK       │
+│  💸 Expense:    5,000 MMK       │
+│  📊 Net:        5,000 MMK       │
+└─────────────────────────────────┘
+```
+
+---
+
+## 🔔 Threshold Alerts
+
+| Alert | Trigger | UI |
+|-------|---------|-----|
+| **Warning** | 75% of budget spent | 🟡 Yellow banner |
+| **Critical** | 90% of budget spent | 🟠 Orange banner |
+| **Over Budget** | 100%+ spent | 🔴 Red banner + push notification |
+
+**Over Budget UI (Remaining goes negative):**
+```
+┌─────────────────────────────────────────┐
+│  🎯 Monthly Overall Budget    [Edit ⚙️] │
+│  3,250 MMK Spent  /  3,000 MMK Target  │
+│  ==========================> 🔴 108%    │
+│  Remaining: -250 MMK  |  5 Days Left   │
+└─────────────────────────────────────────┘
+```
+
+**Push Notification:**
+```
+⚠️ Saving Coach — Budget Alert
+You've exceeded your monthly budget by 250,000 MMK!
+Tap to view details.
+```
+
+---
+
+### Dev 5: Settings, Onboarding + Release
+
+> **Note:** CI/CD, ProGuard, and signing config are done by Dev 1. Dev 5 focuses on settings, onboarding, and release.
+
+**Already built by Dev 1:**
+| File | Purpose |
+|------|---------|
+| `proxy/` | Vercel serverless proxy |
+| `.github/workflows/` | CI/CD pipelines |
+| `app/proguard-rules.pro` | ProGuard rules |
+| `app/build.gradle.kts` | Signing config (release) |
+| `ui/theme/Theme.kt` | Material 3 theme |
+| `ui/auth/AuthScreen.kt` | Login screen |
+
+**What to build (8 files):**
+
+| File | Task | Difficulty |
+|------|------|:----------:|
+| `export/ExcelExporter.kt` | Generate Excel from expenses + savings | Medium |
+| `export/ShareManager.kt` | Android share/email intent | Easy |
+| `ui/settings/SettingsScreen.kt` | Profile + export + settings | Medium |
+| `ui/settings/SettingsViewModel.kt` | Settings state + preferences | Medium |
+| `data/repository/SettingsRepository.kt` | Save/load user preferences | Easy |
+| `ui/theme/ThemeManager.kt` | Switch between themes | Easy |
+| `ui/onboarding/OnboardingScreen.kt` | New user profile form | Medium |
+| `ui/onboarding/OnboardingViewModel.kt` | Onboarding state | Easy |
+
+**Onboarding Screen (After Sign Up):**
+
+| Field | Type | Options | Required |
+|-------|------|---------|:--------:|
+| Career | Text | "Software Engineer" | ✅ |
+| Age | Number | "25" | ✅ |
+| Gender | Select | "Male", "Female", "Rather not answer" | ✅ |
+| Salary Range | Select | See below | ✅ |
+
+**Salary Range Options:**
+| Range | Value |
+|-------|-------|
+| Less than 100k | `< 100,000 MMK` |
+| 100k - 200k | `100,000 - 200,000 MMK` |
+| 200k - 300k | `200,000 - 300,000 MMK` |
+| 300k - 500k | `300,000 - 500,000 MMK` |
+| 500k - 1M | `500,000 - 1,000,000 MMK` |
+| More than 1M | `> 1,000,000 MMK` |
+| Prefer not to say | `null` |
+
+**Onboarding Flow:**
+```
+Sign Up → Onboarding Screen → Dashboard
+                ↓
+        Save profile to Firestore
+        users/{userId}/profile
+```
+
+**Settings Screen Sections:**
+
+| Section | Options | Implementation |
+|---------|---------|----------------|
+| **Profile** | Name, email, photo, career, salary, age, gender | From `FirebaseAuthRepository` + profile |
+| **Theme** | Light, Pink, Dark | `ThemeManager.kt` + DataStore |
+| **Language** | English, Myanmar | Android locale switching |
+| **Notifications** | On/Off toggle | `SettingsRepository.kt` + DataStore |
+| **Export** | Monthly history (spending + saving) in Excel | `ExcelExporter.kt` |
+| **Account** | Sign out | `AuthRepository.signOut()` |
+
+**Export Feature:**
+
+| Export Type | Content | Format |
+|-------------|---------|--------|
+| **Spending History** | Expenses per month | `.xlsx` Excel |
+| **Saving History** | Challenge deposits per month | `.xlsx` Excel |
+
+**Export Flow:**
+```
+Settings → Export → Select Month → Select Type (Spending/Saving) → Download Excel
+```
+
+**Excel Columns (Spending):**
+| Date | Category | Merchant | Amount (MMK) | Notes |
+|------|----------|----------|--------------|-------|
+
+**Excel Columns (Saving):**
+| Start Date | End Date | Challenge Name | Deposit Amount (MMK) | Target Amount (MMK) |
+|------------|----------|----------------|----------------------|---------------------|
+
+**Theme Options:**
+
+| Theme | Mode | Colors |
+|-------|------|--------|
+| Light | `ThemeMode.Light` | White background, dark text |
+| Pink | `ThemeMode.Light` | Pink primary color, light background |
+| Dark | `ThemeMode.Dark` | Dark background, light text |
+
+**Language Options:**
+
+| Language | Locale Code | Resources |
+|----------|-------------|-----------|
+| English | `en` | `res/values/` (default) |
+| Myanmar | `my` | `res/values-my/` (need to create) |
+
+**Integration:**
+- CSV export uses `ExpenseRepository` from Dev 3
+- Profile data from `FirebaseAuthRepository` (Dev 1)
+- Sign out calls `AuthRepository.signOut()`
+- Theme switching via `ThemeManager.kt` in `ui/theme/`
+- Language switching via Android locale API
+- Onboarding saves profile to Firestore
+
+**If proxy URL changes:**
+```bash
+# Update local.defaults.properties
+proxy.url=https://new-vercel-url.vercel.app
+```
 
 ---
 
@@ -736,59 +1203,591 @@ service cloud.firestore {
 
 ---
 
-## 8. Gemini API Setup
+## 8. Notification System Setup (Dev 1)
+
+### Overview
+
+The notification system provides push notifications for budget alerts, saving milestones, and daily reminders using Firebase Cloud Messaging (FCM) and WorkManager for background scheduling.
+
+### Prerequisites
+
+| Requirement | Version | Purpose |
+|-------------|---------|---------|
+| Firebase BOM | 33.7.0 | Firebase services integration |
+| Firebase Messaging | 24.0.0 | Push notifications (optional for future) |
+| WorkManager | 2.9.0 | Background scheduling |
+| Hilt | 2.53.1 | Dependency injection |
+
+### Step 1: Add Dependencies
+
+Add to `app/build.gradle.kts`:
+
+```kotlin
+dependencies {
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
+
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    kapt("androidx.hilt:hilt-compiler:1.2.0")
+}
+```
+
+### Step 2: Update AndroidManifest.xml
+
+```xml
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+<application>
+    <!-- Notification receiver for boot completed -->
+    <receiver
+        android:name=".core.notification.BootReceiver"
+        android:enabled="true"
+        android:exported="false">
+        <intent-filter>
+            <action android:name="android.intent.action.BOOT_COMPLETED" />
+        </intent-filter>
+    </receiver>
+</application>
+```
+
+### Step 3: Create Notification Channels
+
+Create `core/notification/NotificationHelper.kt`:
+
+```kotlin
+@Singleton
+class NotificationHelper @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    companion object {
+        const val BUDGET_CHANNEL_ID = "budget_alerts"
+        const val SAVING_CHANNEL_ID = "saving_milestones"
+        const val DAILY_REMINDER_CHANNEL_ID = "daily_reminders"
+    }
+
+    init {
+        createNotificationChannels()
+    }
+
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val budgetChannel = NotificationChannel(
+                BUDGET_CHANNEL_ID,
+                "Budget Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifications for budget threshold alerts"
+                enableVibration(true)
+            }
+
+            val savingChannel = NotificationChannel(
+                SAVING_CHANNEL_ID,
+                "Saving Milestones",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Notifications for saving goal achievements"
+            }
+
+            val reminderChannel = NotificationChannel(
+                DAILY_REMINDER_CHANNEL_ID,
+                "Daily Reminders",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Daily reminders to log expenses and check savings"
+                enableVibration(false)
+            }
+
+            val notificationManager = context.getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannels(
+                listOf(budgetChannel, savingChannel, reminderChannel)
+            )
+        }
+    }
+
+    fun showBudgetAlert(percentage: Int, overspent: Double = 0.0) {
+        val title = if (overspent > 0) "Over Budget!" else "Budget Alert"
+        val message = if (overspent > 0) {
+            "You've exceeded your budget by ${formatCurrency(overspent)}"
+        } else {
+            "You've used $percentage% of your monthly budget"
+        }
+
+        showNotification(
+            channelId = BUDGET_CHANNEL_ID,
+            title = title,
+            message = message,
+            icon = R.drawable.ic_budget_alert
+        )
+    }
+
+    fun showSavingMilestone(challengeName: String, percentage: Int) {
+        val title = when {
+            percentage >= 100 -> "Challenge Complete!"
+            percentage >= 75 -> "Almost There!"
+            percentage >= 50 -> "Halfway!"
+            else -> "Saving Progress"
+        }
+
+        showNotification(
+            channelId = SAVING_CHANNEL_ID,
+            title = title,
+            message = "You've saved $percentage% of your $challengeName goal",
+            icon = R.drawable.ic_saving_milestone
+        )
+    }
+
+    fun showDailyReminder(message: String) {
+        showNotification(
+            channelId = DAILY_REMINDER_CHANNEL_ID,
+            title = "Saving Coach",
+            message = message,
+            icon = R.drawable.ic_notification
+        )
+    }
+
+    private fun showNotification(channelId: String, title: String, message: String, icon: Int) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(icon)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+    }
+}
+```
+
+### Step 4: Create Notification Scheduler
+
+Create `core/notification/NotificationScheduler.kt`:
+
+```kotlin
+@Singleton
+class NotificationScheduler @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    private val workManager = WorkManager.getInstance(context)
+
+    companion object {
+        private const val DAILY_REMINDER_WORK = "daily_reminder_work"
+        private const val BUDGET_CHECK_WORK = "budget_check_work"
+        private const val SAVING_REMINDER_WORK = "saving_reminder_work"
+        private const val INACTIVE_CHECK_WORK = "inactive_check_work"
+    }
+
+    fun scheduleDailyReminders() {
+        // Daily expense reminder at 8:00 PM
+        val expenseReminderRequest = PeriodicWorkRequestBuilder<DailyExpenseReminderWorker>(
+            1, TimeUnit.DAYS
+        )
+            .setInitialDelay(calculateDelay(20, 0), TimeUnit.MILLISECONDS) // 8:00 PM
+            .build()
+
+        // Daily saving challenge reminder at 7:00 PM
+        val savingReminderRequest = PeriodicWorkRequestBuilder<SavingReminderWorker>(
+            1, TimeUnit.DAYS
+        )
+            .setInitialDelay(calculateDelay(19, 0), TimeUnit.MILLISECONDS) // 7:00 PM
+            .build()
+
+        // Inactive alert at 9:00 PM
+        val inactiveAlertRequest = PeriodicWorkRequestBuilder<InactiveAlertWorker>(
+            1, TimeUnit.DAYS
+        )
+            .setInitialDelay(calculateDelay(21, 0), TimeUnit.MILLISECONDS) // 9:00 PM
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            DAILY_REMINDER_WORK,
+            ExistingPeriodicWorkPolicy.KEEP,
+            expenseReminderRequest
+        )
+
+        workManager.enqueueUniquePeriodicWork(
+            SAVING_REMINDER_WORK,
+            ExistingPeriodicWorkPolicy.KEEP,
+            savingReminderRequest
+        )
+
+        workManager.enqueueUniquePeriodicWork(
+            INACTIVE_CHECK_WORK,
+            ExistingPeriodicWorkPolicy.KEEP,
+            inactiveAlertRequest
+        )
+    }
+
+    fun scheduleBudgetCheck() {
+        val budgetCheckRequest = PeriodicWorkRequestBuilder<BudgetAlertWorker>(
+            6, TimeUnit.HOURS // Check every 6 hours
+        )
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            BUDGET_CHECK_WORK,
+            ExistingPeriodicWorkPolicy.KEEP,
+            budgetCheckRequest
+        )
+    }
+
+    private fun calculateDelay(hour: Int, minute: Int): Long {
+        val now = Calendar.getInstance()
+        val target = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+        }
+        if (target.before(now)) {
+            target.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        return target.timeInMillis - now.timeInMillis
+    }
+}
+```
+
+### Step 5: Create Workers
+
+**BudgetAlertWorker.kt:**
+```kotlin
+@HiltWorker
+class BudgetAlertWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val budgetRepository: BudgetRepository,
+    private val expenseRepository: ExpenseRepository,
+    private val notificationHelper: NotificationHelper
+) : CoroutineWorker(context, workerParams) {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
+            val currentMonth = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(Date())
+
+            val budget = budgetRepository.getBudget(userId, currentMonth).first()
+            val expenses = expenseRepository.getExpensesForMonth(userId, currentMonth).first()
+
+            if (budget != null) {
+                val totalSpent = expenses.sumOf { it.amount }
+                val percentage = ((totalSpent / budget.limit) * 100).toInt()
+
+                when {
+                    percentage >= 100 -> notificationHelper.showBudgetAlert(percentage, totalSpent - budget.limit)
+                    percentage >= 90 -> notificationHelper.showBudgetAlert(percentage)
+                    percentage >= 75 -> notificationHelper.showBudgetAlert(percentage)
+                }
+            }
+
+            Result.success()
+        } catch (e: Exception) {
+            Result.failure()
+        }
+    }
+}
+```
+
+**DailyExpenseReminderWorker.kt:**
+```kotlin
+@HiltWorker
+class DailyExpenseReminderWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val expenseRepository: ExpenseRepository,
+    private val notificationHelper: NotificationHelper
+) : CoroutineWorker(context, workerParams) {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+            val todayExpenses = expenseRepository.getExpensesForDate(userId, today).first()
+
+            if (todayExpenses.isEmpty()) {
+                notificationHelper.showDailyReminder(
+                    "Don't forget to log your expenses today!"
+                )
+            }
+
+            Result.success()
+        } catch (e: Exception) {
+            Result.failure()
+        }
+    }
+}
+```
+
+**SavingReminderWorker.kt:**
+```kotlin
+@HiltWorker
+class SavingReminderWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val savingChallengeRepository: SavingChallengeRepository,
+    private val notificationHelper: NotificationHelper
+) : CoroutineWorker(context, workerParams) {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
+            val challenges = savingChallengeRepository.getActiveChallenges(userId).first()
+
+            if (challenges.isNotEmpty()) {
+                val challengeNames = challenges.joinToString(", ") { it.name }
+                notificationHelper.showDailyReminder(
+                    "You have ${challenges.size} active saving challenges: $challengeNames. Keep going!"
+                )
+            }
+
+            Result.success()
+        } catch (e: Exception) {
+            Result.failure()
+        }
+    }
+}
+```
+
+**InactiveAlertWorker.kt:**
+```kotlin
+@HiltWorker
+class InactiveAlertWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val expenseRepository: ExpenseRepository,
+    private val notificationHelper: NotificationHelper
+) : CoroutineWorker(context, workerParams) {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
+            val yesterday = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(
+                Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.time
+            )
+
+            val yesterdayExpenses = expenseRepository.getExpensesForDate(userId, yesterday).first()
+
+            if (yesterdayExpenses.isEmpty()) {
+                notificationHelper.showDailyReminder(
+                    "You haven't logged expenses yesterday. Stay on track with your budget!"
+                )
+            }
+
+            Result.success()
+        } catch (e: Exception) {
+            Result.failure()
+        }
+    }
+}
+```
+
+### Step 6: Initialize in Application Class
+
+Update `SavingCoachApp.kt`:
+
+```kotlin
+@HiltAndroidApp
+class SavingCoachApp : Application() {
+    @Inject
+    lateinit var notificationScheduler: NotificationScheduler
+
+    override fun onCreate() {
+        super.onCreate()
+        notificationScheduler.scheduleDailyReminders()
+        notificationScheduler.scheduleBudgetCheck()
+    }
+}
+```
+
+### Step 7: Request Permission in MainActivity
+
+Update `MainActivity.kt`:
+
+```kotlin
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            // User denied permission - show explanation if needed
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        requestNotificationPermission()
+        // ... rest of onCreate
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+}
+```
+
+### Testing
+
+```bash
+# Test budget alert
+adb shell am broadcast -a com.savingcoach.app.BUDGET_ALERT --ei percentage 100
+
+# Check notification channels
+adb shell dumpsys notification | grep -A 5 "budget_alerts"
+
+# Force run WorkManager tasks
+adb shell am broadcast -a "androidx.work.diagnostics.REQUEST_DIAGNOSTICS"
+```
+
+---
+
+## 9. Gemini API Setup (Proxy for Myanmar)
+
+### ⚠️ Important: Myanmar Geo-Restriction
+
+The Gemini API is **not officially supported in Myanmar**. Google blocks API requests from Myanmar IP addresses. To work around this, we use a **proxy server** hosted in a supported region (e.g., Singapore, US).
+
+### Architecture
+
+```
+Android App → Vercel Proxy (supported region) → Gemini API
+                    ↑
+            API key stored here (server-side)
+```
+
+- The Android app **never** calls Gemini directly
+- The API key is stored as a Vercel environment variable (encrypted)
+- The proxy forwards requests and returns responses
 
 ### Get an API Key
 
 1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
 2. Click **Create API Key**
-3. Copy the key
+3. Copy the key (you'll need this for Vercel deployment)
 
-### Add to local.properties
+### Deploy Proxy to Vercel
 
-```
-gemini.api.key=AIzaSyYourActualKeyHere
-```
+The proxy is a serverless function in the `proxy/` folder. To deploy:
 
-### Secrets Gradle Plugin
+```bash
+# Install Vercel CLI (if not installed)
+npm install -g vercel
 
-The plugin reads `gemini.api.key` from `local.properties` and exposes it as a BuildConfig field:
+# Login to Vercel
+vercel login
 
-```kotlin
-// In app/build.gradle.kts:
-secrets {
-    propertiesFileName = "local.properties"
-    defaultPropertiesFileName = "local.defaults.properties"
-}
-```
+# Deploy from the proxy directory
+cd proxy
+vercel
 
-Then in code:
-
-```kotlin
-val apiKey = BuildConfig.GEMINI_API_KEY
+# Follow prompts:
+# - Set scope: jolly30s-projects
+# - Set environment variable: GEMINI_API_KEY = your_key_here
+# - Deploy to production
 ```
 
-> **⚠️ Security Warning:** `local.properties` is listed in `.gitignore`. It NEVER gets committed. The API key is only on local dev machines.
+After deployment, you'll get a URL like:
+```
+https://proxy-topaz-ten-36.vercel.app
+```
 
-### 🔄 How Other Devs Get Their Keys
+### Disable Vercel Auth Protection
 
-Since `local.properties` and `google-services.json` are **gitignored**, each dev must set up their own:
+By default, Vercel enables SSO protection. Disable it so the app can access the API:
+
+```bash
+vercel project protection disable --sso --scope jolly30s-projects
+```
+
+### Update local.properties
+
+Replace the placeholder with your deployed proxy URL:
+
+```properties
+sdk.dir=/Users/yourname/Library/Android/sdk
+proxy.url=https://proxy-topaz-ten-36.vercel.app
+```
+
+> **⚠️ Security:** The API key is NOT in `local.properties` — it's stored securely in Vercel. The app only knows the proxy URL.
+
+### 🔄 How Other Devs Connect
+
+Since `local.properties` is **gitignored**, each dev must set up their own:
 
 | File | How to get it | Committed? |
 |------|--------------|:----------:|
-| `local.properties` | Copy `local.defaults.properties` → `local.properties`, then fill in your SDK path + Gemini API key | ❌ No |
+| `local.properties` | Copy `local.defaults.properties` → `local.properties`, then fill in SDK path + proxy URL | ❌ No |
 | `google-services.json` | Download from Firebase Console (`Project Settings → Your apps → Download`) | ❌ No |
-| `local.defaults.properties` | ✅ **Already in repo** — contains placeholder template | ✅ **Yes** |
+| `local.defaults.properties` | ✅ **Already in repo** — contains proxy URL template | ✅ **Yes** |
 
 **Quick setup for a new dev machine:**
 ```bash
 cp local.defaults.properties local.properties
 # Then edit local.properties:
 #   sdk.dir=/Users/yourname/Library/Android/sdk
-#   gemini.api.key=AIzaSy...
+#   proxy.url=https://proxy-topaz-ten-36.vercel.app
 ```
 
-> **Tip:** The Google Services Gradle plugin generates a `BuildConfig` field for the API key automatically. No need to share keys in chat — each dev uses their own. 
+### Test the Proxy
+
+Before building the app, verify the proxy works:
+
+```bash
+curl -X POST https://proxy-topaz-ten-36.vercel.app/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Hello!"}]}'
+```
+
+Expected response: `{ "reply": "Hello! How can I help you..." }`
+
+### How It Works in Code
+
+1. **`GeminiProxyService.kt`** — OkHttp service that calls the proxy endpoint
+2. **`AiChatRepository.kt`** — Implements `ChatRepository`, uses proxy for AI + Firestore for history
+3. **`ChatViewModel.kt`** — Manages chat state, calls repository
+4. **`ChatScreen.kt`** — UI with message bubbles, input field, auto-scroll
+
+The proxy URL is injected via Hilt:
+```kotlin
+// In AppModule.kt
+@Provides
+@Singleton
+fun provideProxyUrl(): String = BuildConfig.proxyurl
+```
+
+### Proxy Endpoint
+
+```
+POST /api/chat
+Body: {
+  "messages": [{"role": "user", "content": "..."}],
+  "systemPrompt": "..."  // optional
+}
+Response: {
+  "reply": "..."
+}
+```
 
 ---
 
@@ -837,12 +1836,13 @@ cp local.defaults.properties local.properties
 ```kotlin
 sealed class Route(val route: String) {
     object Auth : Route("auth")
+    object Onboarding : Route("onboarding")
     object Dashboard : Route("dashboard")
     object Expenses : Route("expenses")
+    object Challenges : Route("challenges")
     object AddExpense : Route("add_expense")
     object Chat : Route("chat")
     object Camera : Route("camera")
-    object Budget : Route("budget")
     object Settings : Route("settings")
 }
 ```
@@ -851,44 +1851,50 @@ sealed class Route(val route: String) {
 
 ```
                     ┌─────────────┐
-                    │   Splash    │
-                    │  (optional) │
+                    │    Auth     │
+                    │  (Login)    │
+                    └──────┬──────┘
+                           │ sign in
+                    ┌──────▼──────┐
+                    │  Onboarding │ (new users only)
+                    │  Profile    │
                     └──────┬──────┘
                            │
                     ┌──────▼──────┐
-              ┌─────│  Authenticated? │─────┐
-              │     └──────┬──────┘     │
-              │            │ yes        │ no
-              │     ┌──────▼──────┐     │
-              │     │  Main Screen│     │
-              │     │ (Nav Host)  │     │
+              ┌─────│  Main Screen │─────┐
+              │     │  (Nav Host)  │     │
               │     └──────┬──────┘     │
               │            │            │
-        ┌─────┼─────┬──────┼──────┬─────┼─────┐
-        │     │     │      │      │     │     │
-   ┌────▼──┐ ┌▼───┐ ┌▼───┐ ┌▼───┐ ┌▼───┐ ┌▼───┐
-   │Dashboard│ │Exp.│ │Chat│ │Cam.│ │Budg│ │Sett.│
-   │        │ │List│ │    │ │    │ │et  │ │ings │
-   └────────┘ └──┬─┘ └──┬─┘ └────┘ └────┘ └─────┘
-                 │      │
-           ┌─────▼──┐   │
-           │Add Exp.│   │
-           │(Manual)│   │
-           └────────┘   │
-                   ┌────▼────┐
-                   │Receipt  │
-                   │Result   │
-                   └─────────┘
+        ┌─────┼─────┬──────┼─────┬─────┐
+        │     │     │      │     │     │
+   ┌────▼──┐ ┌▼───┐ ┌▼───┐ ┌▼───┐ ┌▼───┐
+   │Dashboard│ │Exp.│ │Chal│ │Sett│ │ 💬 │
+   │        │ │    │ │len.│ │ings│ │ FAB │
+   └────────┘ └──┬─┘ └────┘ └────┘ └─────┘
+                 │
+           ┌─────▼──┐
+           │Add Exp.│
+           │(Manual)│
+           └────────┘
 ```
 
-### Bottom Navigation Tabs
+### Bottom Navigation Tabs (4 tabs)
 
-| Tab | Icon | Route | Badge |
-|-----|------|-------|-------|
-| Dashboard | `Icons.Dashboard` | `dashboard` | — |
-| Expenses | `Icons.Receipt` | `expenses` | Count of today's expenses |
-| Chat | `Icons.Chat` | `chat` | — |
-| Settings | `Icons.Settings` | `settings` | — |
+| Tab | Icon | Route | What's Inside |
+|-----|------|-------|---------------|
+| Dashboard | `Icons.Dashboard` | `dashboard` | Budget progress, spending overview, calendar heatmap |
+| Expense | `Icons.Receipt` | `expenses` | Expense list + budget settings |
+| Challenges | `Icons.EmojiEvents` | `challenges` | Saving challenges, deposits, progress |
+| Settings | `Icons.Settings` | `settings` | Profile, theme, language, notifications, export |
+
+### Chat Bubble (FAB)
+
+| Element | Implementation |
+|---------|----------------|
+| **Position** | Floating on all screens (bottom-right) |
+| **Icon** | `Icons.Default.Chat` |
+| **Action** | Tap → navigate to Chat screen |
+| **Visibility** | Hidden on Auth, Onboarding, and Chat screens |
 
 ---
 
@@ -1327,20 +2333,23 @@ main
 | Issue | Solution |
 |-------|----------|
 | `Failed to resolve: com.google.firebase` | Ensure `google-services.json` is in `app/` folder |
-| Gemini API `PERMISSION_DENIED` | Check API key in `local.properties` and enable Generative Language API in Google Cloud Console |
+| Gemini API `PERMISSION_DENIED` | Check API key in Vercel env vars, not `local.properties`. The app only knows the proxy URL. |
+| Gemini API `QUOTA_EXCEEDED` | Free tier limit reached. Wait for reset or upgrade at [aistudio.google.com](https://aistudio.google.com) |
+| Proxy returns 404 in browser | Expected — proxy only handles `POST /api/chat`. Use `curl` to test, not browser. |
+| Proxy returns `GEMINI_API_KEY not configured` | Set the env var in Vercel dashboard: `GEMINI_API_KEY = your_key` |
 | Firestore too slow on first launch | Enable offline persistence: `FirebaseFirestore.getInstance().firestoreSettings = FirebaseFirestoreSettings.Builder().setPersistenceEnabled(true).build()` |
 | CameraX preview not showing | Add `android:usesCleartextTraffic="true"` to manifest (for dev) |
 | Compose recompilation issues | Run `./gradlew clean` and rebuild |
 | Gradle sync failed | Check internet connection, then `File → Invalidate Caches → Restart` |
 | `java.io.IOException: Cleartext HTTP traffic` | Add `android:usesCleartextTraffic="true"` in AndroidManifest.xml for dev, or implement network_security_config.xml |
-| `Could not find generativeai:1.1.0` | Guide had wrong version — use `0.9.0` (check latest on Google Maven) |
 | Hilt `@HiltAndroidApp` fails | Add `kotlin("kapt")` to plugins and `kapt(libs.hilt.compiler)` to dependencies in `app/build.gradle.kts` |
 | Firebase "No matching client" error | Remove `applicationIdSuffix = ".debug"` — Firebase package must match exactly |
 | Dagger "MissingBinding" errors | Create mock repos + `RepositoryModule.kt` with `@Binds` — see Mock Repositories section above |
+| `BuildConfig.PROXY_URL` unresolved | The secrets plugin generates `proxyurl` (lowercase, no dots). Use `BuildConfig.proxyurl` instead. |
 
 ---
 
-> **Next Step for You:** Create the Firebase project, download `google-services.json`, place it in `app/`, and tell the team to run `./gradlew assembleDebug` to verify the build works. Then branch out!
+> **Next Step for You:** Create the Firebase project, download `google-services.json`, place it in `app/`, and tell the team to run `./gradlew assembleDebug` to verify the build works. The Gemini proxy is already deployed and ready to use. Then branch out!
 
 ---
 

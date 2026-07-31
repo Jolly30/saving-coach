@@ -6,10 +6,12 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -28,13 +30,40 @@ import com.savingcoach.app.navigation.Routes
 import com.savingcoach.app.ui.theme.SavingCoachTheme
 import dagger.hilt.android.AndroidEntryPoint
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            // User denied permission - show explanation if needed
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestNotificationPermission()
         setContent {
             SavingCoachTheme {
                 MainScreen()
+            }
+        }
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }
@@ -49,7 +78,7 @@ data class BottomNavItem(
 val bottomNavItems = listOf(
     BottomNavItem("Dashboard", Icons.Default.Dashboard, Routes.Dashboard.route),
     BottomNavItem("Expenses", Icons.Default.Receipt, Routes.Expenses.route),
-    BottomNavItem("Chat", Icons.Default.Chat, Routes.Chat.route),
+    BottomNavItem("Challenges", Icons.Default.EmojiEvents, Routes.Challenges.route),
     BottomNavItem("Settings", Icons.Default.Settings, Routes.Settings.route)
 )
 
@@ -66,6 +95,15 @@ fun MainScreen() {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        floatingActionButton = {
+            if (showBottomBar) {
+                FloatingActionButton(
+                    onClick = { navController.navigate(Routes.Chat.route) }
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat")
+                }
+            }
+        },
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
