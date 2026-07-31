@@ -423,6 +423,106 @@ Redesigned dashboard to match the new ASCII mockup spec.
 
 ---
 
+## 🔧 Session 10 — Calendar Refactor (2026-07-31)
+
+### Calendar Layout & Navigation
+* **25-Month Range:** The calendar now renders a rolling 25-month range (12 months in the past, the current month, and 12 months in the future) instead of just the current month.
+* **Auto-Scroll to Current Date:** Added logic to automatically scroll the calendar to the current month/year when the data first loads.
+* **Year-to-Month Navigation Fix:** Fixed a bug where clicking a specific month from the Year view would ignore your tap and force you back to the current month. The auto-scroll logic was tweaked to only run *once* on initial load so it doesn't fight your manual navigation.
+* **UI Spacing:** Fixed the "weird" layout in the Year view by adding proper null-padding and spacing between the mini-months, making the grid align perfectly.
+
+### Top Bar & UI Polish
+* **Filter Relocation:** Moved the Month/Year toggle button and the Calendar Filter dropdown into the main `TopAppBar` to save vertical space and clean up the screen.
+* **Text Updates:** Changed the loading state text from "Loading history..." to a more accurate "Loading calendar...".
+
+### New Rating System & Filter Logic
+We completely overhauled the color rating system to unify the UI and decouple savings from the spending budget. The old "green dot" UI was completely removed in favor of full background colors.
+
+* **"All" Filter (Peak Days):**
+  * 🔴 **Red:** Highlights the Most Spent Day (the day with the highest total expense of the month).
+  * 🟢 **Green:** Highlights the Most Saved Day (the day with the highest total savings deposit of the month).
+  * ⚪ **No Color:** All other days remain clean.
+* **"Expenses" Filter (Budget %):**
+  * Divides your total monthly budget by the number of days in the month to get a "daily budget limit".
+  * 🔴 **Red:** Spending was over 100% of the daily limit.
+  * 🟡 **Yellow:** Spending was between 80% - 100% of the daily limit.
+  * ⚪ **No Color:** Spending was under 80% of the daily limit.
+  * *(Days with zero expenses are faded out).*
+* **"Savings" Filter:**
+  * 🟢 **Green:** Highlights the Most Saved Day.
+  * ⚪ **No Color:** Other days with savings.
+  * *(Days with zero savings are faded out).*
+* **Dynamic Legend:** The legend at the bottom of the calendar now automatically updates its labels and colors to match whichever filter you are currently using.
+
+### Syntax & Bug Fixes
+* **`CalendarHistoryScreen.kt`:** Fixed an `Expecting a top level declaration` error caused by an extra trailing closing brace after restructuring the scroll layout.
+* **`CalendarHeatmap.kt`:** Fixed a structural duplication issue in the grid layout and restored missing variables (`isSelected`, `isToday`) that broke the compilation when the Green dot was removed.
+
+### Modified Files
+| File | Changes |
+|------|---------|
+| `ui/dashboard/CalendarHeatmap.kt` | 25-month range, auto-scroll, rating system, filter logic, bug fixes |
+| `ui/dashboard/DashboardScreen.kt` | Filter relocation to TopAppBar, calendar history navigation |
+| `ui/dashboard/DashboardViewModel.kt` | Calendar data loading, filter state management |
+| `ui/dashboard/CalendarHistoryScreen.kt` | New screen for historical calendar view |
+| `ui/dashboard/CalendarHistoryViewModel.kt` | ViewModel for calendar history |
+| `navigation/Routes.kt` | Added CalendarHistory route |
+| `navigation/NavGraph.kt` | Added CalendarHistoryScreen composable |
+
+---
+
+## 🔧 Session 11 — Notification System (PLANNED)
+
+### What Will Be Built
+
+Implement a comprehensive push notification system for budget alerts, saving milestones, and daily reminders using Firebase Cloud Messaging and WorkManager.
+
+### Notification Conditions
+
+**Budget Alerts:**
+| Threshold | Trigger | Notification Type |
+|-----------|---------|-------------------|
+| 75% | Spending reaches 75% of monthly budget | 🟡 Warning |
+| 90% | Spending reaches 90% of monthly budget | 🟠 Critical |
+| 100%+ | Spending exceeds monthly budget | 🔴 Over Budget (push notification) |
+
+**Saving Milestones:**
+| Threshold | Trigger | Notification Type |
+|-----------|---------|-------------------|
+| 50% | Saved 50% of challenge target | 🎯 Halfway |
+| 75% | Saved 75% of challenge target | 🚀 Almost There |
+| 100% | Completed challenge | 🎉 Celebration |
+
+**Daily Reminders:**
+| Reminder | Trigger | Schedule |
+|----------|---------|----------|
+| Daily Expense Log | User hasn't logged expenses today | Every day at 8:00 PM |
+| Inactive Alert | No expenses logged for 1+ days | Every day at 9:00 PM |
+| Saving Challenge | Daily reminder about active challenges | Every day at 7:00 PM |
+
+### Files to Create
+
+| File | Purpose |
+|------|---------|
+| `core/notification/NotificationHelper.kt` | Core notification manager with channel setup, permission handling, and notification builders |
+| `core/notification/NotificationScheduler.kt` | WorkManager scheduler for daily reminders and periodic checks |
+| `workers/BudgetAlertWorker.kt` | Background worker to check budget thresholds and trigger alerts |
+| `workers/SavingReminderWorker.kt` | Background worker for daily saving challenge reminders |
+| `workers/InactiveAlertWorker.kt` | Background worker to detect inactive periods |
+| `workers/DailyExpenseReminderWorker.kt` | Worker for daily expense logging reminders |
+
+### Integration Points
+* **DashboardViewModel:** Check budget percentage after fetching expenses
+* **ChallengeViewModel:** Check progress after adding deposits
+* **MainActivity:** Request notification permission on app launch
+* **WorkManager:** Schedule periodic background checks
+* **SavingCoachApp.kt:** Initialize notification scheduler on app launch
+
+### Documentation
+* **SETUP_GUIDE.md:** Section 8 (Notification System Setup) with complete implementation guide
+
+---
+
 ## 📝 Scratch Notes
 
 ```
