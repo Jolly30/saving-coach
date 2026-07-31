@@ -11,4 +11,5 @@ sealed class Routes(val route: String) {
     object Budget : Routes("budget")
     object Settings : Routes("settings")
     object CalendarHistory : Routes("calendar_history")
+    object Notifications : Routes("notifications")
 }

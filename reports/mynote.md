@@ -471,11 +471,11 @@ We completely overhauled the color rating system to unify the UI and decouple sa
 
 ---
 
-## 🔧 Session 11 — Notification System (PLANNED)
+## 🔧 Session 11 — Notification System & Bug Fixes (2026-07-31)
 
-### What Will Be Built
+### What Was Built (Notification System)
 
-Implement a comprehensive push notification system for budget alerts, saving milestones, and daily reminders using Firebase Cloud Messaging and WorkManager.
+Implemented a comprehensive push notification system for budget alerts, saving milestones, and daily reminders using Firebase Cloud Messaging and WorkManager.
 
 ### Notification Conditions
 
@@ -500,26 +500,34 @@ Implement a comprehensive push notification system for budget alerts, saving mil
 | Inactive Alert | No expenses logged for 1+ days | Every day at 9:00 PM |
 | Saving Challenge | Daily reminder about active challenges | Every day at 7:00 PM |
 
-### Files to Create
+### Files Created for Notifications:
 
 | File | Purpose |
 |------|---------|
 | `core/notification/NotificationHelper.kt` | Core notification manager with channel setup, permission handling, and notification builders |
 | `core/notification/NotificationScheduler.kt` | WorkManager scheduler for daily reminders and periodic checks |
+| `core/notification/BootReceiver.kt` | Re-initializes alarms/WorkManager jobs upon device reboot |
 | `workers/BudgetAlertWorker.kt` | Background worker to check budget thresholds and trigger alerts |
 | `workers/SavingReminderWorker.kt` | Background worker for daily saving challenge reminders |
 | `workers/InactiveAlertWorker.kt` | Background worker to detect inactive periods |
 | `workers/DailyExpenseReminderWorker.kt` | Worker for daily expense logging reminders |
 
-### Integration Points
-* **DashboardViewModel:** Check budget percentage after fetching expenses
-* **ChallengeViewModel:** Check progress after adding deposits
-* **MainActivity:** Request notification permission on app launch
-* **WorkManager:** Schedule periodic background checks
-* **SavingCoachApp.kt:** Initialize notification scheduler on app launch
+### Notification UI & Navigation
 
-### Documentation
-* **SETUP_GUIDE.md:** Section 8 (Notification System Setup) with complete implementation guide
+* Added a **Notification Bell Icon** (`Icons.Default.Notifications`) to the top right of the `DashboardScreen.kt` Header.
+* Created a new **`NotificationsScreen.kt`** inside `ui/notifications/` with a clean `Scaffold` and `TopAppBar`.
+* Added a new `Routes.Notifications` object and registered the screen in `NavGraph.kt`.
+* Fixed a **"Double Insets"** (overlapping padding) UI bug on the `NotificationsScreen` by explicitly setting `windowInsets = WindowInsets(0, 0, 0, 0)` on the `TopAppBar` to prevent it from doubling up on the `MainActivity`'s global Scaffold padding.
+
+### Bug Fixes
+
+* **`SavingReminderWorker.kt` Compilation Error:** Fixed a compiler error (`Unresolved reference 'name'`) by changing `it.name` to `it.title` to correctly reference the `SavingChallenge` data class property.
+* **Deprecation Warnings:** Updated `Icons.Default.Chat` to the modern `Icons.AutoMirrored.Filled.Chat` in `MainActivity.kt` to resolve deprecation warnings.
+* **Redundant Logic Warnings:** Removed an always-true `day.date != null` condition in `CalendarHeatmap.kt` logic to clean up the code.
+* **Duplicate Imports:** Resolved a `Conflicting import: imported name 'Icons' is ambiguous` error by cleaning up duplicate `Icons` imports in `DashboardScreen.kt`.
+
+### Build Verification
+`./gradlew assembleDebug` — **BUILD SUCCESSFUL** ✅
 
 ---
 
@@ -528,7 +536,7 @@ Implement a comprehensive push notification system for budget alerts, saving mil
 ```
 Project: Saving Coach | Package: com.savingcoach.app
 Repo: https://github.com/Jolly30/saving-coach
-Dev 1 Role: UI Skeleton + Auth + Dashboard + AI Proxy + Firestore Repositories
-Status: ✅ ALL tasks DONE + Real Auth + Gemini Proxy + Firestore Repositories + Dashboard Redesign v2 + Default Challenges + Filter Dropdown
+Dev 1 Role: UI Skeleton + Auth + Dashboard + AI Proxy + Firestore Repositories + Notifications
+Status: ✅ ALL tasks DONE + Real Auth + Gemini Proxy + Firestore Repositories + Dashboard Redesign v2 + Default Challenges + Filter Dropdown + Notifications System + Notification UI
 Proxy URL: https://proxy-topaz-ten-36.vercel.app
 ```
