@@ -10,6 +10,11 @@ plugins {
     id("com.google.firebase.crashlytics") version "3.0.2"
 }
 
+secrets {
+    propertiesFileName = "local.properties"
+    defaultPropertiesFileName = "local.defaults.properties"
+}
+
 android {
     namespace = "com.savingcoach.app"
     compileSdk = 35
