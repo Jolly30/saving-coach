@@ -1,6 +1,6 @@
 # 👤 Dev 1 — Work Log
 
-> Last updated: 2026-07-31 (Session 7)
+> Last updated: 2026-08-01 (Session 12)
 
 ---
 
@@ -531,12 +531,60 @@ Implemented a comprehensive push notification system for budget alerts, saving m
 
 ---
 
+## 🔧 Session 12 — KAPT → KSP Migration (2026-08-01)
+
+### Problem
+A teammate reported a build failure on Windows:
+```
+> Task :app:kaptDebugKotlin FAILED
+Caused by: java.lang.IllegalArgumentException: Invalid relative name: META-INF\proguard\...
+```
+KAPT (Kotlin Annotation Processing Tool) does not support Kotlin 2.0+. The project was using Kotlin 2.0.21 with KAPT, causing annotation processing failures. KAPT generates Java stubs first then processes them — it falls back to language version 1.9, but this often breaks.
+
+### Solution
+Migrated from KAPT to **KSP** (Kotlin Symbol Processing), which:
+- Fully supports Kotlin 2.0+
+- Is 2x faster (reads Kotlin AST directly, no Java stubs)
+- Is the actively maintained replacement for KAPT
+
+### Changes Made
+
+| File | Change |
+|------|--------|
+| `gradle/libs.versions.toml` | Added KSP version `2.0.21-1.0.28` + plugin `com.google.devtools.ksp` |
+| `app/build.gradle.kts` | Replaced `kotlin("kapt")` → `alias(libs.plugins.ksp)`, `kapt()` → `ksp()` for Hilt compiler and WorkManager Hilt compiler |
+
+### Dependency Swap
+```kotlin
+// Before (KAPT):
+kotlin("kapt")
+kapt(libs.hilt.compiler)
+kapt("androidx.hilt:hilt-compiler:1.2.0")
+
+// After (KSP):
+alias(libs.plugins.ksp)
+ksp(libs.hilt.compiler)
+ksp("androidx.hilt:hilt-compiler:1.2.0")
+```
+
+### Why KSP is Better
+| | KAPT | KSP |
+|---|---|---|
+| Kotlin 2.0+ | ❌ Not supported | ✅ Fully supported |
+| Speed | Slow (generates Java stubs) | 2x faster (reads Kotlin AST directly) |
+| Status | Deprecated | Active, recommended |
+
+### Build Verification
+`./gradlew assembleDebug` — **BUILD SUCCESSFUL** ✅
+
+---
+
 ## 📝 Scratch Notes
 
 ```
 Project: Saving Coach | Package: com.savingcoach.app
 Repo: https://github.com/Jolly30/saving-coach
 Dev 1 Role: UI Skeleton + Auth + Dashboard + AI Proxy + Firestore Repositories + Notifications
-Status: ✅ ALL tasks DONE + Real Auth + Gemini Proxy + Firestore Repositories + Dashboard Redesign v2 + Default Challenges + Filter Dropdown + Notifications System + Notification UI
+Status: ✅ ALL tasks DONE + Real Auth + Gemini Proxy + Firestore Repositories + Dashboard Redesign v2 + Default Challenges + Filter Dropdown + Notifications System + Notification UI + KAPT→KSP Migration
 Proxy URL: https://proxy-topaz-ten-36.vercel.app
 ```
