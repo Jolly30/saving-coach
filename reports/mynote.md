@@ -602,8 +602,46 @@ ksp("androidx.hilt:hilt-compiler:1.2.0")
 *   **OpenRouter Key Fix:** Discovered the OpenRouter key failed during fallback because an accidental newline (`\n`) was pasted into Vercel, breaking the HTTP header formatting. The key was cleaned up and redeployed.
 
 #### 5. Final Verification
-*   Ran a live `curl` test against the new Vercel endpoint. 
+*   Ran a live `curl` test against the new Vercel endpoint.
 *   **Result:** The proxy correctly hit Gemini, caught the `429 Quota Exceeded` error (because `shouldSkip` correctly returned false for 429), smoothly fell back to OpenRouter, and successfully returned the JSON payload.
+
+---
+
+## 🔧 Session 14 — Chat Integration Fixes (2026-08-02)
+
+### Problem
+Full project audit revealed multiple issues in the chat/proxy integration:
+1. Blocking network call on main thread (ANR risk)
+2. ViewModel depended on concrete class instead of interface
+3. Chat history lost on app restart (Firestore writes never read back)
+4. Error banner had no dismiss button
+
+### Fixes Applied
+
+| # | File | Fix |
+|---|------|-----|
+| 1 | `GeminiProxyService.kt` | Added `withContext(Dispatchers.IO)` around blocking `execute()` call — no more main thread blocking |
+| 2 | `ChatRepository.kt` | Added `sendToAi()` method to interface |
+| 3 | `ChatViewModel.kt` | Changed from concrete `AiChatRepository` → `ChatRepository` interface (proper DI) |
+| 4 | `AiChatRepository.kt` | Added Firestore read to load chat history on startup, removed unused `Query` import |
+| 5 | `ChatScreen.kt` | Added dismiss button (✕) on error banner, wired to `viewModel.clearError()` |
+| 6 | `MockRepositories.kt` | Added `sendToAi()` mock implementation for testing |
+
+### Architecture Improvement
+```
+// Before (concrete dependency):
+class ChatViewModel @Inject constructor(
+    private val chatRepository: AiChatRepository  ← concrete class
+)
+
+// After (interface dependency):
+class ChatViewModel @Inject constructor(
+    private val chatRepository: ChatRepository  ← interface
+)
+```
+
+### Build Verification
+`./gradlew assembleDebug` — **BUILD SUCCESSFUL** ✅
 
 ---
 
@@ -613,6 +651,6 @@ ksp("androidx.hilt:hilt-compiler:1.2.0")
 Project: Saving Coach | Package: com.savingcoach.app
 Repo: https://github.com/Jolly30/saving-coach
 Dev 1 Role: UI Skeleton + Auth + Dashboard + AI Proxy + Firestore Repositories + Notifications
-Status: ✅ ALL tasks DONE + Real Auth + Gemini Proxy + Firestore Repositories + Dashboard Redesign v2 + Default Challenges + Filter Dropdown + Notifications System + Notification UI + KAPT→KSP Migration
+Status: ✅ ALL tasks DONE + Real Auth + Gemini Proxy + Firestore Repositories + Dashboard Redesign v2 + Default Challenges + Filter Dropdown + Notifications System + Notification UI + KAPT→KSP Migration + Chat Integration Fixes
 Proxy URL: https://proxy-lake-xi-82.vercel.app
 ```
