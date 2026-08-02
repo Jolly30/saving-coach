@@ -2,9 +2,9 @@ package com.savingcoach.app.ui.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.savingcoach.app.ai.AiChatRepository
 import com.savingcoach.app.data.model.ChatMessage
 import com.savingcoach.app.data.repository.AuthRepository
+import com.savingcoach.app.data.repository.ChatRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +14,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    private val chatRepository: AiChatRepository,
+    private val chatRepository: ChatRepository,
     private val authRepository: AuthRepository
 ) : ViewModel() {
 

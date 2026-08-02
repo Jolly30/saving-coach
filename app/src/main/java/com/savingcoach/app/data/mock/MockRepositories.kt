@@ -72,6 +72,23 @@ class MockChatRepository @Inject constructor() : ChatRepository {
     override suspend fun saveMessage(userId: String, message: ChatMessage) {
         messages.value = messages.value + message
     }
+
+    override suspend fun sendToAi(
+        userId: String,
+        userMessage: String,
+        systemPrompt: String?
+    ): Result<ChatMessage> {
+        // Mock response for testing
+        val aiMessage = ChatMessage(
+            id = "ai_${System.currentTimeMillis()}",
+            userId = userId,
+            role = "ai",
+            content = "This is a mock response. In production, this would call the AI proxy.",
+            timestamp = System.currentTimeMillis(),
+            type = "advice"
+        )
+        return Result.success(aiMessage)
+    }
 }
 
 @Singleton

@@ -3,10 +3,12 @@ package com.savingcoach.app.ai
 import com.savingcoach.app.data.model.ChatMessage
 import com.savingcoach.app.data.repository.ChatRepository
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -18,11 +20,36 @@ class AiChatRepository @Inject constructor(
 ) : ChatRepository {
 
     private val localHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
+    private var hasLoadedFromFirestore = false
 
     override fun getChatHistory(userId: String): Flow<List<ChatMessage>> {
+        // Load from Firestore once
+        if (!hasLoadedFromFirestore) {
+            hasLoadedFromFirestore = true
+            loadFromFirestore(userId)
+        }
         return localHistory.map { messages ->
             messages.filter { it.userId == userId }
                 .sortedBy { it.timestamp }
+        }
+    }
+
+    private fun loadFromFirestore(userId: String) {
+        // Load in background - will update localHistory when complete
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val snapshot = firestore.collection("users")
+                    .document(userId)
+                    .collection("chatMessages")
+                    .orderBy("timestamp")
+                    .get()
+                    .await()
+
+                val messages = snapshot.toObjects(ChatMessage::class.java)
+                localHistory.value = messages
+            } catch (_: Exception) {
+                // Firestore load failed, start with empty history
+            }
         }
     }
 
@@ -46,10 +73,10 @@ class AiChatRepository @Inject constructor(
      * Send a message to the AI and get a response.
      * Returns the AI's reply as a ChatMessage.
      */
-    suspend fun sendToAi(
+    override suspend fun sendToAi(
         userId: String,
         userMessage: String,
-        systemPrompt: String? = null
+        systemPrompt: String?
     ): Result<ChatMessage> {
         // Build conversation context (last 20 messages)
         val recentMessages = localHistory.value
