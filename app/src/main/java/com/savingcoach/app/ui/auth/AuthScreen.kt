@@ -60,7 +60,6 @@ fun AuthScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // TODO: Replace with your actual Firebase Web Client ID from Firebase Console > Authentication > Sign-in method > Google
     val webClientId = "42108385419-is8ctsvtkob8uedf0pgtdlcn5lolg8gu.apps.googleusercontent.com"
 
     val credentialManager = remember { CredentialManager.create(context) }
