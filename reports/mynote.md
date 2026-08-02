@@ -181,10 +181,10 @@ Response: { "reply": "..." }
 
 | Step | Status | Details |
 |------|--------|---------|
-| Deploy proxy to Vercel | ✅ Done | `https://proxy-topaz-ten-36.vercel.app` |
+| Deploy proxy to Vercel | ✅ Done | `https://proxy-lake-xi-82.vercel.app` |
 | Set `GEMINI_API_KEY` env var | ✅ Done | Stored in Vercel (not hardcoded) |
 | Disable SSO protection | ✅ Done | App can access API without auth |
-| Update `local.properties` | ✅ Done | `proxy.url=https://proxy-topaz-ten-36.vercel.app` |
+| Update `local.properties` | ✅ Done | `proxy.url=https://proxy-lake-xi-82.vercel.app` |
 | Update `local.defaults.properties` | ✅ Done | Same URL for other devs |
 | Build app | ✅ Done | `./gradlew assembleDebug` — **BUILD SUCCESSFUL** |
 | Test proxy | ✅ Done | Proxy forwards to Gemini API successfully |
@@ -193,7 +193,7 @@ Response: { "reply": "..." }
 
 | Item | Value |
 |------|-------|
-| **Production URL** | `https://proxy-topaz-ten-36.vercel.app` |
+| **Production URL** | `https://proxy-lake-xi-82.vercel.app` |
 | **Vercel Dashboard** | [vercel.com/jolly30s-projects/proxy](https://vercel.com/jolly30s-projects/proxy) |
 | **API Endpoint** | `POST /api/chat` |
 | **API Key Storage** | Vercel environment variable (encrypted) |
@@ -579,6 +579,34 @@ ksp("androidx.hilt:hilt-compiler:1.2.0")
 
 ---
 
+## 🔧 Session 13 — AI Proxy Debugging & Redeployment (2026-08-02)
+
+### What Was Done
+
+#### 1. Proxy Testing & Provider Cleanup
+*   **API Key Auditing:** Tested live API keys (Gemini, OpenRouter, OpenAI, DeepSeek, Grok) by bypassing the local sandbox to make real requests.
+*   **Result:** Only OpenRouter and Gemini were functional (though Gemini hit a free-tier 429 rate limit). OpenAI, DeepSeek, and Grok were rejected.
+*   **Code Cleanup:** Removed the unused providers (OpenAI, DeepSeek, Grok) from the `providers` array in `proxy/api/chat.js` to streamline the proxy and only prompt for valid keys.
+
+#### 2. Bug Fix: Fallback Loop
+*   **Problem:** The proxy's fallback mechanism had a logical flaw. When a non-retryable error occurred (e.g., a `400 Bad Request` from a malformed API key), `if (!shouldSkip(status)) continue;` failed to actually abort the loop. It just fell through to the end of the `catch` block and naturally continued to the next provider.
+*   **Fix:** Replaced the check with `if (shouldSkip(status)) { break; }` so non-retryable errors correctly abort the fallback chain.
+
+#### 3. Vercel Redeployment
+*   **Cleanup:** Completely removed the old proxy project from Vercel using `vercel rm proxy --yes` to ensure a clean slate and clear old environment variables.
+*   **Deployment:** Redeployed the updated proxy using `vercel --prod`.
+*   **New Production URL:** `https://proxy-lake-xi-82.vercel.app`
+
+#### 4. Environment Variable Debugging
+*   Guided the deployment of the `GEMINI_API_KEY` and `OPENROUTER_API_KEY` into the Vercel dashboard.
+*   **OpenRouter Key Fix:** Discovered the OpenRouter key failed during fallback because an accidental newline (`\n`) was pasted into Vercel, breaking the HTTP header formatting. The key was cleaned up and redeployed.
+
+#### 5. Final Verification
+*   Ran a live `curl` test against the new Vercel endpoint. 
+*   **Result:** The proxy correctly hit Gemini, caught the `429 Quota Exceeded` error (because `shouldSkip` correctly returned false for 429), smoothly fell back to OpenRouter, and successfully returned the JSON payload.
+
+---
+
 ## 📝 Scratch Notes
 
 ```
@@ -586,5 +614,5 @@ Project: Saving Coach | Package: com.savingcoach.app
 Repo: https://github.com/Jolly30/saving-coach
 Dev 1 Role: UI Skeleton + Auth + Dashboard + AI Proxy + Firestore Repositories + Notifications
 Status: ✅ ALL tasks DONE + Real Auth + Gemini Proxy + Firestore Repositories + Dashboard Redesign v2 + Default Challenges + Filter Dropdown + Notifications System + Notification UI + KAPT→KSP Migration
-Proxy URL: https://proxy-topaz-ten-36.vercel.app
+Proxy URL: https://proxy-lake-xi-82.vercel.app
 ```

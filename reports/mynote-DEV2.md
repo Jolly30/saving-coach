@@ -64,7 +64,7 @@
 - ✅ `ChatMessage.kt` + `ParsedExpense` (data model)
 - ✅ `ChatRepository` interface
 - ✅ ChatScreen, ChatViewModel, ProxyService (all built)
-- ✅ Proxy deployed at `https://proxy-topaz-ten-36.vercel.app`
+- ✅ Proxy deployed at `https://proxy-lake-xi-82.vercel.app`
 
 ---
 

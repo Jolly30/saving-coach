@@ -34,3 +34,4 @@ local.properties
 # Claude AI
 .claude/
 .playwright-mcp/
+.vercel

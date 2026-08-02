@@ -119,13 +119,13 @@ Then open `local.properties` and edit:
 **Mac:**
 ```properties
 sdk.dir=/Users/YOUR_USERNAME/Library/Android/sdk
-proxy.url=https://proxy-topaz-ten-36.vercel.app
+proxy.url=https://proxy-lake-xi-82.vercel.app
 ```
 
 **Windows:**
 ```properties
 sdk.dir=C:/Users/YOUR_USERNAME/AppData/Local/Android/sdk
-proxy.url=https://proxy-topaz-ten-36.vercel.app
+proxy.url=https://proxy-lake-xi-82.vercel.app
 ```
 
 > ⚠️ Replace `YOUR_USERNAME` with your actual computer username.

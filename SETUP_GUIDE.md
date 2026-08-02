@@ -611,7 +611,7 @@ Each day cell based on: daily_spending / (monthly_budget / 30)
 
 **Test the proxy:**
 ```bash
-curl -X POST https://proxy-topaz-ten-36.vercel.app/api/chat \
+curl -X POST https://proxy-lake-xi-82.vercel.app/api/chat \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Hello!"}]}'
 ```
@@ -1709,7 +1709,7 @@ vercel
 
 After deployment, you'll get a URL like:
 ```
-https://proxy-topaz-ten-36.vercel.app
+https://proxy-lake-xi-82.vercel.app
 ```
 
 ### Disable Vercel Auth Protection
@@ -1726,7 +1726,7 @@ Replace the placeholder with your deployed proxy URL:
 
 ```properties
 sdk.dir=/Users/yourname/Library/Android/sdk
-proxy.url=https://proxy-topaz-ten-36.vercel.app
+proxy.url=https://proxy-lake-xi-82.vercel.app
 ```
 
 > **⚠️ Security:** The API key is NOT in `local.properties` — it's stored securely in Vercel. The app only knows the proxy URL.
@@ -1746,7 +1746,7 @@ Since `local.properties` is **gitignored**, each dev must set up their own:
 cp local.defaults.properties local.properties
 # Then edit local.properties:
 #   sdk.dir=/Users/yourname/Library/Android/sdk
-#   proxy.url=https://proxy-topaz-ten-36.vercel.app
+#   proxy.url=https://proxy-lake-xi-82.vercel.app
 ```
 
 ### Test the Proxy
@@ -1754,7 +1754,7 @@ cp local.defaults.properties local.properties
 Before building the app, verify the proxy works:
 
 ```bash
-curl -X POST https://proxy-topaz-ten-36.vercel.app/api/chat \
+curl -X POST https://proxy-lake-xi-82.vercel.app/api/chat \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Hello!"}]}'
 ```
