@@ -1,6 +1,6 @@
 # 👤 Dev 1 — Work Log
 
-> Last updated: 2026-08-01 (Session 12)
+> Last updated: 2026-08-02 (Session 15)
 
 ---
 
@@ -642,6 +642,51 @@ class ChatViewModel @Inject constructor(
 
 ### Build Verification
 `./gradlew assembleDebug` — **BUILD SUCCESSFUL** ✅
+
+---
+
+## 🔧 Session 15 — Proxy 429 Fix & Multi-Provider Setup (2026-08-02)
+
+### Problem
+Proxy was returning 429 (quota exceeded) errors because the Gemini model name was wrong. The proxy used `gemini-2.0-flash` which had zero quota, while the Google Cloud project actually had quota for `gemini-2.5-flash-lite`.
+
+### Root Cause
+The Gemini API key's Google Cloud project had quota only for `gemini-2.5-flash-lite` (20 requests/day), but the proxy was configured to use `gemini-2.0-flash` (0 quota). Direct API calls from Myanmar also returned 404 due to geo-restriction.
+
+### Fixes Applied
+
+| # | Fix | Details |
+|---|-----|---------|
+| 1 | Changed Gemini model | `gemini-2.0-flash` → `gemini-2.5-flash-lite` (matches actual quota) |
+| 2 | Verified proxy URL | Confirmed `proxy-lake-xi-82.vercel.app` is live and working |
+| 3 | Cleaned up providers | Removed OpenAI, DeepSeek, Grok — kept only Gemini + OpenRouter |
+| 4 | Updated proxy code | Simplified `proxy/api/chat.js` to single-file, two-provider fallback |
+| 5 | Removed unused env vars | Deleted OPENAI_API_KEY, GROK_API_KEY, DEEPSEEK_API_KEY from Vercel |
+| 6 | Fixed local.properties | Updated `proxy.url` to new domain |
+
+### Proxy Architecture (Final)
+```
+Request → Gemini (2.5-flash-lite, 20/day free) → if fails → OpenRouter (DeepSeek V3)
+```
+
+### Gemini Free Tier (Verified)
+| Model | Quota | Current Usage |
+|-------|-------|---------------|
+| gemini-2.5-flash-lite | 20 requests/day | 9 used |
+
+### Geo-Restriction Note
+Direct Gemini API calls from Myanmar return 404. The proxy on Vercel (US servers) bypasses this restriction. This is expected behavior — the proxy exists specifically for this reason.
+
+### Verification
+- 5 consecutive requests: all returned 200 OK
+- No 429 or 404 errors from proxy
+- Gemini provider confirmed active in responses
+
+### Final Vercel Environment
+| Key | Status |
+|-----|--------|
+| GEMINI_API_KEY | ✅ Set |
+| OPENROUTER_API_KEY | ✅ Set (fallback) |
 
 ---
 
