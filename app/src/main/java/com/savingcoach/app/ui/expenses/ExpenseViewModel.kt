@@ -85,7 +85,7 @@ class ExpenseViewModel @Inject constructor(
                             monthlyBudget = budgetObj ?: Budget(
                                 userId = userId,
                                 month = currentMonth,
-                                limit = 1000000.0,
+                                limit = 0.0,
                                 totalSpent = totalSpent
                             ),
                             totalSpent = totalSpent,

@@ -74,7 +74,7 @@ fun ExpenseScreen(
                     // SECTION 1: Monthly Overall Budget Card
                     // ==========================================
                     item {
-                        val limit = uiState.monthlyBudget?.limit ?: 1000000.0
+                        val limit = uiState.monthlyBudget?.limit ?: 0.0
                         val spent = uiState.totalSpent
                         val rawRemaining = limit - spent
                         val remaining = rawRemaining.coerceAtLeast(0.0)
@@ -274,7 +274,7 @@ fun ExpenseScreen(
                         ) {
                             items(uiState.categories) { category ->
                                 val isSelected = uiState.selectedCategory == category.name
-                                val globalLimit = uiState.monthlyBudget?.limit ?: 1000000.0
+                                val globalLimit = uiState.monthlyBudget?.limit ?: 0.0
                                 val effectiveTarget = if (category.target > 0) category.target else globalLimit
                                 val catPercentage = when {
                                     effectiveTarget > 0 -> (category.spent / effectiveTarget) * 100.0
@@ -503,7 +503,7 @@ fun ExpenseScreen(
                 )
             }
 
-            val globalLimit = uiState.monthlyBudget?.limit ?: 1000000.0
+            val globalLimit = uiState.monthlyBudget?.limit ?: 0.0
             val categoryTargetsSum = uiState.categories.sumOf { it.target }
 
             // Edit Budget Dialog
