@@ -46,10 +46,12 @@ class MockExpenseRepository @Inject constructor() : ExpenseRepository {
 
 @Singleton
 class MockBudgetRepository @Inject constructor() : BudgetRepository {
+
     private val budgets = MutableStateFlow<Map<String, Budget>>(emptyMap())
 
-    override fun getBudget(userId: String, yearMonth: String): Flow<Budget?> =
-        budgets.map { it[yearMonth] }
+    override fun getBudget(userId: String, yearMonth: String): Flow<Budget?> {
+        return budgets.map { it[yearMonth] }
+    }
 
     override suspend fun setBudget(userId: String, budget: Budget) {
         budgets.value = budgets.value + (budget.month to budget)
@@ -61,7 +63,13 @@ class MockBudgetRepository @Inject constructor() : BudgetRepository {
             budgets.value = budgets.value + (yearMonth to current.copy(limit = newLimit))
         }
     }
+
+    override fun getBudgetForMonth(yearMonth: String): Flow<Budget?> {
+        return getBudget("mock_user_id", yearMonth)
+    }
+
 }
+
 
 @Singleton
 class MockChatRepository @Inject constructor() : ChatRepository {

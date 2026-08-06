@@ -47,4 +47,10 @@ class FirebaseBudgetRepository @Inject constructor(
         budgetsCol(userId).document(yearMonth)
             .update("limit", newLimit, "updatedAt", System.currentTimeMillis()).await()
     }
+
+    override fun getBudgetForMonth(yearMonth: String): Flow<Budget?> {
+        val userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+        return getBudget(userId, yearMonth)
+    }
+
 }
