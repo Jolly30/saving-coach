@@ -9,7 +9,7 @@
 
 | Task | Status | Started | Notes |
 |------|--------|---------|-------|
-| —    | ⏳ Pending | — | — |
+| Budget & Expense Hub | ✅ Completed | 2026-08-04 | All UI components, ViewModel, State, and Navigation wired |
 
 ---
 
@@ -17,7 +17,13 @@
 
 | # | Task | Files | Done |
 |---|------|-------|------|
-| — | —    | —     | —   |
+| 1 | Create ExpenseUiState & ExpenseCategory | `ui/expenses/ExpenseUiState.kt` | ✅ |
+| 2 | Implement ExpenseViewModel state & logic | `ui/expenses/ExpenseViewModel.kt` | ✅ |
+| 3 | Build LogExpenseBottomSheet | `ui/expenses/LogExpenseBottomSheet.kt` | ✅ |
+| 4 | Build AddExpenseScreen | `ui/expenses/AddExpenseScreen.kt` | ✅ |
+| 5 | Build ExpenseScreen (Budget Hub UI) | `ui/expenses/ExpenseScreen.kt` | ✅ |
+| 6 | Wire up Navigation | `navigation/NavGraph.kt` | ✅ |
+| 7 | Custom Category in Log Expense | `ui/expenses/LogExpenseBottomSheet.kt`, `AddExpenseScreen.kt` | ✅ |
 
 ---
 
