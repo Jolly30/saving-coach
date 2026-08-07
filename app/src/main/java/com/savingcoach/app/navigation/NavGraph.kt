@@ -4,8 +4,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -13,6 +16,9 @@ import com.savingcoach.app.ui.auth.AuthScreen
 import com.savingcoach.app.ui.chat.ChatScreen
 import com.savingcoach.app.ui.dashboard.CalendarHistoryScreen
 import com.savingcoach.app.ui.dashboard.DashboardScreen
+import com.savingcoach.app.ui.expenses.AddExpenseScreen
+import com.savingcoach.app.ui.expenses.ExpenseScreen
+import com.savingcoach.app.ui.expenses.ExpenseViewModel
 
 @Composable
 fun NavGraph(
@@ -48,9 +54,14 @@ fun NavGraph(
             )
         }
 
-        composable(Routes.Expenses.route) {
-            // TODO: Dev 4 — Replace with ExpenseListScreen
-            PlaceholderScreen("Expenses")
+        composable(Routes.Expenses.route) { backStackEntry ->
+            val viewModel: ExpenseViewModel = hiltViewModel(backStackEntry)
+            ExpenseScreen(
+                viewModel = viewModel,
+                onNavigateToAddExpense = {
+                    navController.navigate(Routes.AddExpense.route)
+                }
+            )
         }
 
         composable(Routes.Challenges.route) {
@@ -58,9 +69,30 @@ fun NavGraph(
             PlaceholderScreen("Challenges")
         }
 
-        composable(Routes.AddExpense.route) {
-            // TODO: Dev 4 — Replace with AddExpenseScreen
-            PlaceholderScreen("Add Expense")
+        composable(Routes.AddExpense.route) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                try {
+                    navController.getBackStackEntry(Routes.Expenses.route)
+                } catch (e: Exception) {
+                    backStackEntry
+                }
+            }
+            val viewModel: ExpenseViewModel = hiltViewModel(parentEntry)
+            val uiState = viewModel.uiState.collectAsState().value
+            AddExpenseScreen(
+                onBackClick = { navController.popBackStack() },
+                onSaveClick = { amount, category, merchant, description ->
+                    viewModel.addExpense(amount, category, merchant, description)
+                    navController.popBackStack()
+                },
+                availableCategories = uiState.categories,
+                onAddCategory = { emoji, name, target ->
+                    viewModel.addCustomCategory(emoji, name, target)
+                },
+                onDeleteCategory = { categoryName ->
+                    viewModel.deleteCategory(categoryName)
+                }
+            )
         }
 
         composable(Routes.Chat.route) {
@@ -72,9 +104,21 @@ fun NavGraph(
             PlaceholderScreen("Camera")
         }
 
-        composable(Routes.Budget.route) {
-            // TODO: Dev 4 — Replace with BudgetScreen
-            PlaceholderScreen("Budget")
+        composable(Routes.Budget.route) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                try {
+                    navController.getBackStackEntry(Routes.Expenses.route)
+                } catch (e: Exception) {
+                    backStackEntry
+                }
+            }
+            val viewModel: ExpenseViewModel = hiltViewModel(parentEntry)
+            ExpenseScreen(
+                viewModel = viewModel,
+                onNavigateToAddExpense = {
+                    navController.navigate(Routes.AddExpense.route)
+                }
+            )
         }
 
         composable(Routes.Settings.route) {

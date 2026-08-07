@@ -7,4 +7,8 @@ interface BudgetRepository {
     fun getBudget(userId: String, yearMonth: String): Flow<Budget?>
     suspend fun setBudget(userId: String, budget: Budget)
     suspend fun updateLimit(userId: String, yearMonth: String, newLimit: Double)
+
+    // ဒီ Function အသစ်ကို ထည့်ပေးပါ
+    fun getBudgetForMonth(yearMonth: String): Flow<Budget?>
 }
+

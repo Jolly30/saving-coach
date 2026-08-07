@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -138,43 +139,43 @@ fun CalendarHeatmap(
 
             var filterExpanded by remember { mutableStateOf(false) }
             if (showFilter) {
-            val currentLabel = when (filter) {
-                CalendarFilter.ALL -> "All"
-                CalendarFilter.SAVINGS -> "💰 Savings"
-                CalendarFilter.EXPENSES -> "🧾 Expenses"
-            }
-
-            Box {
-                OutlinedButton(
-                    onClick = { filterExpanded = true },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    Text(currentLabel, style = MaterialTheme.typography.labelMedium)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Filter", modifier = Modifier.size(18.dp))
+                val currentLabel = when (filter) {
+                    CalendarFilter.ALL -> "All"
+                    CalendarFilter.SAVINGS -> "💰 Savings"
+                    CalendarFilter.EXPENSES -> "🧾 Expenses"
                 }
-                DropdownMenu(
-                    expanded = filterExpanded,
-                    onDismissRequest = { filterExpanded = false }
-                ) {
-                    CalendarFilter.entries.forEach { f ->
-                        val label = when (f) {
-                            CalendarFilter.ALL -> "All"
-                            CalendarFilter.SAVINGS -> "💰 Savings"
-                            CalendarFilter.EXPENSES -> "🧾 Expenses"
-                        }
-                        DropdownMenuItem(
-                            text = { Text(label) },
-                            onClick = {
-                                onFilterChange(f)
-                                filterExpanded = false
+
+                Box {
+                    OutlinedButton(
+                        onClick = { filterExpanded = true },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text(currentLabel, style = MaterialTheme.typography.labelMedium)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Filter", modifier = Modifier.size(18.dp))
+                    }
+                    DropdownMenu(
+                        expanded = filterExpanded,
+                        onDismissRequest = { filterExpanded = false }
+                    ) {
+                        CalendarFilter.entries.forEach { f ->
+                            val label = when (f) {
+                                CalendarFilter.ALL -> "All"
+                                CalendarFilter.SAVINGS -> "💰 Savings"
+                                CalendarFilter.EXPENSES -> "🧾 Expenses"
                             }
-                        )
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    onFilterChange(f)
+                                    filterExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
-            }
             }
         }
 
