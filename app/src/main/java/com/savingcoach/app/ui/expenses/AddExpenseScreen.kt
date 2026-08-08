@@ -6,13 +6,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -26,11 +24,12 @@ fun AddExpenseScreen(
     onAddCategory: ((emoji: String, name: String, target: Double) -> Unit)? = null,
     onDeleteCategory: ((categoryName: String) -> Unit)? = null
 ) {
+    // Fresh state on every composition — fields start empty
     var amountText by remember { mutableStateOf("") }
     var merchantText by remember { mutableStateOf("") }
     var descriptionText by remember { mutableStateOf("") }
-    
-    val categoriesList = if (availableCategories.isNotEmpty()) availableCategories else defaultFallbackCategories
+
+    val categoriesList = if (availableCategories.isNotEmpty()) availableCategories else ExpenseCategory.DEFAULT_CATEGORIES
     var selectedCategoryName by remember(categoriesList) {
         mutableStateOf(categoriesList.firstOrNull()?.name ?: "Food & Dining")
     }
@@ -65,14 +64,14 @@ fun AddExpenseScreen(
             // Amount Input
             OutlinedTextField(
                 value = amountText,
-                onValueChange = { input ->
-                    if (input.all { it.isDigit() || it == '.' }) {
-                        amountText = input
+                onValueChange = { newValue ->
+                    // Allow empty, or valid number: digits with optional single decimal
+                    if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
+                        amountText = newValue
                     }
                 },
                 label = { Text("Amount (MMK) *") },
-                placeholder = { Text("0") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -114,15 +113,13 @@ fun AddExpenseScreen(
                                     )
                                     if (onDeleteCategory != null) {
                                         IconButton(
-                                            onClick = {
-                                                onDeleteCategory.invoke(cat.name)
-                                            },
+                                            onClick = { onDeleteCategory.invoke(cat.name) },
                                             modifier = Modifier.size(24.dp)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Delete,
                                                 contentDescription = "Delete Category",
-                                                tint = Color.Red.copy(alpha = 0.7f),
+                                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         }
@@ -163,7 +160,6 @@ fun AddExpenseScreen(
                 value = merchantText,
                 onValueChange = { merchantText = it },
                 label = { Text("Merchant / Store (Optional)") },
-                placeholder = { Text("e.g., Starbucks, City Mart") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )

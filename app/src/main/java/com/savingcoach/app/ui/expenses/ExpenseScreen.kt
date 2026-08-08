@@ -21,9 +21,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 import com.savingcoach.app.data.model.Expense
@@ -40,8 +40,19 @@ fun ExpenseScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val currencyFormat = remember { NumberFormat.getNumberInstance(Locale.US) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show Snackbar when errorMessage changes
+    val errorMessage = uiState.errorMessage
+    LaunchedEffect(errorMessage) {
+        if (!errorMessage.isNullOrEmpty()) {
+            snackbarHostState.showSnackbar(errorMessage)
+            viewModel.clearError()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -77,7 +88,6 @@ fun ExpenseScreen(
                         val limit = uiState.monthlyBudget?.limit ?: 0.0
                         val spent = uiState.totalSpent
                         val rawRemaining = limit - spent
-                        val remaining = rawRemaining.coerceAtLeast(0.0)
                         val percentage = if (limit > 0) (spent / limit) * 100 else 0.0
 
                         Card(
@@ -141,7 +151,7 @@ fun ExpenseScreen(
                                         color = if (percentage >= 100) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "Remaining: ${currencyFormat.format(remaining.toLong())} MMK",
+                                        text = "Remaining: ${currencyFormat.format(rawRemaining.toLong())} MMK",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = if (rawRemaining < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
@@ -151,77 +161,6 @@ fun ExpenseScreen(
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.outline
                                     )
-                                }
-                            }
-                        }
-
-                        // Over Budget Alerts Banner
-                        when {
-                            percentage >= 100 -> {
-                                val overAmount = (spent - limit).toLong()
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Icon(Icons.Default.Warning, contentDescription = "Alert", tint = MaterialTheme.colorScheme.error)
-                                        Text(
-                                            text = "Over Budget! Exceeded by ${currencyFormat.format(overAmount)} MMK",
-                                            color = MaterialTheme.colorScheme.onErrorContainer,
-                                            fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                    }
-                                }
-                            }
-                            percentage >= 90 -> {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = Orange.copy(alpha = 0.15f)),
-                                    border = BorderStroke(1.dp, Orange),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Icon(Icons.Default.Warning, contentDescription = "Alert", tint = Orange)
-                                        Text(
-                                            text = "Critical Alert: You have used ${percentage.toInt()}% of your budget!",
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                    }
-                                }
-                            }
-                            percentage >= 75 -> {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = Yellow.copy(alpha = 0.15f)),
-                                    border = BorderStroke(1.dp, Yellow),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Icon(Icons.Default.Warning, contentDescription = "Warning", tint = Yellow)
-                                        Text(
-                                            text = "Warning: 75% of monthly budget spent",
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -235,11 +174,18 @@ fun ExpenseScreen(
                             onClick = onNavigateToAddExpense,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(52.dp),
-                            shape = RoundedCornerShape(12.dp)
+                                .height(56.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 4.dp,
+                                pressedElevation = 1.dp
+                            )
                         ) {
                             Text(
-                                text = "➕ LOG NEW EXPENSE",
+                                text = "Log New Expense",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -273,7 +219,6 @@ fun ExpenseScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(uiState.categories) { category ->
-                                val isSelected = uiState.selectedCategory == category.name
                                 val globalLimit = uiState.monthlyBudget?.limit ?: 0.0
                                 val effectiveTarget = if (category.target > 0) category.target else globalLimit
                                 val catPercentage = when {
@@ -284,26 +229,22 @@ fun ExpenseScreen(
                                 val isOverBudget = when {
                                     category.target > 0 -> category.spent > category.target
                                     globalLimit > 0 -> category.spent > globalLimit
-                                    else -> category.spent > 0
+                                    else -> false
                                 }
 
                                 Card(
                                     modifier = Modifier
-                                        .width(330.dp)
-                                        .clickable { viewModel.selectCategory(category.name) },
+                                        .widthIn(max = 330.dp)
+                                        .fillMaxWidth(),
                                     shape = RoundedCornerShape(18.dp),
                                     colors = CardDefaults.cardColors(
                                         containerColor = if (isOverBudget)
                                             MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                                        else if (isSelected)
-                                            MaterialTheme.colorScheme.primaryContainer
                                         else
                                             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                                     ),
                                     border = if (isOverBudget)
                                         BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
-                                    else if (isSelected)
-                                        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                                     else null
                                 ) {
                                     Column(
@@ -332,7 +273,7 @@ fun ExpenseScreen(
                                                     style = MaterialTheme.typography.titleLarge,
                                                     fontWeight = FontWeight.Bold,
                                                     maxLines = 1,
-                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
                                             }
 
@@ -396,11 +337,11 @@ fun ExpenseScreen(
                     item {
                         var filterDropdownExpanded by remember { mutableStateOf(false) }
 
-                        val selectedCategoryObj = uiState.categories.firstOrNull { it.name.equals(uiState.selectedCategory, ignoreCase = true) }
-                        val currentFilterText = if (selectedCategoryObj != null) {
-                            "${selectedCategoryObj.emoji} ${selectedCategoryObj.name}"
-                        } else if (!uiState.selectedCategory.isNullOrEmpty()) {
-                            uiState.selectedCategory!!
+                        val filterCategoryObj = uiState.categories.firstOrNull { it.name.equals(uiState.filterCategory, ignoreCase = true) }
+                        val currentFilterText = if (filterCategoryObj != null) {
+                            "${filterCategoryObj.emoji} ${filterCategoryObj.name}"
+                        } else if (!uiState.filterCategory.isNullOrEmpty()) {
+                            uiState.filterCategory!!
                         } else {
                             "All"
                         }
@@ -434,18 +375,17 @@ fun ExpenseScreen(
                                         onDismissRequest = { filterDropdownExpanded = false }
                                     ) {
                                         DropdownMenuItem(
-                                            text = { Text("All", fontWeight = if (uiState.selectedCategory == null) FontWeight.Bold else FontWeight.Normal) },
+                                            text = { Text("All", fontWeight = if (uiState.filterCategory == null) FontWeight.Bold else FontWeight.Normal) },
                                             onClick = {
-                                                viewModel.selectCategory(null)
+                                                viewModel.selectFilterCategory(null)
                                                 filterDropdownExpanded = false
                                             }
                                         )
-                                        HorizontalDivider()
                                         uiState.categories.forEach { cat ->
                                             DropdownMenuItem(
-                                                text = { Text("${cat.emoji} ${cat.name}", fontWeight = if (uiState.selectedCategory.equals(cat.name, ignoreCase = true)) FontWeight.Bold else FontWeight.Normal) },
+                                                text = { Text("${cat.emoji} ${cat.name}", fontWeight = if (uiState.filterCategory.equals(cat.name, ignoreCase = true)) FontWeight.Bold else FontWeight.Normal) },
                                                 onClick = {
-                                                    viewModel.selectCategory(cat.name)
+                                                    viewModel.selectFilterCategory(cat.name)
                                                     filterDropdownExpanded = false
                                                 }
                                             )
@@ -471,7 +411,10 @@ fun ExpenseScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "No expenses yet. Tap + to log your first expense!",
+                                    text = if (uiState.filterCategory != null && uiState.expenses.isNotEmpty())
+                                        "No expenses in this category."
+                                    else
+                                        "No expenses yet. Tap + to log your first expense!",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.outline
                                 )
@@ -489,28 +432,11 @@ fun ExpenseScreen(
                 }
             }
 
-            // Bottom Sheet Modal
-            if (uiState.isBottomSheetOpen) {
-                LogExpenseBottomSheet(
-                    onDismiss = { viewModel.setBottomSheetVisible(false) },
-                    onSave = { amount, category, merchant, desc ->
-                        viewModel.addExpense(amount, category, merchant, desc)
-                    },
-                    availableCategories = uiState.categories,
-                    onAddCategory = { emoji, name, target ->
-                        viewModel.addCustomCategory(emoji, name, target)
-                    }
-                )
-            }
-
-            val globalLimit = uiState.monthlyBudget?.limit ?: 0.0
-            val categoryTargetsSum = uiState.categories.sumOf { it.target }
-
             // Edit Budget Dialog
             if (uiState.isEditBudgetDialogOpen) {
+                val globalLimit = uiState.monthlyBudget?.limit ?: 0.0
                 EditBudgetDialog(
                     currentLimit = globalLimit,
-                    categoryTargetsSum = categoryTargetsSum,
                     currencyFormat = currencyFormat,
                     onDismiss = { viewModel.setEditBudgetDialogVisible(false) },
                     onConfirm = { newLimit -> viewModel.updateBudgetLimit(newLimit) }
@@ -519,6 +445,8 @@ fun ExpenseScreen(
 
             // Add Category Dialog (Main screen mode: includes target limit field)
             if (uiState.isAddCategoryDialogOpen) {
+                val globalLimit = uiState.monthlyBudget?.limit ?: 0.0
+                val categoryTargetsSum = uiState.categories.sumOf { it.target }
                 val maxAllowedForNew = (globalLimit - categoryTargetsSum).coerceAtLeast(0.0)
                 AddCategoryDialog(
                     globalLimit = globalLimit,
@@ -532,6 +460,7 @@ fun ExpenseScreen(
 
             // Edit Category Target Dialog
             uiState.categoryToEdit?.let { category ->
+                val globalLimit = uiState.monthlyBudget?.limit ?: 0.0
                 val otherSum = uiState.categories.filterNot { it.name.equals(category.name, ignoreCase = true) }.sumOf { it.target }
                 val maxAllowedForEdit = (globalLimit - otherSum).coerceAtLeast(0.0)
                 EditCategoryTargetDialog(
@@ -553,7 +482,7 @@ fun ExpenseScreen(
                     text = { Text("Are you sure you want to delete this expense of ${currencyFormat.format(expense.amount.toLong())} MMK?") },
                     confirmButton = {
                         TextButton(onClick = { viewModel.deleteExpense(expense.id) }) {
-                            Text("Delete", color = Color.Red)
+                            Text("Delete", color = MaterialTheme.colorScheme.error)
                         }
                     },
                     dismissButton = {
@@ -602,7 +531,12 @@ fun ExpenseItemRow(
                     )
                 }
                 Text(
-                    text = expense.date.ifEmpty { "Today" },
+                    text = try {
+                        val parsed = java.time.LocalDate.parse(expense.date)
+                        parsed.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy"))
+                    } catch (e: Exception) {
+                        expense.date.ifEmpty { "Today" }
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
                 )
@@ -616,7 +550,7 @@ fun ExpenseItemRow(
                     text = "-${currencyFormat.format(expense.amount.toLong())} MMK",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Red
+                    color = MaterialTheme.colorScheme.error
                 )
                 IconButton(
                     onClick = onDeleteClick,
@@ -636,14 +570,12 @@ fun ExpenseItemRow(
 @Composable
 fun EditBudgetDialog(
     currentLimit: Double,
-    categoryTargetsSum: Double,
     currencyFormat: NumberFormat,
     onDismiss: () -> Unit,
     onConfirm: (newLimit: Double) -> Unit
 ) {
-    var limitText by remember { mutableStateOf(currentLimit.toLong().toString()) }
+    var limitText by remember { mutableStateOf(if (currentLimit > 0) currentLimit.toBigDecimal().stripTrailingZeros().toPlainString() else "") }
     val enteredLimit = limitText.toDoubleOrNull() ?: 0.0
-    val isBelowCategoryTargets = enteredLimit < categoryTargetsSum && categoryTargetsSum > 0.0
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -652,28 +584,24 @@ fun EditBudgetDialog(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = limitText,
-                    onValueChange = { if (it.all { char -> char.isDigit() }) limitText = it },
+                    onValueChange = { newValue ->
+                        if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
+                            limitText = newValue
+                        }
+                    },
                     label = { Text("Global Budget Limit (MMK)") },
-                    isError = isBelowCategoryTargets,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (isBelowCategoryTargets) {
-                    Text(
-                        text = "⚠️ Global Budget cannot be less than total assigned category targets (${currencyFormat.format(categoryTargetsSum.toLong())} MMK).",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (enteredLimit >= 0 && !isBelowCategoryTargets) onConfirm(enteredLimit)
+                    if (enteredLimit >= 0) onConfirm(enteredLimit)
                 },
-                enabled = enteredLimit >= 0 && !isBelowCategoryTargets
+                enabled = enteredLimit >= 0
             ) {
                 Text("Save")
             }
@@ -696,13 +624,14 @@ fun EditCategoryTargetDialog(
     onConfirm: (newTarget: Double) -> Unit,
     onDelete: () -> Unit = {}
 ) {
-    var targetText by remember { mutableStateOf(category.target.toLong().toString()) }
+    var targetText by remember { mutableStateOf(if (category.target > 0) category.target.toBigDecimal().stripTrailingZeros().toPlainString() else "") }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
 
     val enteredTarget = targetText.toDoubleOrNull() ?: 0.0
     val isExceedingGlobal = globalLimit > 0 && enteredTarget > maxAllowedTarget
     val isGlobalZero = globalLimit == 0.0 && enteredTarget > 0.0
 
+    // Only show one dialog at a time
     if (showDeleteConfirmation) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirmation = false },
@@ -725,85 +654,95 @@ fun EditCategoryTargetDialog(
                 }
             }
         )
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Edit Category Budget")
-                IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = "${category.emoji} ${category.name}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                OutlinedTextField(
-                    value = targetText,
-                    onValueChange = { if (it.all { char -> char.isDigit() }) targetText = it },
-                    label = { Text("Monthly Target Limit (MMK)") },
-                    isError = isExceedingGlobal || isGlobalZero,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (isGlobalZero) {
-                    Text(
-                        text = "⚠️ Monthly Overall Budget is currently 0 MMK. Please set Global Budget first.",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                } else if (isExceedingGlobal) {
-                    Text(
-                        text = "⚠️ Cannot exceed Global Budget! Max available for this category: ${currencyFormat.format(maxAllowedTarget.toLong())} MMK.",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                } else if (globalLimit > 0) {
-                    Text(
-                        text = "Available Global Capacity: ${currencyFormat.format(maxAllowedTarget.toLong())} MMK",
-                        color = MaterialTheme.colorScheme.outline,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(onClick = { showDeleteConfirmation = true }) {
-                    Text("Delete", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Spacer(modifier = Modifier.width(24.dp))
-                TextButton(
-                    onClick = {
-                        if (!isExceedingGlobal && !isGlobalZero) {
-                            onConfirm(enteredTarget)
-                        }
-                    },
-                    enabled = !isExceedingGlobal && !isGlobalZero
+    } else {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Save", fontWeight = FontWeight.Bold)
+                    Text("Edit Category Budget")
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-            }
-        },
-        dismissButton = null
-    )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "${category.emoji} ${category.name}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    OutlinedTextField(
+                        value = targetText,
+                        onValueChange = { newValue ->
+                            if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
+                                targetText = newValue
+                            }
+                        },
+                        label = { Text("Monthly Target Limit (MMK)") },
+                        isError = isExceedingGlobal || isGlobalZero,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (isGlobalZero) {
+                        Text(
+                            text = "⚠️ Monthly Overall Budget is currently 0 MMK. Please set Global Budget first.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    } else if (isExceedingGlobal) {
+                        Text(
+                            text = "⚠️ Cannot exceed Global Budget! Max available for this category: ${currencyFormat.format(maxAllowedTarget.toLong())} MMK.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    } else if (globalLimit > 0) {
+                        Text(
+                            text = "Available Global Capacity: ${currencyFormat.format(maxAllowedTarget.toLong())} MMK",
+                            color = MaterialTheme.colorScheme.outline,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Delete separated from Save by Spacer, styled distinctly
+                    TextButton(
+                        onClick = { showDeleteConfirmation = true },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Delete", fontWeight = FontWeight.Medium)
+                    }
+                    Spacer(modifier = Modifier.width(32.dp))
+                    TextButton(
+                        onClick = {
+                            if (!isExceedingGlobal && !isGlobalZero) {
+                                onConfirm(enteredTarget)
+                            }
+                        },
+                        enabled = !isExceedingGlobal && !isGlobalZero
+                    ) {
+                        Text("Save", fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            dismissButton = null
+        )
+    }
 }

@@ -19,9 +19,10 @@ fun AddCategoryDialog(
     onConfirm: (emoji: String, name: String, target: Double) -> Unit,
     showTargetField: Boolean = true
 ) {
-    var emojiText by remember { mutableStateOf("🏷️") }
-    var nameText by remember { mutableStateOf("") }
-    var targetText by remember { mutableStateOf("0") }
+    // Fields start empty — user types fresh each time
+    var emojiText by remember(Unit) { mutableStateOf("") }
+    var nameText by remember(Unit) { mutableStateOf("") }
+    var targetText by remember(Unit) { mutableStateOf("") }
 
     val enteredTarget = if (showTargetField) (targetText.toDoubleOrNull() ?: 0.0) else 0.0
     val isExceedingGlobal = globalLimit > 0 && enteredTarget > maxAllowedTarget
@@ -43,6 +44,7 @@ fun AddCategoryDialog(
                     value = nameText,
                     onValueChange = { nameText = it },
                     label = { Text("Category Name *") },
+                    placeholder = { Text("e.g. Groceries") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -50,10 +52,15 @@ fun AddCategoryDialog(
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         OutlinedTextField(
                             value = targetText,
-                            onValueChange = { if (it.all { char -> char.isDigit() }) targetText = it },
+                            onValueChange = { newValue ->
+                                // Allow empty or valid number: digits with optional single decimal
+                                if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
+                                    targetText = newValue
+                                }
+                            },
                             label = { Text("Category Target Limit (MMK)") },
                             isError = isExceedingGlobal || isGlobalZero,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -84,7 +91,11 @@ fun AddCategoryDialog(
             Button(
                 onClick = {
                     if (nameText.isNotBlank() && !isExceedingGlobal && !isGlobalZero) {
-                        onConfirm(emojiText.ifBlank { "🏷️" }, nameText.trim(), enteredTarget)
+                        onConfirm(
+                            emojiText.ifBlank { "🏷️" },
+                            nameText.trim(),
+                            enteredTarget
+                        )
                     }
                 },
                 enabled = nameText.isNotBlank() && !isExceedingGlobal && !isGlobalZero

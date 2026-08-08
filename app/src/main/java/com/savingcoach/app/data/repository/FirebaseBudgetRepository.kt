@@ -28,7 +28,8 @@ class FirebaseBudgetRepository @Inject constructor(
             val listener = budgetsCol(userId).document(yearMonth)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        close(error)
+                        // Send null instead of closing — consistent with expense repo
+                        trySend(null)
                         return@addSnapshotListener
                     }
                     val budget = snapshot?.toObject(Budget::class.java)?.copy(id = snapshot.id)
@@ -39,18 +40,15 @@ class FirebaseBudgetRepository @Inject constructor(
 
     override suspend fun setBudget(userId: String, budget: Budget) {
         val docId = budget.month.ifEmpty { System.currentTimeMillis().toString() }
+        val existing = budgetsCol(userId).document(docId).get().await()
+        val createdAt = if (existing.exists()) existing.getLong("createdAt") ?: System.currentTimeMillis() else System.currentTimeMillis()
         budgetsCol(userId).document(docId)
-            .set(budget.copy(id = docId, userId = userId)).await()
+            .set(budget.copy(id = docId, userId = userId, createdAt = createdAt)).await()
     }
 
     override suspend fun updateLimit(userId: String, yearMonth: String, newLimit: Double) {
         budgetsCol(userId).document(yearMonth)
             .update("limit", newLimit, "updatedAt", System.currentTimeMillis()).await()
-    }
-
-    override fun getBudgetForMonth(yearMonth: String): Flow<Budget?> {
-        val userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
-        return getBudget(userId, yearMonth)
     }
 
 }
