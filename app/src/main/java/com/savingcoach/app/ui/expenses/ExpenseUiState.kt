@@ -17,6 +17,7 @@ data class ExpenseUiState(
     // Expenses
     val expenses: List<Expense> = emptyList(),
     val filteredExpenses: List<Expense> = emptyList(),
+    val filterCategory: String? = null,  // filter dropdown selection (separate from selectedCategory)
 
     // UI state
     val isBottomSheetOpen: Boolean = false,
@@ -35,4 +36,17 @@ data class ExpenseCategory(
     val target: Double,        // category budget limit in MMK
     val spent: Double = 0.0,   // computed from expenses
     val isCustom: Boolean = false
-)
+) {
+    companion object {
+        val DEFAULT_CATEGORIES = listOf(
+            ExpenseCategory("🍔", "Food & Dining", 0.0),
+            ExpenseCategory("🚗", "Transportation", 0.0),
+            ExpenseCategory("🛍️", "Shopping", 0.0),
+            ExpenseCategory("📱", "Bills & Utilities", 0.0),
+            ExpenseCategory("🎬", "Entertainment", 0.0),
+            ExpenseCategory("📚", "Education", 0.0),
+            ExpenseCategory("💊", "Health", 0.0),
+            ExpenseCategory("📦", "Other", 0.0)
+        )
+    }
+}

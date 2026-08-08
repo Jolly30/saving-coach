@@ -4,9 +4,11 @@ import com.savingcoach.app.ai.AiChatRepository
 import com.savingcoach.app.data.repository.AuthRepository
 import com.savingcoach.app.data.repository.BudgetRepository
 import com.savingcoach.app.data.repository.ChatRepository
+import com.savingcoach.app.data.repository.ExpenseCategoryRepository
 import com.savingcoach.app.data.repository.ExpenseRepository
 import com.savingcoach.app.data.repository.FirebaseAuthRepository
 import com.savingcoach.app.data.repository.FirebaseBudgetRepository
+import com.savingcoach.app.data.repository.FirebaseExpenseCategoryRepository
 import com.savingcoach.app.data.repository.FirebaseExpenseRepository
 import com.savingcoach.app.data.repository.FirebaseSavingChallengeRepository
 import com.savingcoach.app.data.repository.SavingChallengeRepository
@@ -49,4 +51,10 @@ abstract class RepositoryModule {
     abstract fun bindAuthRepository(
         impl: FirebaseAuthRepository
     ): AuthRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindExpenseCategoryRepository(
+        impl: FirebaseExpenseCategoryRepository
+    ): ExpenseCategoryRepository
 }

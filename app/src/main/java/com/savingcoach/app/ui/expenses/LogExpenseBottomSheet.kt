@@ -3,7 +3,6 @@ package com.savingcoach.app.ui.expenses
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,16 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
-val defaultFallbackCategories = listOf(
-    ExpenseCategory("🍔", "Food & Dining", 0.0),
-    ExpenseCategory("🚗", "Transportation", 0.0),
-    ExpenseCategory("🛍️", "Shopping", 0.0),
-    ExpenseCategory("📱", "Bills & Utilities", 0.0),
-    ExpenseCategory("🎬", "Entertainment", 0.0),
-    ExpenseCategory("📚", "Education", 0.0),
-    ExpenseCategory("💊", "Health", 0.0),
-    ExpenseCategory("📦", "Other", 0.0)
-)
+private val defaultFallbackCategories = ExpenseCategory.DEFAULT_CATEGORIES
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +22,7 @@ fun LogExpenseBottomSheet(
     availableCategories: List<ExpenseCategory> = emptyList(),
     onAddCategory: ((emoji: String, name: String, target: Double) -> Unit)? = null
 ) {
+    // Fresh state on every composition — fields start empty
     var amountText by remember { mutableStateOf("") }
     val categoriesList = if (availableCategories.isNotEmpty()) availableCategories else defaultFallbackCategories
 
@@ -78,14 +69,15 @@ fun LogExpenseBottomSheet(
             // Amount Input
             OutlinedTextField(
                 value = amountText,
-                onValueChange = { input ->
-                    if (input.all { it.isDigit() || it == '.' }) {
-                        amountText = input
+                onValueChange = { newValue ->
+                    // Allow empty, or valid number: digits with optional single decimal
+                    if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
+                        amountText = newValue
                     }
                 },
                 label = { Text("Amount (MMK) *") },
                 placeholder = { Text("e.g. 5000") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -154,12 +146,20 @@ fun LogExpenseBottomSheet(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Description Input
+            OutlinedTextField(
+                value = descriptionText,
+                onValueChange = { descriptionText = it },
+                label = { Text("Description (Optional)") },
+                placeholder = { Text("Additional notes...") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
             // Save Button
             val amountValue = amountText.toDoubleOrNull() ?: 0.0
             Button(
                 onClick = {
                     if (amountValue > 0) {
-                        // Pass Category Name Only!
                         onSave(amountValue, selectedCategoryName, merchantText.trim(), descriptionText.trim())
                     }
                 },
