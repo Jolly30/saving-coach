@@ -6,8 +6,10 @@ import com.savingcoach.app.data.model.Expense
 import com.savingcoach.app.data.model.SavingChallenge
 import com.savingcoach.app.data.model.SavingsDeposit
 import com.savingcoach.app.data.repository.AuthRepository
+import com.savingcoach.app.data.model.ExpenseCategoryEntity
 import com.savingcoach.app.data.repository.BudgetRepository
 import com.savingcoach.app.data.repository.ChatRepository
+import com.savingcoach.app.data.repository.ExpenseCategoryRepository
 import com.savingcoach.app.data.repository.ExpenseRepository
 import com.savingcoach.app.data.repository.SavingChallengeRepository
 import com.google.firebase.auth.AuthResult
@@ -62,10 +64,6 @@ class MockBudgetRepository @Inject constructor() : BudgetRepository {
         if (current != null) {
             budgets.value = budgets.value + (yearMonth to current.copy(limit = newLimit))
         }
-    }
-
-    override fun getBudgetForMonth(yearMonth: String): Flow<Budget?> {
-        return getBudget("mock_user_id", yearMonth)
     }
 
 }
@@ -161,5 +159,27 @@ class MockAuthRepository @Inject constructor() : AuthRepository {
 
     override suspend fun signOut() {
         signedIn = false
+    }
+}
+
+@Singleton
+class MockExpenseCategoryRepository @Inject constructor() : ExpenseCategoryRepository {
+    private val categories = MutableStateFlow<Map<String, List<ExpenseCategoryEntity>>>(emptyMap())
+    private val deletedNames = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
+
+    override fun getCategories(userId: String, yearMonth: String): Flow<List<ExpenseCategoryEntity>> =
+        categories.map { map -> map[yearMonth] ?: emptyList() }
+
+    override fun getDeletedCategoryNames(userId: String, yearMonth: String): Flow<Set<String>> =
+        deletedNames.map { map -> map[yearMonth] ?: emptySet() }
+
+    override suspend fun saveCategories(
+        userId: String,
+        yearMonth: String,
+        categories: List<ExpenseCategoryEntity>,
+        deletedNames: Set<String>
+    ) {
+        this.categories.value = this.categories.value + (yearMonth to categories)
+        this.deletedNames.value = this.deletedNames.value + (yearMonth to deletedNames)
     }
 }

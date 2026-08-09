@@ -11,9 +11,7 @@ import com.savingcoach.app.data.repository.ExpenseRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.time.LocalDate
 
 @HiltWorker
 class BudgetAlertWorker @AssistedInject constructor(
@@ -27,12 +25,12 @@ class BudgetAlertWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         return try {
             val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
-            val currentMonth = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(Date())
+            val currentMonth = LocalDate.now().toString().substring(0, 7)
 
             val budget = budgetRepository.getBudget(userId, currentMonth).first()
             val expenses = expenseRepository.getExpensesForMonth(userId, currentMonth).first()
 
-            if (budget != null) {
+            if (budget != null && budget.limit > 0) {
                 val totalSpent = expenses.sumOf { it.amount }
                 val percentage = ((totalSpent / budget.limit) * 100).toInt()
 
