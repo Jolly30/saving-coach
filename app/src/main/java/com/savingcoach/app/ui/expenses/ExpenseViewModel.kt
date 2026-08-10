@@ -67,7 +67,7 @@ class ExpenseViewModel @Inject constructor(
                     val filteredSession = sessionExpenses.values.filter { it.date.startsWith(currentMonth) }
                     val combinedList = (expenseList + filteredSession)
                         .distinctBy { it.id }
-                        .sortedByDescending { it.createdAt }
+                        .sortedWith(compareByDescending<Expense> { it.date }.thenByDescending { it.createdAt })
 
                     // Reconcile: remove session entries that match Firestore entries (offline→online sync)
                     if (expenseList.isNotEmpty()) {
@@ -109,7 +109,7 @@ class ExpenseViewModel @Inject constructor(
                 val filteredSession = sessionExpenses.values.filter { it.date.startsWith(currentMonth) }
                 val combinedList = (_uiState.value.expenses + filteredSession)
                     .distinctBy { it.id }
-                    .sortedByDescending { it.createdAt }
+                    .sortedWith(compareByDescending<Expense> { it.date }.thenByDescending { it.createdAt })
                 updateStateFromData(
                     budget = _uiState.value.monthlyBudget,
                     expenses = combinedList,
@@ -235,7 +235,7 @@ class ExpenseViewModel @Inject constructor(
                 val filteredSession = sessionExpenses.values.filter { it.date.startsWith(currentMonth) }
                 val combinedList = (_uiState.value.expenses + filteredSession)
                     .distinctBy { it.id }
-                    .sortedByDescending { it.createdAt }
+                    .sortedWith(compareByDescending<Expense> { it.date }.thenByDescending { it.createdAt })
                 updateStateFromData(
                     budget = _uiState.value.monthlyBudget,
                     expenses = combinedList,
