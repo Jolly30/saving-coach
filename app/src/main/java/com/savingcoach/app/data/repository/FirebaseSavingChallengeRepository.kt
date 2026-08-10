@@ -83,9 +83,9 @@ class FirebaseSavingChallengeRepository @Inject constructor(
         }
 
     override suspend fun createChallenge(challenge: SavingChallenge): String {
-        val docRef = challengesCol(challenge.userId).document()
-        docRef.set(challenge.copy(id = docRef.id)).await()
-        return docRef.id
+        val id = if (challenge.id.isNotBlank()) challenge.id else challengesCol(challenge.userId).document().id
+        challengesCol(challenge.userId).document(id).set(challenge.copy(id = id)).await()
+        return id
     }
 
     override suspend fun addDeposit(userId: String, challengeId: String, deposit: SavingsDeposit) {

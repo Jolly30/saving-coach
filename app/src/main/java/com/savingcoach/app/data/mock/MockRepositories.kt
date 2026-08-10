@@ -111,8 +111,8 @@ class MockSavingChallengeRepository @Inject constructor() : SavingChallengeRepos
         deposits.map { it[challengeId] ?: emptyList() }
 
     override suspend fun createChallenge(challenge: SavingChallenge): String {
-        val id = "ch_${System.currentTimeMillis()}"
-        challenges.value = challenges.value + challenge.copy(id = id)
+        val id = if (challenge.id.isNotBlank()) challenge.id else "ch_${System.currentTimeMillis()}"
+        challenges.value = challenges.value.filter { it.id != id } + challenge.copy(id = id)
         return id
     }
 

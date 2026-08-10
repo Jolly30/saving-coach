@@ -65,8 +65,11 @@ fun NavGraph(
         }
 
         composable(Routes.Challenges.route) {
-            // TODO: Dev 3 — Replace with ChallengesScreen
-            PlaceholderScreen("Challenges")
+            com.savingcoach.app.ui.challenges.ChallengesScreen(
+                onChallengeClick = { id ->
+                    navController.navigate("challenge_detail/$id")
+                }
+            )
         }
 
         composable(Routes.AddExpense.route) { backStackEntry ->
