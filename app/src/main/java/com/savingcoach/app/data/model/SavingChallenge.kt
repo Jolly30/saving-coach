@@ -2,6 +2,8 @@ package com.savingcoach.app.data.model
 
 import kotlinx.serialization.Serializable
 
+enum class ChallengeTemplate { CONSTANT, FLEXI, ENVELOPE, NO_SPEND }
+
 @Serializable
 data class SavingChallenge(
     val id: String = "",
@@ -13,7 +15,9 @@ data class SavingChallenge(
     val endDate: String = "",        // YYYY-MM-DD
     val isActive: Boolean = true,
     val isCompleted: Boolean = false,
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    val template: ChallengeTemplate = ChallengeTemplate.CONSTANT,
+    val lastDepositDate: String = ""
 ) {
     val progress: Double get() = if (targetAmount > 0) (currentAmount / targetAmount) * 100 else 0.0
     val remaining: Double get() = (targetAmount - currentAmount).coerceAtLeast(0.0)
