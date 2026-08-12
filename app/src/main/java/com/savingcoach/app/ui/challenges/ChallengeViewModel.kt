@@ -16,10 +16,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.util.UUID
 import javax.inject.Inject
 
 val defaultPresets = listOf(
@@ -27,57 +25,57 @@ val defaultPresets = listOf(
         id = "preset_1",
         title = "🎯 1K a Day",
         targetAmount = 30000.0,
-        currentAmount = 18000.0,
-        startDate = LocalDate.now().minusDays(18).toString(),
-        endDate = LocalDate.now().plusDays(12).toString(),
+        currentAmount = 0.0,
+        startDate = LocalDate.now().toString(),
+        endDate = LocalDate.now().plusDays(30).toString(),
         isActive = true,
         isCompleted = false,
         template = ChallengeTemplate.CONSTANT,
-        lastDepositDate = "|18|30"
+        lastDepositDate = "|0|30"
     ),
     SavingChallenge(
         id = "preset_2",
         title = "✉️ 100 Envelopes",
         targetAmount = 505000.0,
-        currentAmount = 142500.0,
-        startDate = LocalDate.now().minusDays(2).toString(),
-        endDate = LocalDate.now().plusDays(58).toString(),
+        currentAmount = 0.0,
+        startDate = LocalDate.now().toString(),
+        endDate = LocalDate.now().plusDays(100).toString(),
         isActive = true,
         isCompleted = false,
         template = ChallengeTemplate.ENVELOPE,
-        lastDepositDate = "|34|100"
+        lastDepositDate = "|0|100"
     ),
     SavingChallenge(
         id = "preset_3",
         title = "⚡ 7-Day Sprint",
         targetAmount = 70000.0,
-        currentAmount = 50000.0,
-        startDate = LocalDate.now().minusDays(5).toString(),
-        endDate = LocalDate.now().plusDays(2).toString(),
+        currentAmount = 0.0,
+        startDate = LocalDate.now().toString(),
+        endDate = LocalDate.now().plusDays(7).toString(),
         isActive = true,
         isCompleted = false,
         template = ChallengeTemplate.FLEXI,
-        lastDepositDate = "|5|7"
+        lastDepositDate = "|0|7"
     ),
     SavingChallenge(
         id = "preset_4",
         title = "🚫 No-Spend Week",
-        targetAmount = 50000.0,
-        currentAmount = 50000.0,
-        startDate = LocalDate.now().minusDays(7).toString(),
-        endDate = LocalDate.now().minusDays(1).toString(),
-        isActive = false,
-        isCompleted = true,
+        targetAmount = 0.0,
+        currentAmount = 0.0,
+        startDate = LocalDate.now().toString(),
+        endDate = LocalDate.now().plusDays(7).toString(),
+        isActive = true,
+        isCompleted = false,
         template = ChallengeTemplate.NO_SPEND,
-        lastDepositDate = "|4|7"
+        lastDepositDate = "|0|7"
     )
 )
 
 data class ChallengesUiState(
-    val challengesList: List<SavingChallenge> = defaultPresets,
-    val totalSaved: Double = defaultPresets.sumOf { it.currentAmount },
-    val activeCount: Int = defaultPresets.count { it.isActive && !it.isCompleted },
-    val completedCount: Int = defaultPresets.count { it.isCompleted },
+    val challengesList: List<SavingChallenge> = emptyList(),
+    val totalSaved: Double = 0.0,
+    val activeCount: Int = 0,
+    val completedCount: Int = 0,
     val selectedChallengeDeposits: List<SavingsDeposit> = emptyList()
 )
 
@@ -90,46 +88,63 @@ class ChallengeViewModel @Inject constructor(
 
     private val userId = authRepository.getCurrentUserId() ?: ""
     private val selectedChallengeId = MutableStateFlow<String?>(null)
-
-    private val _mockChallenges = MutableStateFlow(defaultPresets)
+    private val completedChallengeIds = mutableSetOf<String>()
 
     init {
         viewModelScope.launch {
-            repository.getAllChallenges(userId).collect { dbChallenges ->
-                val dbPresets = dbChallenges.filter { it.id.startsWith("preset_") }
-                val currentMock = _mockChallenges.value
-                val updatedMock = currentMock.map { mockChan ->
-                    dbPresets.find { it.id == mockChan.id } ?: mockChan
-                }
-                _mockChallenges.value = updatedMock
-            }
+            repository.initializeDefaultChallengesIfNeeded(userId, defaultPresets)
         }
     }
 
     val uiState: StateFlow<ChallengesUiState> = combine(
         repository.getAllChallenges(userId),
-        _mockChallenges,
         selectedChallengeId.flatMapLatest { id ->
-            if (id != null && !id.startsWith("preset_")) {
+            if (id != null) {
                 repository.getDeposits(userId, id)
             } else {
                 flowOf(emptyList())
             }
         }
-    ) { challenges, mockChallenges, deposits ->
-        val customChallenges = challenges.filter { dbChallenge ->
-            dbChallenge.id != "preset_1" &&
-            dbChallenge.id != "preset_2" &&
-            dbChallenge.id != "preset_3" &&
-            dbChallenge.id != "preset_4" &&
-            mockChallenges.none { it.id == dbChallenge.id }
+    ) { challenges, deposits ->
+        val patchedChallenges = challenges.map { challenge ->
+            if (!challenge.isCompleted) {
+                val percent = if (challenge.template == ChallengeTemplate.NO_SPEND || challenge.targetAmount == 0.0) {
+                    if (challenge.durationDays > 0) {
+                        ((challenge.completedDaysCount.toFloat() / challenge.durationDays.toFloat()) * 100).toInt()
+                    } else 0
+                } else {
+                    if (challenge.targetAmount > 0) {
+                        ((challenge.currentAmount / challenge.targetAmount) * 100).toInt()
+                    } else 0
+                }
+                
+                if (percent >= 100 || (challenge.targetAmount == 0.0 && challenge.completedDaysCount >= challenge.durationDays)) {
+                    // Sync to Firestore in background (only once per challenge)
+                    if (challenge.id !in completedChallengeIds) {
+                        completedChallengeIds.add(challenge.id)
+                        viewModelScope.launch {
+                            repository.completeChallenge(userId, challenge.id)
+                        }
+                    }
+                    // Patch locally instantly
+                    challenge.copy(isCompleted = true, isActive = false)
+                } else {
+                    challenge
+                }
+            } else {
+                challenge
+            }
         }
-        val displayList = mockChallenges + customChallenges
+        
+        val sortedChallenges = patchedChallenges.sortedWith(
+            compareBy<SavingChallenge> { it.isCompleted }.thenByDescending { it.createdAt }
+        )
+    
         ChallengesUiState(
-            challengesList = displayList,
-            totalSaved = displayList.sumOf { it.currentAmount },
-            activeCount = displayList.count { it.isActive && !it.isCompleted },
-            completedCount = displayList.count { it.isCompleted },
+            challengesList = sortedChallenges,
+            totalSaved = patchedChallenges.sumOf { it.currentAmount },
+            activeCount = patchedChallenges.count { it.isActive && !it.isCompleted },
+            completedCount = patchedChallenges.count { it.isCompleted },
             selectedChallengeDeposits = deposits
         )
     }.stateIn(
@@ -142,33 +157,17 @@ class ChallengeViewModel @Inject constructor(
         selectedChallengeId.value = id
     }
 
-    fun activatePresetAndSelect(presetId: String) {
-        val preset = defaultPresets.find { it.id == presetId } ?: return
-        val newId = UUID.randomUUID().toString()
-        val realChallenge = preset.copy(
-            id = newId,
-            userId = userId,
-            isActive = true,
-            createdAt = System.currentTimeMillis()
-        )
-        viewModelScope.launch {
-            repository.createChallenge(realChallenge)
-            selectedChallengeId.value = newId
-        }
-    }
-
     fun createChallenge(challenge: SavingChallenge) {
         viewModelScope.launch {
             val finalChallenge = challenge.copy(userId = userId)
             repository.createChallenge(finalChallenge)
-            _mockChallenges.value = _mockChallenges.value + finalChallenge
         }
     }
 
-    fun createChallenge(name: String, emoji: String, target: Double, duration: Long) {
+    fun createChallenge(name: String, emoji: String, target: Double, duration: Long, template: ChallengeTemplate = ChallengeTemplate.CONSTANT) {
         viewModelScope.launch {
             val challenge = SavingChallenge(
-                id = UUID.randomUUID().toString(),
+                id = java.util.UUID.randomUUID().toString(),
                 userId = userId,
                 title = "$emoji $name".trim(),
                 targetAmount = target,
@@ -177,7 +176,9 @@ class ChallengeViewModel @Inject constructor(
                 endDate = LocalDate.now().plusDays(duration).toString(),
                 isActive = true,
                 isCompleted = false,
-                createdAt = System.currentTimeMillis()
+                createdAt = System.currentTimeMillis(),
+                template = template,
+                lastDepositDate = "|0|$duration"
             )
             repository.createChallenge(challenge)
         }
@@ -186,7 +187,7 @@ class ChallengeViewModel @Inject constructor(
     fun addDeposit(challengeId: String, amount: Double) {
         viewModelScope.launch {
             val deposit = SavingsDeposit(
-                id = UUID.randomUUID().toString(),
+                id = java.util.UUID.randomUUID().toString(),
                 challengeId = challengeId,
                 amount = amount,
                 date = LocalDate.now().toString(),
@@ -197,48 +198,53 @@ class ChallengeViewModel @Inject constructor(
         }
     }
 
-    fun addDepositMock(challengeId: String, amount: Double, completedSteps: Int, daysDecremented: Int = 1) {
-        val currentList = _mockChallenges.value
-        val hasChallenge = currentList.any { it.id == challengeId }
+    fun addDepositMock(challengeId: String, amount: Double, completedSteps: Int, daysDecremented: Int = 1, note: String = "Deposit") {
+        val challenge = uiState.value.challengesList.find { it.id == challengeId } ?: return
+        val newAmount = challenge.currentAmount + amount
+        val newEndDate = if (daysDecremented > 0) {
+            try {
+                val parsed = LocalDate.parse(challenge.endDate)
+                parsed.minusDays(daysDecremented.toLong()).toString()
+            } catch (e: Exception) { challenge.endDate }
+        } else challenge.endDate
         
-        val listToMap = if (hasChallenge) {
-            currentList
-        } else {
-            val customChan = uiState.value.challengesList.find { it.id == challengeId }
-            if (customChan != null) {
-                currentList + customChan
-            } else {
-                currentList
+        val parts = challenge.lastDepositDate.split("|")
+        val duration = if (parts.size > 2) parts[2] else "30"
+        
+        val isNowCompleted = when (challenge.template) {
+            com.savingcoach.app.data.model.ChallengeTemplate.FLEXI -> newAmount >= challenge.targetAmount
+            com.savingcoach.app.data.model.ChallengeTemplate.CONSTANT,
+            com.savingcoach.app.data.model.ChallengeTemplate.ENVELOPE,
+            com.savingcoach.app.data.model.ChallengeTemplate.NO_SPEND -> completedSteps >= (duration.toIntOrNull() ?: 30)
+        }
+
+        val updatedChallenge = challenge.copy(
+            endDate = newEndDate,
+            lastDepositDate = LocalDate.now().toString() + "|" + completedSteps + "|" + duration,
+            isCompleted = challenge.isCompleted || isNowCompleted,
+            isActive = challenge.isActive && !isNowCompleted
+        )
+        
+        viewModelScope.launch {
+            try {
+                // Update challenge state first
+                repository.createChallenge(updatedChallenge)
+
+                // Then add the deposit
+                val deposit = SavingsDeposit(
+                    id = java.util.UUID.randomUUID().toString(),
+                    challengeId = challengeId,
+                    amount = amount,
+                    date = java.time.LocalDate.now().toString(),
+                    note = note,
+                    createdAt = System.currentTimeMillis()
+                )
+                repository.addDeposit(userId, challengeId, deposit)
+            } catch (e: Exception) {
+                // If deposit fails, revert the challenge update
+                repository.createChallenge(challenge)
             }
         }
-        
-        val updatedList = listToMap.map { challenge ->
-            if (challenge.id == challengeId) {
-                val newAmount = challenge.currentAmount + amount
-                val newEndDate = if (daysDecremented > 0) {
-                    try {
-                        val parsed = LocalDate.parse(challenge.endDate)
-                        parsed.minusDays(daysDecremented.toLong()).toString()
-                    } catch (e: Exception) { challenge.endDate }
-                } else challenge.endDate
-                
-                val parts = challenge.lastDepositDate.split("|")
-                val duration = if (parts.size > 2) parts[2] else "30"
-                
-                val updatedChallenge = challenge.copy(
-                    currentAmount = newAmount,
-                    endDate = newEndDate,
-                    lastDepositDate = LocalDate.now().toString() + "|" + completedSteps + "|" + duration
-                )
-                
-                viewModelScope.launch {
-                    repository.createChallenge(updatedChallenge)
-                }
-                
-                updatedChallenge
-            } else challenge
-        }
-        _mockChallenges.value = updatedList
     }
 
     fun completeChallenge(challengeId: String) {
@@ -248,17 +254,6 @@ class ChallengeViewModel @Inject constructor(
     }
 
     fun updateChallengeMock(updated: SavingChallenge) {
-        val currentList = _mockChallenges.value
-        val hasChallenge = currentList.any { it.id == updated.id }
-        val updatedList = if (hasChallenge) {
-            currentList.map { challenge ->
-                if (challenge.id == updated.id) updated else challenge
-            }
-        } else {
-            currentList + updated
-        }
-        _mockChallenges.value = updatedList
-        
         viewModelScope.launch {
             repository.createChallenge(updated)
         }
@@ -267,7 +262,6 @@ class ChallengeViewModel @Inject constructor(
     fun deleteChallenge(challengeId: String) {
         viewModelScope.launch {
             repository.deleteChallenge(userId, challengeId)
-            _mockChallenges.value = _mockChallenges.value.filter { it.id != challengeId }
             if (selectedChallengeId.value == challengeId) {
                 selectedChallengeId.value = null
             }

@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -39,6 +41,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -54,11 +58,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.savingcoach.app.data.model.SavingChallenge
 import com.savingcoach.app.data.model.ChallengeTemplate
+import com.savingcoach.app.ui.theme.*
 import java.text.NumberFormat
 import java.util.Locale
 
 data class DepositItem(val amount: Double, val note: String, val time: String)
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ChallengeDetailScreen(
     challengeId: String,
@@ -69,6 +75,10 @@ fun ChallengeDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     val challenge = uiState.challengesList.find { it.id == challengeId }
 
+    androidx.compose.runtime.LaunchedEffect(challengeId) {
+        viewModel.selectChallenge(challengeId)
+    }
+
     val isPreset100 = challengeId == "preset_2"
     val isPreset7Day = challengeId == "preset_3"
     val isPresetNoSpend = challengeId == "preset_4"
@@ -78,82 +88,100 @@ fun ChallengeDetailScreen(
     val is7Day = challenge?.template == ChallengeTemplate.FLEXI || challenge?.title?.contains("7-Day", ignoreCase = true) == true || isPreset7Day
     val isNoSpend = challenge?.template == ChallengeTemplate.NO_SPEND || challenge?.title?.contains("No-Spend", ignoreCase = true) == true || isPresetNoSpend
     
-    var completedSteps by rememberSaveable(challengeId) { 
-        mutableIntStateOf(challenge?.completedDaysCount ?: 0) 
+    var completedSteps by rememberSaveable(challengeId) {
+        mutableIntStateOf(challenge?.completedDaysCount ?: 0)
     }
-    
-    var currentAmount by rememberSaveable(challengeId) { 
-        mutableDoubleStateOf(challenge?.currentAmount ?: 0.0) 
+
+    var currentAmount by rememberSaveable(challengeId) {
+        mutableDoubleStateOf(challenge?.currentAmount ?: 0.0)
     }
-    
-    var currentDaysLeft by rememberSaveable(challengeId) { 
+
+    var currentDaysLeft by rememberSaveable(challengeId) {
         mutableIntStateOf(challenge?.let {
             try {
                 val end = java.time.LocalDate.parse(it.endDate)
                 java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), end).toInt().coerceAtLeast(0)
             } catch (e: Exception) { 30 }
-        } ?: 30) 
+        } ?: 30)
     }
 
-    androidx.compose.runtime.LaunchedEffect(challenge) {
+    // Sync local state with Firestore when challenge changes externally (e.g., from another device)
+    // Only reset if the challenge has been updated after our last local update
+    androidx.compose.runtime.LaunchedEffect(challenge?.id, challenge?.currentAmount, challenge?.completedDaysCount) {
         challenge?.let {
-            completedSteps = it.completedDaysCount
-            currentAmount = it.currentAmount
-            currentDaysLeft = try {
-                val end = java.time.LocalDate.parse(it.endDate)
-                java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), end).toInt().coerceAtLeast(0)
-            } catch (e: Exception) { 30 }
+            // Only sync from Firestore if we haven't made local changes
+            // This prevents resetting local state after user actions
+            val localCompletedSteps = completedSteps
+            val localCurrentAmount = currentAmount
+            if (it.completedDaysCount > localCompletedSteps || it.currentAmount > localCurrentAmount) {
+                // Firestore has newer data - sync from it
+                completedSteps = it.completedDaysCount
+                currentAmount = it.currentAmount
+                currentDaysLeft = try {
+                    val end = java.time.LocalDate.parse(it.endDate)
+                    java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), end).toInt().coerceAtLeast(0)
+                } catch (e: Exception) { 30 }
+            }
         }
     }
 
     val totalSteps = when {
         is100 && challengeId.startsWith("preset_") -> 100
-        is7Day && challengeId.startsWith("preset_") -> 7
-        isNoSpend && challengeId.startsWith("preset_") -> 7
         else -> try {
-            val start = java.time.LocalDate.parse(challenge?.startDate ?: java.time.LocalDate.now().toString())
-            val end = java.time.LocalDate.parse(challenge?.endDate ?: java.time.LocalDate.now().plusDays(30).toString())
-            val currentDiff = java.time.temporal.ChronoUnit.DAYS.between(start, end).toInt().coerceAtLeast(1)
-            if (challengeId.startsWith("preset_")) {
-                currentDiff
+            val parts = challenge?.lastDepositDate?.split("|") ?: emptyList()
+            if (parts.size > 2) {
+                parts[2].toIntOrNull() ?: 30
             } else {
-                currentDiff + completedSteps
+                val start = java.time.LocalDate.parse(challenge?.startDate ?: java.time.LocalDate.now().toString())
+                val end = java.time.LocalDate.parse(challenge?.endDate ?: java.time.LocalDate.now().plusDays(30).toString())
+                java.time.temporal.ChronoUnit.DAYS.between(start, end).toInt().coerceAtLeast(1)
             }
         } catch (e: Exception) {
-            if (is100) 100 else if (is7Day || isNoSpend) 7 else 30
+            30
         }
     }
     
     val targetAmount = challenge?.targetAmount ?: 30000.0
     
     val depositAmount = if (totalSteps > 0) {
-        if (isPreset100 && targetAmount == 505000.0) 5000.0
-        else targetAmount / totalSteps
+        targetAmount / totalSteps
     } else 1000.0
     
-    val depositHistory = remember(challengeId) {
-        val list = mutableStateListOf<DepositItem>()
-        if (isPreset7Day) {
-            list.add(DepositItem(amount = depositAmount, note = "Deposit", time = "Today, 06:55"))
-            list.add(DepositItem(amount = depositAmount, note = "Freelance payout", time = "Yesterday, 21:10"))
-        } else if (isPreset100) {
-            list.add(DepositItem(amount = depositAmount, note = "Saved Envelope #34", time = "Today, 08:12"))
-            list.add(DepositItem(amount = depositAmount, note = "Deposit", time = "Yesterday, 21:40"))
-        } else if (isPresetNoSpend) {
-            list.add(DepositItem(amount = depositAmount, note = "Day 4 saved", time = "Yesterday, 20:00"))
-            list.add(DepositItem(amount = depositAmount, note = "Day 3 saved", time = "Jul 26, 19:15"))
-        } else if (isPreset1K) {
-            list.add(DepositItem(amount = depositAmount, note = "Morning coffee skipped", time = "Today, 08:12"))
-            list.add(DepositItem(amount = depositAmount, note = "Deposit", time = "Yesterday, 21:40"))
-        }
-        list
+    val depositHistory = uiState.selectedChallengeDeposits.map {
+        val timeStr = java.text.SimpleDateFormat("yyyy-MM-dd • hh:mm a", java.util.Locale.US).format(java.util.Date(it.createdAt))
+        DepositItem(amount = it.amount, note = it.note, time = timeStr)
     }
 
     var showDayDialog by remember { mutableStateOf(false) }
     var selectedDayNumber by remember { mutableIntStateOf(1) }
     
     var showEnterAmountDialog by remember { mutableStateOf(false) }
-    var customAmountInput by remember { mutableStateOf("10000") }
+    var customAmountInput by remember { mutableStateOf("") }
+    
+    var showCompletionDialog by remember { mutableStateOf(false) }
+    var showFullMapSheet by remember { mutableStateOf(false) }
+
+    androidx.compose.runtime.LaunchedEffect(challenge) {
+        val c = challenge ?: return@LaunchedEffect
+        if (!c.isCompleted) {
+            val parts = c.lastDepositDate.split("|")
+            val duration = if (parts.size > 2) parts[2].toIntOrNull() ?: 30 else 30
+            val isActuallyCompleted = when (c.template) {
+                com.savingcoach.app.data.model.ChallengeTemplate.FLEXI -> c.currentAmount >= c.targetAmount
+                else -> c.completedDaysCount >= duration
+            }
+            if (isActuallyCompleted) {
+                viewModel.completeChallenge(c.id)
+            }
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(challenge?.isCompleted) {
+        if (challenge?.isCompleted == true) {
+            showCompletionDialog = true
+        }
+    }
+
+
 
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -164,15 +192,19 @@ fun ChallengeDetailScreen(
     
     val outerFormatter = NumberFormat.getNumberInstance(Locale.US)
     
-    val todayDateString = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+    val todayDateString = java.time.LocalDate.now().toString()
     val lastDepositDateOnly = challenge?.lastDepositDate?.substringBefore("|") ?: ""
     val hasDepositedToday = lastDepositDateOnly == todayDateString
 
     if (showDayDialog) {
+        // Reset selectedDayNumber to current active step when dialog opens
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            selectedDayNumber = completedSteps + 1
+        }
         Dialog(onDismissRequest = { showDayDialog = false }) {
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -187,35 +219,35 @@ fun ChallengeDetailScreen(
                             onClick = { showDayDialog = false },
                             modifier = Modifier.size(24.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Text(if (isNoSpend) "HABIT TRACKER" else "SAVING", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
-                    
+
+                    Text(if (isNoSpend) "HABIT TRACKER" else "SAVING", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     if (isNoSpend) {
                         Text(
-                            text = "Zero Spend Day $selectedDayNumber", 
-                            fontSize = 22.sp, 
-                            fontWeight = FontWeight.ExtraBold, 
-                            color = Color(0xFF0F172A)
+                            text = "Zero Spend Day $selectedDayNumber",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     } else {
                         val formattedDepositAmount = NumberFormat.getNumberInstance(Locale.US).format(depositAmount)
                         Text(
-                            text = "$formattedDepositAmount MMK", 
-                            fontSize = 24.sp, 
-                            fontWeight = FontWeight.Bold, 
-                            color = Color(0xFF0F172A)
+                            text = "$formattedDepositAmount MMK",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
-                    
+
                     Spacer(modifier = Modifier.height(32.dp))
-                    
+
                     Button(
                         onClick = {
                             if (completedSteps < totalSteps) {
@@ -223,18 +255,22 @@ fun ChallengeDetailScreen(
                                 if (currentDaysLeft > 0) currentDaysLeft--
                                 if (!isNoSpend) {
                                     currentAmount += depositAmount
-                                    viewModel.addDepositMock(challengeId, depositAmount, completedSteps, 1)
                                     val depositNote = when {
                                         is7Day -> "Deposit"
                                         is100 -> "Saved Envelope #$completedSteps"
                                         else -> "Deposit"
                                     }
-                                    depositHistory.add(
-                                        0, 
-                                        DepositItem(amount = depositAmount, note = depositNote, time = "Just now")
-                                    )
+                                    viewModel.addDepositMock(challengeId, depositAmount, completedSteps, 1, depositNote)
+                                    if (completedSteps >= totalSteps) {
+                                        viewModel.completeChallenge(challengeId)
+                                        showCompletionDialog = true
+                                    }
                                 } else {
-                                    viewModel.addDepositMock(challengeId, 0.0, completedSteps, 1)
+                                    viewModel.addDepositMock(challengeId, 0.0, completedSteps, 1, "Day $completedSteps saved")
+                                    if (completedSteps >= totalSteps) {
+                                        viewModel.completeChallenge(challengeId)
+                                        showCompletionDialog = true
+                                    }
                                 }
                             }
                             showDayDialog = false
@@ -242,12 +278,12 @@ fun ChallengeDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                        colors = ButtonDefaults.buttonColors(containerColor = ChallengeActive),
                         shape = RoundedCornerShape(24.dp)
                     ) {
                         Text("Confirm", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
-                    
+
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
@@ -258,7 +294,7 @@ fun ChallengeDetailScreen(
         Dialog(onDismissRequest = { showSurpriseDialog = false }) {
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = Color(0xFF0F172A), // Theme navy
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -273,57 +309,58 @@ fun ChallengeDetailScreen(
                             onClick = { showSurpriseDialog = false },
                             modifier = Modifier.size(24.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     Text(
                         text = "ENVELOPE SURPRISE",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF94A3B8)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     Text(
                         text = "You opened an envelope and found:",
                         fontSize = 14.sp,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center
                     )
-                    
+
                     Spacer(modifier = Modifier.height(12.dp))
-                    
+
                     Text(
                         text = "${outerFormatter.format(calculatedSurpriseAmount)} MMK",
                         fontSize = 28.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF10B981) // Emerald accent
+                        color = ChallengeActive
                     )
-                    
+
                     Spacer(modifier = Modifier.height(24.dp))
-                    
+
                     Button(
                         onClick = {
-                            completedSteps++
-                            if (currentDaysLeft > 0) currentDaysLeft--
-                            currentAmount += calculatedSurpriseAmount
-                            viewModel.addDepositMock(challengeId, calculatedSurpriseAmount, completedSteps, 1)
-                            
-                            val depositNote = "Saved Envelope #$selectedDayNumber"
-                            depositHistory.add(
-                                0,
-                                DepositItem(amount = calculatedSurpriseAmount, note = depositNote, time = "Just now")
-                            )
+                            if (completedSteps < totalSteps) {
+                                completedSteps++
+                                if (currentDaysLeft > 0) currentDaysLeft--
+                                currentAmount += calculatedSurpriseAmount
+                                val depositNote = "Saved Envelope #$selectedDayNumber"
+                                viewModel.addDepositMock(challengeId, calculatedSurpriseAmount, completedSteps, 1, depositNote)
+                                if (completedSteps >= totalSteps) {
+                                    viewModel.completeChallenge(challengeId)
+                                    showCompletionDialog = true
+                                }
+                            }
                             showSurpriseDialog = false
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                        colors = ButtonDefaults.buttonColors(containerColor = ChallengeActive),
                         shape = RoundedCornerShape(24.dp)
                     ) {
                         Text("Save", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -337,7 +374,7 @@ fun ChallengeDetailScreen(
         Dialog(onDismissRequest = { showEnterAmountDialog = false }) {
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -349,33 +386,32 @@ fun ChallengeDetailScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Enter amount", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                        Text("Enter amount", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         IconButton(
                             onClick = { showEnterAmountDialog = false },
                             modifier = Modifier.size(24.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    
+
                     Spacer(modifier = Modifier.height(24.dp))
-                    
+
                     OutlinedTextField(
                         value = customAmountInput,
-                        onValueChange = { customAmountInput = it.filter { char -> char.isDigit() } },
-                        placeholder = { Text("10000") },
+                        onValueChange = { customAmountInput = it.filter { char -> char.isDigit() }.take(10) },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF10B981),
-                            unfocusedBorderColor = Color(0xFF10B981).copy(alpha = 0.5f)
+                            focusedBorderColor = MaterialTheme.colorScheme.secondary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
                         ),
                         singleLine = true
                     )
-                    
+
                     Spacer(modifier = Modifier.height(32.dp))
-                    
+
                     Button(
                         onClick = {
                             val amount = customAmountInput.toDoubleOrNull() ?: 10000.0
@@ -383,23 +419,75 @@ fun ChallengeDetailScreen(
                                 completedSteps++
                                 if (currentDaysLeft > 0) currentDaysLeft--
                                 currentAmount += amount
-                                viewModel.addDepositMock(challengeId, amount, completedSteps, 1)
-                                depositHistory.add(
-                                    0, 
-                                    DepositItem(amount = amount, note = "Deposit", time = "Just now")
-                                )
+                                viewModel.addDepositMock(challengeId, amount, completedSteps, 1, "Deposit")
+                                if (currentAmount >= targetAmount || completedSteps >= totalSteps) {
+                                    viewModel.completeChallenge(challengeId)
+                                    showCompletionDialog = true
+                                }
                             }
                             showEnterAmountDialog = false
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                        colors = ButtonDefaults.buttonColors(containerColor = ChallengeActive),
                         shape = RoundedCornerShape(24.dp)
                     ) {
                         Text("Confirm", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
+            }
+        }
+    }
+
+    val handleStepClick: (Int) -> Unit = { stepNumber ->
+        if (stepNumber == -1) {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar("You've already completed today's check-in! Come back tomorrow.")
+            }
+        } else {
+            selectedDayNumber = stepNumber
+            if (is100) {
+                val todayStr = java.time.LocalDate.now().toString()
+                val lastDepositDateOnly100 = challenge?.lastDepositDate?.substringBefore("|") ?: ""
+                val alreadyDeposited = lastDepositDateOnly100 == todayStr
+                if (alreadyDeposited) {
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("You've already opened an envelope today! Come back tomorrow.")
+                    }
+                } else {
+                    animatingEnvelopeIndex = stepNumber
+                    val remainingEnvelopes = (totalSteps - completedSteps).coerceAtLeast(1)
+                    val remainingAmount = (targetAmount - currentAmount).coerceAtLeast(0.0)
+
+                    val surprise = if (remainingEnvelopes == 1) {
+                        remainingAmount
+                    } else {
+                        val average = remainingAmount / remainingEnvelopes
+                        val randomFactor = 0.7 + (Math.random() * 0.6)
+                        val rawSurprise = average * randomFactor
+                        // Round to nearest 1000 if amount is large enough, otherwise use raw value
+                        if (rawSurprise >= 1000.0) {
+                            ((rawSurprise / 1000.0).toInt() * 1000.0).coerceAtLeast(1000.0)
+                        } else if (rawSurprise >= 100.0) {
+                            ((rawSurprise / 100.0).toInt() * 100.0).coerceAtLeast(100.0)
+                        } else {
+                            rawSurprise.coerceAtLeast(1.0)
+                        }
+                    }
+
+                    calculatedSurpriseAmount = if (remainingEnvelopes == 1) {
+                        remainingAmount.coerceAtLeast(0.0)
+                    } else {
+                        val maxAllowed = (remainingAmount - ((remainingEnvelopes - 1) * 1.0)).coerceAtLeast(0.0)
+                        surprise.coerceAtLeast(1.0).coerceAtMost(maxAllowed)
+                    }
+                }
+            } else if (is7Day) {
+                customAmountInput = ""
+                showEnterAmountDialog = true
+            } else {
+                showDayDialog = true
             }
         }
     }
@@ -422,47 +510,208 @@ fun ChallengeDetailScreen(
             animatingEnvelopeIndex = null
         },
         onBackClick = onBackClick,
-        onStepClick = { stepNumber ->
-            if (stepNumber == -1) {
-                coroutineScope.launch {
-                    snackbarHostState.showSnackbar("You've already completed today's check-in! Come back tomorrow.")
-                }
-            } else {
-                selectedDayNumber = stepNumber
-                if (is100) {
-                    val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
-                    val lastDepositDateOnly100 = challenge?.lastDepositDate?.substringBefore("|") ?: ""
-                    val alreadyDeposited = lastDepositDateOnly100 == todayStr
-                    if (alreadyDeposited) {
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("You've already opened an envelope today! Come back tomorrow.")
-                        }
-                    } else {
-                        animatingEnvelopeIndex = stepNumber
-                        val remainingEnvelopes = (totalSteps - completedSteps).coerceAtLeast(1)
-                        val remainingAmount = (targetAmount - currentAmount).coerceAtLeast(0.0)
-                        
-                        val surprise = if (remainingEnvelopes == 1) {
-                            remainingAmount
-                        } else {
-                            val average = remainingAmount / remainingEnvelopes
-                            val randomFactor = 0.7 + (Math.random() * 0.6)
-                            ((average * randomFactor) / 10).toInt() * 10.0
-                        }
-                        calculatedSurpriseAmount = surprise.coerceAtLeast(100.0)
-                    }
-                } else if (is7Day) {
-                    customAmountInput = depositAmount.toInt().toString()
-                    showEnterAmountDialog = true
-                } else {
-                    showDayDialog = true
-                }
-            }
-        },
+        onStepClick = handleStepClick,
         onSettingsClick = { challenge?.let { onSettingsClick(it) } },
+        onDeleteClick = {
+            viewModel.deleteChallenge(challengeId)
+            onBackClick()
+        },
+        onSeeMoreClick = { showFullMapSheet = true },
         snackbarHostState = snackbarHostState,
         hasDepositedToday = hasDepositedToday
     )
+    
+    if (showCompletionDialog) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .pointerInput(Unit) {
+                    detectTapGestures { }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = DarkSlate,
+                modifier = Modifier.padding(32.dp).fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    androidx.compose.material3.Text(
+                        "🎉 Challenge Completed! 🎉", 
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, 
+                        color = Color.White, 
+                        fontSize = 20.sp, 
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    androidx.compose.material3.Text(
+                        "Amazing job! You have successfully reached your saving goal.", 
+                        color = MutedGray, 
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    androidx.compose.material3.Button(
+                        onClick = { 
+                            showCompletionDialog = false
+                            onBackClick()
+                        },
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = ChallengeActive),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        androidx.compose.material3.Text(
+                            "OK", 
+                            color = Color.White, 
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                    }
+                }
+            }
+            com.savingcoach.app.ui.components.ConfettiView(modifier = Modifier.fillMaxSize())
+        }
+    }
+
+    if (showFullMapSheet) {
+        val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = false)
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { showFullMapSheet = false },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.onBackground
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp)
+            ) {
+                androidx.compose.material3.Text(
+                    text = "Full Progress Map",
+                    fontSize = 18.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                val outlineColor = MaterialTheme.colorScheme.outline
+                val surfaceColor = MaterialTheme.colorScheme.onBackground
+
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(if (is100) 10 else 6),
+                    horizontalArrangement = Arrangement.spacedBy(if (is100) 8.dp else 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (is100) 8.dp else 12.dp),
+                    modifier = Modifier.fillMaxWidth().weight(1f, fill = false)
+                ) {
+                    items(totalSteps) { index ->
+                        val isDone = index < completedSteps
+                        val isActiveStep = index == completedSteps && !hasDepositedToday
+                        val isDisabled = index > completedSteps || hasDepositedToday
+
+                        if (is100) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        color = when {
+                                            isDone -> ChallengeActive
+                                            isActiveStep -> ChallengeActiveTrack
+                                            else -> ChallengeInactive
+                                        },
+                                        shape = CircleShape
+                                    )
+                                    .clickable {
+                                        if (isDone) {
+                                            // Do nothing
+                                        } else if (isDisabled) {
+                                            showFullMapSheet = false
+                                            handleStepClick(-1)
+                                        } else {
+                                            showFullMapSheet = false
+                                            handleStepClick(index + 1)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (!isDone) {
+                                    Canvas(modifier = Modifier.matchParentSize()) {
+                                        drawCircle(
+                                            color = if (isActiveStep) outlineColor else MutedGray,
+                                            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                                width = 1.5.dp.toPx(),
+                                                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                                            )
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = if (isDone) Icons.Default.Check else Icons.Outlined.Email,
+                                    contentDescription = null,
+                                    tint = if (isDone) surfaceColor else MutedGray,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        color = when {
+                                            isDone -> ChallengeActive
+                                            isActiveStep -> ChallengeActiveTrack
+                                            else -> ChallengeInactive
+                                        },
+                                        shape = CircleShape
+                                    )
+                                    .clickable {
+                                        if (isDone) {
+                                        } else if (isDisabled) {
+                                            showFullMapSheet = false
+                                            handleStepClick(-1)
+                                        } else {
+                                            showFullMapSheet = false
+                                            handleStepClick(index + 1)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isDone) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = surfaceColor,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                } else {
+                                    Canvas(modifier = Modifier.matchParentSize()) {
+                                        drawCircle(
+                                            color = if (isActiveStep) outlineColor else MutedGray,
+                                            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                                width = 1.5.dp.toPx(),
+                                                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                                            )
+                                        )
+                                    }
+                                    androidx.compose.material3.Text(
+                                        text = "${index + 1}",
+                                        color = if (isActiveStep) MaterialTheme.colorScheme.onSurface else MutedGray,
+                                        fontSize = 12.sp,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -484,6 +733,8 @@ fun ChallengeDetailScreenContent(
     onBackClick: () -> Unit,
     onStepClick: (Int) -> Unit,
     onSettingsClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    onSeeMoreClick: () -> Unit,
     snackbarHostState: SnackbarHostState,
     hasDepositedToday: Boolean
 ) {
@@ -534,154 +785,206 @@ fun ChallengeDetailScreenContent(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        // Wrap everything in a light surface explicitly to avoid black screens
-        Surface(color = Color(0xFFF8FAFC), modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                // Header Section
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF0F172A))
-                            .padding(top = 16.dp, bottom = 12.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
+            // Header Section
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(top = 8.dp, bottom = 24.dp)
+                ) {
+                        Column {
+                            // Back arrow + Title + Settings — all same row
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    .padding(horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // 1. Back Arrow Button
                                 IconButton(
                                     onClick = onBackClick,
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .padding(0.dp)
+                                    modifier = Modifier.size(48.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Back",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-
-                                // 2. Circular Emoji Badge
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = emoji,
-                                        fontSize = 22.sp
-                                    )
-                                }
-
-                                // 3. Title & Subtitle Column
-                                Column(
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    IconButton(
-                                        onClick = onSettingsClick,
+                                        tint = MaterialTheme.colorScheme.onBackground,
                                         modifier = Modifier.size(24.dp)
+                                    )
+                                }
+
+                                Text(
+                                    text = cleanTitle,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                Box {
+                                    var showMenu by remember { mutableStateOf(false) }
+                                    var showDeleteDialog by remember { mutableStateOf(false) }
+
+                                    IconButton(
+                                        onClick = { showMenu = true },
+                                        modifier = Modifier.size(48.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Settings,
                                             contentDescription = "Settings",
-                                            tint = Color.White.copy(alpha = 0.8f),
-                                            modifier = Modifier.size(18.dp)
+                                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(24.dp)
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = cleanTitle,
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = description,
-                                        fontSize = 12.sp,
-                                        color = Color.White.copy(alpha = 0.7f)
-                                    )
+
+                                    DropdownMenu(
+                                        expanded = showMenu,
+                                        onDismissRequest = { showMenu = false },
+                                        modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Edit Challenge", color = MaterialTheme.colorScheme.onSurface) },
+                                            onClick = {
+                                                showMenu = false
+                                                onSettingsClick()
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Delete Challenge", color = MaterialTheme.colorScheme.error) },
+                                            onClick = {
+                                                showMenu = false
+                                                showDeleteDialog = true
+                                            }
+                                        )
+                                    }
+
+                                    if (showDeleteDialog) {
+                                        AlertDialog(
+                                            onDismissRequest = { showDeleteDialog = false },
+                                            title = { Text("Delete Challenge", color = MaterialTheme.colorScheme.onSurface) },
+                                            text = { Text("Are you sure you want to delete this challenge? This action cannot be undone.", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                            containerColor = MaterialTheme.colorScheme.surface,
+                                            confirmButton = {
+                                                TextButton(onClick = {
+                                                    showDeleteDialog = false
+                                                    onDeleteClick()
+                                                }) {
+                                                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                                                }
+                                            },
+                                            dismissButton = {
+                                                TextButton(onClick = { showDeleteDialog = false }) {
+                                                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface)
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
                             }
-                            
-                            Spacer(modifier = Modifier.height(24.dp))
-                            
+
+                            // Description
+                            Text(
+                                text = description,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                            )
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
                             // Progress text
                             if (isNoSpend) {
                                 Text(
                                     text = "$completedSteps of $totalSteps days completed",
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onBackground,
                                     fontSize = 24.sp,
-                                    fontWeight = FontWeight.ExtraBold
+                                    fontWeight = FontWeight.ExtraBold,
+                                    modifier = Modifier.padding(horizontal = 24.dp)
                                 )
                             } else {
                                 Text(
                                     text = buildAnnotatedString {
-                                        withStyle(SpanStyle(color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)) {
+                                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.onBackground, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)) {
                                             append(formattedCurrent)
                                         }
-                                        withStyle(SpanStyle(color = Color(0xFFA5D6A7), fontSize = 16.sp, fontWeight = FontWeight.Bold)) {
+                                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f), fontSize = 16.sp, fontWeight = FontWeight.Bold)) {
                                             append("/$formattedTarget MMK")
                                         }
-                                    }
+                                    },
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 24.dp)
                                 )
                             }
-                            
+
                             Spacer(modifier = Modifier.height(16.dp))
+
+                            // Progress bar
+                            val progressFloat = when {
+                                isNoSpend && totalSteps > 0 -> (completedSteps.toFloat() / totalSteps.toFloat())
+                                !isNoSpend && targetAmount > 0 -> (currentAmount / targetAmount).toFloat()
+                                else -> 0f
+                            }.coerceIn(0f, 1f)
                             
-                            Box(
+                            LinearProgressIndicator(
+                                progress = { progressFloat },
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .padding(horizontal = 24.dp)
                                     .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(Color(0xFF0F172A))
-                            ) {
-                                LinearProgressIndicator(
-                                    progress = { if (isNoSpend) (completedSteps.toFloat() / totalSteps.toFloat()).coerceIn(0f, 1f) else (currentAmount / targetAmount).toFloat().coerceIn(0f, 1f) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .fillMaxHeight(),
-                                    color = if (completedSteps >= totalSteps || currentAmount >= targetAmount) Color(0xFFF97316) else Color(0xFF10B981),
-                                    trackColor = Color(0xFF0F172A),
-                                    strokeCap = StrokeCap.Butt
-                                )
-                            }
-                            
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = if (completedSteps >= totalSteps || currentAmount >= targetAmount) Orange else MaterialTheme.colorScheme.secondary,
+                                trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.15f),
+                                strokeCap = StrokeCap.Round
+                            )
+
                             Spacer(modifier = Modifier.height(12.dp))
-                            
+
                             // Subtext Row
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
                                 Text(
                                     text = "$calculatedPercent% complete",
-                                    color = Color.White,
-                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
                                 )
-                                Text(if (completedSteps >= totalSteps || currentAmount >= targetAmount) "Completed" else "$daysLeft days left", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                Text(
+                                    text = if (completedSteps >= totalSteps || currentAmount >= targetAmount) "Completed" else "$daysLeft days left",
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
                             }
-                            
-                            Spacer(modifier = Modifier.height(16.dp))
                         }
                     }
                 }
                 
-                // PROGRESS MAP Card
+
+                item {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f),
+                        thickness = 1.dp
+                    )
+                }
+
+                // PROGRESS MAP
                 item {
                     Column(
                         modifier = Modifier
@@ -692,54 +995,68 @@ fun ChallengeDetailScreenContent(
                             text = "PROGRESS MAP",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.Gray,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                             letterSpacing = 1.sp,
-                            modifier = Modifier.padding(bottom = 12.dp)
+                            modifier = Modifier.padding(bottom = 16.dp)
                         )
-                        
-                        Card(
+
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(20.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White)
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Column(
+                            val windowSize = 30
+                            val isCapped = totalSteps > windowSize
+                            val startIndex = if (isCapped) {
+                                val pageIndex = minOf(completedSteps, maxOf(0, totalSteps - 1)) / windowSize
+                                pageIndex * windowSize
+                            } else {
+                                0
+                            }
+                            val remainingSteps = totalSteps - startIndex
+                            val displayCount = if (isCapped) minOf(windowSize, remainingSteps) else totalSteps
+
+                            if (is100) {
+                                EnvelopeMap(
+                                    completedSteps = completedSteps,
+                                    totalSteps = totalSteps,
+                                    animatingIndex = animatingEnvelopeIndex,
+                                    onAnimationFinished = onAnimationFinished,
+                                    hasDepositedToday = hasDepositedToday,
+                                    onStepClick = onStepClick,
+                                    startIndex = startIndex,
+                                    displayCount = displayCount
+                                )
+                            } else if ((is7Day || isNoSpend) && totalSteps == 7) {
+                                SevenDayMap(
+                                    completedSteps = completedSteps,
+                                    isNoSpend = isNoSpend,
+                                    hasDepositedToday = hasDepositedToday,
+                                    onStepClick = onStepClick
+                                )
+                            } else {
+                                DotGridMap(
+                                    completedSteps = completedSteps,
+                                    totalSteps = totalSteps,
+                                    hasDepositedToday = hasDepositedToday,
+                                    onStepClick = onStepClick,
+                                    startIndex = startIndex,
+                                    displayCount = displayCount
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable(enabled = isCapped) { if (isCapped) onSeeMoreClick() }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (is100) {
-                                    EnvelopeMap(
-                                        completedSteps = completedSteps,
-                                        totalSteps = totalSteps,
-                                        animatingIndex = animatingEnvelopeIndex,
-                                        onAnimationFinished = onAnimationFinished,
-                                        hasDepositedToday = hasDepositedToday,
-                                        onStepClick = onStepClick
-                                    )
-                                } else if (is7Day || isNoSpend) {
-                                    SevenDayMap(
-                                        completedSteps = completedSteps,
-                                        isNoSpend = isNoSpend,
-                                        hasDepositedToday = hasDepositedToday,
-                                        onStepClick = onStepClick
-                                    )
-                                } else {
-                                    DotGridMap(
-                                        completedSteps = completedSteps,
-                                        totalSteps = totalSteps,
-                                        hasDepositedToday = hasDepositedToday,
-                                        onStepClick = onStepClick
-                                    )
-                                }
-                                
-                                Spacer(modifier = Modifier.height(24.dp))
                                 Text(
                                     text = "$completedSteps of $totalSteps steps done",
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Gray
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (isCapped) ChallengeActive else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                                 )
                             }
                         }
@@ -747,17 +1064,25 @@ fun ChallengeDetailScreenContent(
                 }
 
                 if (!isNoSpend) {
+                    item {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 24.dp),
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f),
+                            thickness = 1.dp
+                        )
+                    }
+
                     // Deposit History List
                     item {
                         Text(
                             text = "DEPOSIT HISTORY",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.Gray,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                         )
                     }
-                    
+
                     items(depositHistory) { deposit ->
                         DepositHistoryItem(
                             amount = deposit.amount,
@@ -773,58 +1098,43 @@ fun ChallengeDetailScreenContent(
             }
         }
     }
-}
 
 @Composable
 fun DepositHistoryItem(amount: Double, note: String, date: String) {
     val formatter = NumberFormat.getNumberInstance(Locale.US)
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 6.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            .padding(horizontal = 24.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
+        // Green dot indicator
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-                val iconBg = Color(0xFFDCFCE7) // Soft emerald background
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(iconBg, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, tint = Color(0xFF16A34A))
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "${formatter.format(amount)} MMK",
-                    color = Color(0xFF0F172A),
-                    fontWeight = FontWeight.Bold, // Bold text for amount
-                    fontSize = 15.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = note,
-                    color = Color.Gray,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+                .size(8.dp)
+                .background(ChallengeActive, CircleShape)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = note,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = date,
-                color = Color.Gray,
-                fontSize = 12.sp, // date timestamp
-                fontWeight = FontWeight.Medium
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                fontSize = 12.sp
             )
         }
+        Text(
+            text = "+${formatter.format(amount)} MMK",
+            color = ChallengeActive,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp
+        )
     }
 }
 
@@ -836,15 +1146,22 @@ fun EnvelopeMap(
     animatingIndex: Int?,
     onAnimationFinished: () -> Unit,
     hasDepositedToday: Boolean,
-    onStepClick: (Int) -> Unit
+    onStepClick: (Int) -> Unit,
+    startIndex: Int = 0,
+    displayCount: Int = totalSteps
 ) {
+    val outlineColor = MaterialTheme.colorScheme.outline
+    val surfaceColor = MaterialTheme.colorScheme.surface
+
     FlowRow(
         maxItemsInEachRow = 10,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        repeat(totalSteps) { index ->
+        repeat(displayCount) { i ->
+            val index = startIndex + i
+            if (index >= totalSteps) return@repeat
             val isDone = index < completedSteps
             val isActiveStep = index == completedSteps && !hasDepositedToday
             val isDisabled = index > completedSteps || hasDepositedToday
@@ -879,9 +1196,9 @@ fun EnvelopeMap(
                     }
                     .background(
                         color = when {
-                            isDone -> Color(0xFF2563EB)
-                            isActiveStep -> Color(0xFFF1F5F9)
-                            else -> Color(0xFFE2E8F0)
+                            isDone -> ChallengeActive
+                            isActiveStep -> ChallengeActiveTrack
+                            else -> ChallengeInactive
                         },
                         shape = CircleShape
                     )
@@ -899,7 +1216,7 @@ fun EnvelopeMap(
                 if (!isDone) {
                     Canvas(modifier = Modifier.matchParentSize()) {
                         drawCircle(
-                            color = if (isActiveStep) Color(0xFFE0E0E0) else Color(0xFF94A3B8),
+                            color = if (isActiveStep) outlineColor else MutedGray,
                             style = Stroke(
                                 width = 1.5.dp.toPx(),
                                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
@@ -910,7 +1227,7 @@ fun EnvelopeMap(
                 Icon(
                     imageVector = if (isDone) Icons.Default.Check else Icons.Outlined.Email,
                     contentDescription = null,
-                    tint = if (isDone) Color.White else Color(0xFF9E9E9E), // gray tint
+                    tint = if (isDone) surfaceColor else MutedGray,
                     modifier = Modifier.size(14.dp)
                 )
             }
@@ -920,6 +1237,9 @@ fun EnvelopeMap(
 
 @Composable
 fun SevenDayMap(completedSteps: Int, isNoSpend: Boolean, hasDepositedToday: Boolean, onStepClick: (Int) -> Unit) {
+    val outlineColor = MaterialTheme.colorScheme.outline
+    val surfaceColor = MaterialTheme.colorScheme.surface
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
@@ -935,15 +1255,15 @@ fun SevenDayMap(completedSteps: Int, isNoSpend: Boolean, hasDepositedToday: Bool
                     .clip(CircleShape)
                     .background(
                         color = when {
-                            isDone -> Color(0xFF2563EB)
-                            isActiveStep -> Color(0xFFF1F5F9)
-                            else -> Color(0xFFE2E8F0)
+                            isDone -> ChallengeActive
+                            isActiveStep -> ChallengeActiveTrack
+                            else -> ChallengeInactive
                         },
                         shape = CircleShape
                     )
                     .let {
                         if (isDone) {
-                            it.border(2.dp, Color(0xFF2563EB), CircleShape)
+                            it.border(2.dp, ChallengeActive, CircleShape)
                         } else {
                             it
                         }
@@ -962,7 +1282,7 @@ fun SevenDayMap(completedSteps: Int, isNoSpend: Boolean, hasDepositedToday: Bool
                 if (!isDone) {
                     Canvas(modifier = Modifier.matchParentSize()) {
                         drawCircle(
-                            color = if (isActiveStep) Color(0xFFE0E0E0) else Color(0xFF94A3B8),
+                            color = if (isActiveStep) outlineColor else MutedGray,
                             style = Stroke(
                                 width = 2.dp.toPx(),
                                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
@@ -974,14 +1294,14 @@ fun SevenDayMap(completedSteps: Int, isNoSpend: Boolean, hasDepositedToday: Bool
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = surfaceColor,
                         modifier = Modifier.size(20.dp)
                     )
                 } else {
                     if (isNoSpend) {
                         Text(
                             text = "${index + 1}",
-                            color = if (isActiveStep) Color(0xFF0F172A) else Color(0xFF94A3B8),
+                            color = if (isActiveStep) MaterialTheme.colorScheme.surface else MutedGray,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1000,14 +1320,26 @@ fun SevenDayMap(completedSteps: Int, isNoSpend: Boolean, hasDepositedToday: Bool
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DotGridMap(completedSteps: Int, totalSteps: Int, hasDepositedToday: Boolean, onStepClick: (Int) -> Unit) {
+fun DotGridMap(
+    completedSteps: Int,
+    totalSteps: Int,
+    hasDepositedToday: Boolean,
+    onStepClick: (Int) -> Unit,
+    startIndex: Int = 0,
+    displayCount: Int = totalSteps
+) {
+    val outlineColor = MaterialTheme.colorScheme.outline
+    val surfaceColor = MaterialTheme.colorScheme.surface
+
     FlowRow(
         maxItemsInEachRow = 6, // Match screenshot (6 columns x 5 rows = 30)
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        repeat(totalSteps) { index ->
+        repeat(displayCount) { i ->
+            val index = startIndex + i
+            if (index >= totalSteps) return@repeat
             val isDone = index < completedSteps
             val isActiveStep = index == completedSteps && !hasDepositedToday
             val isDisabled = index > completedSteps || hasDepositedToday
@@ -1018,9 +1350,9 @@ fun DotGridMap(completedSteps: Int, totalSteps: Int, hasDepositedToday: Boolean,
                     .clip(CircleShape)
                     .background(
                         color = when {
-                            isDone -> Color(0xFF2563EB)
-                            isActiveStep -> Color(0xFFF1F5F9)
-                            else -> Color(0xFFE2E8F0)
+                            isDone -> ChallengeActive
+                            isActiveStep -> ChallengeActiveTrack
+                            else -> ChallengeInactive
                         },
                         shape = CircleShape
                     )
@@ -1039,13 +1371,13 @@ fun DotGridMap(completedSteps: Int, totalSteps: Int, hasDepositedToday: Boolean,
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = surfaceColor,
                         modifier = Modifier.size(24.dp)
                     )
                 } else {
                     Canvas(modifier = Modifier.matchParentSize()) {
                         drawCircle(
-                            color = if (isActiveStep) Color(0xFFE0E0E0) else Color(0xFF94A3B8),
+                            color = if (isActiveStep) outlineColor else MutedGray,
                             style = Stroke(
                                 width = 1.5.dp.toPx(),
                                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
@@ -1054,7 +1386,7 @@ fun DotGridMap(completedSteps: Int, totalSteps: Int, hasDepositedToday: Boolean,
                     }
                     Text(
                         text = "${index + 1}",
-                        color = if (isActiveStep) Color(0xFF0F172A) else Color(0xFF94A3B8),
+                        color = if (isActiveStep) MaterialTheme.colorScheme.onSurface else MutedGray,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )

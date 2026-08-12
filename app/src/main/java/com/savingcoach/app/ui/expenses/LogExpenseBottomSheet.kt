@@ -76,7 +76,6 @@ fun LogExpenseBottomSheet(
                     }
                 },
                 label = { Text("Amount (MMK) *") },
-                placeholder = { Text("e.g. 5000") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -141,7 +140,6 @@ fun LogExpenseBottomSheet(
                 value = merchantText,
                 onValueChange = { merchantText = it },
                 label = { Text("Note / Merchant (Optional)") },
-                placeholder = { Text("e.g. Starbucks, City Mart") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -151,7 +149,6 @@ fun LogExpenseBottomSheet(
                 value = descriptionText,
                 onValueChange = { descriptionText = it },
                 label = { Text("Description (Optional)") },
-                placeholder = { Text("Additional notes...") },
                 modifier = Modifier.fillMaxWidth()
             )
 

@@ -112,14 +112,19 @@ class DashboardViewModel @Inject constructor(
         val currentMonth = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM"))
 
         viewModelScope.launch {
-            // First get active challenges so we can query their deposits
-            val challenges = challengeRepository.getActiveChallenges(userId)
+            // Get ALL challenges (including completed) for total saved calculation
+            val allChallenges = challengeRepository.getAllChallenges(userId)
                 .catch { emit(emptyList()) }
                 .first()
 
-            // Build daily savings from all active challenge deposits
+            // Get active challenges for display and daily savings
+            val activeChallenges = challengeRepository.getActiveChallenges(userId)
+                .catch { emit(emptyList()) }
+                .first()
+
+            // Build daily savings from all challenge deposits (active + completed)
             val dailySavingsMap = mutableMapOf<String, Double>()
-            for (challenge in challenges) {
+            for (challenge in allChallenges) {
                 val deposits = challengeRepository.getDeposits(userId, challenge.id)
                     .catch { emit(emptyList()) }
                     .first()
@@ -165,13 +170,14 @@ class DashboardViewModel @Inject constructor(
                 // Dynamic currency from first expense, fallback to MMK
                 val currency = expenses.firstOrNull()?.currency ?: "MMK"
 
-                val totalSaved = challenges.sumOf { it.currentAmount }
+                // Sum ALL challenges (including completed) for total saved
+                val totalSaved = allChallenges.sumOf { it.currentAmount }
 
                 // Merge: active challenges from Firestore + default templates
                 // Active ones come first, defaults fill remaining slots
-                val activeIds = challenges.map { it.id }.toSet()
+                val activeIds = activeChallenges.map { it.id }.toSet()
                 val defaultsOnly = DashboardUiState.DEFAULT_CHALLENGES.filter { it.id !in activeIds }
-                val displayList = challenges + defaultsOnly
+                val displayList = activeChallenges + defaultsOnly
 
                 DashboardUiState(
                     isLoading = false,
@@ -183,7 +189,7 @@ class DashboardViewModel @Inject constructor(
                     dailySavings = dailySavingsMap,
                     categorySpending = categoryMap,
                     recentExpenses = recent,
-                    activeChallenges = challenges,
+                    activeChallenges = activeChallenges,
                     displayChallenges = displayList,
                     totalSaved = totalSaved,
                     currency = currency

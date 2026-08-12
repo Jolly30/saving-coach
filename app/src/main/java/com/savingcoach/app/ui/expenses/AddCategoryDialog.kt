@@ -44,7 +44,6 @@ fun AddCategoryDialog(
                     value = nameText,
                     onValueChange = { nameText = it },
                     label = { Text("Category Name *") },
-                    placeholder = { Text("e.g. Groceries") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

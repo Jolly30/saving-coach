@@ -169,7 +169,6 @@ fun AddExpenseScreen(
                 value = descriptionText,
                 onValueChange = { descriptionText = it },
                 label = { Text("Note / Description (Optional)") },
-                placeholder = { Text("Additional notes...") },
                 modifier = Modifier.fillMaxWidth()
             )
 
