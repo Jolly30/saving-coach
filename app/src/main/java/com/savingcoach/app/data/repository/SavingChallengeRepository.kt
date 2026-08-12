@@ -12,4 +12,5 @@ interface SavingChallengeRepository {
     suspend fun addDeposit(userId: String, challengeId: String, deposit: SavingsDeposit)
     suspend fun completeChallenge(userId: String, challengeId: String)
     suspend fun deleteChallenge(userId: String, challengeId: String)
+    suspend fun initializeDefaultChallengesIfNeeded(userId: String, defaultChallenges: List<SavingChallenge>)
 }

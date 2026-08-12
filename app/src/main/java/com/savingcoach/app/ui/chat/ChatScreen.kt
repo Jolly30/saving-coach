@@ -113,7 +113,6 @@ fun ChatScreen(
                     value = inputText,
                     onValueChange = { inputText = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Ask about your finances...") },
                     enabled = !isLoading
                 )
                 Spacer(modifier = Modifier.width(8.dp))

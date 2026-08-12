@@ -96,7 +96,8 @@ fun MainScreen() {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         floatingActionButton = {
-            if (showBottomBar) {
+            val isChallengesScreen = currentDestination?.hierarchy?.any { it.route == Routes.Challenges.route } == true
+            if (showBottomBar && !isChallengesScreen) {
                 FloatingActionButton(
                     onClick = { navController.navigate(Routes.Chat.route) }
                 ) {

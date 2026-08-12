@@ -122,4 +122,26 @@ class FirebaseSavingChallengeRepository @Inject constructor(
         // Delete the challenge document
         challengesCol(userId).document(challengeId).delete().await()
     }
+
+    override suspend fun initializeDefaultChallengesIfNeeded(userId: String, defaultChallenges: List<SavingChallenge>) {
+        val userDocRef = firestore.collection("users").document(userId)
+        val userDoc = userDocRef.get().await()
+        
+        if (userDoc.exists() && userDoc.getBoolean("hasInitializedDefaults") == true) {
+            return
+        }
+
+        // Use a batch to insert all default challenges
+        val batch = firestore.batch()
+        for (challenge in defaultChallenges) {
+            val id = challengesCol(userId).document().id
+            val challengeRef = challengesCol(userId).document(id)
+            batch.set(challengeRef, challenge.copy(id = id, userId = userId))
+        }
+        
+        // Update user document
+        batch.set(userDocRef, mapOf("hasInitializedDefaults" to true), com.google.firebase.firestore.SetOptions.merge())
+        
+        batch.commit().await()
+    }
 }

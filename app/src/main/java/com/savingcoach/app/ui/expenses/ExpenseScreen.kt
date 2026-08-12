@@ -40,6 +40,7 @@ fun ExpenseScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val currencyFormat = remember { NumberFormat.getNumberInstance(Locale.US) }
+    val dateFormatter = remember { java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy") }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Show Snackbar when errorMessage changes
@@ -233,9 +234,7 @@ fun ExpenseScreen(
                                 }
 
                                 Card(
-                                    modifier = Modifier
-                                        .widthIn(max = 330.dp)
-                                        .fillMaxWidth(),
+                                    modifier = Modifier.width(330.dp),
                                     shape = RoundedCornerShape(18.dp),
                                     colors = CardDefaults.cardColors(
                                         containerColor = if (isOverBudget)
@@ -332,72 +331,35 @@ fun ExpenseScreen(
                     }
 
                     // ==========================================
-                    // SECTION 4: Recent Expenses Header with Dropdown Filter
+                    // SECTION 4: Recent Expenses Header with Filter Chips
                     // ==========================================
                     item {
-                        var filterDropdownExpanded by remember { mutableStateOf(false) }
-
-                        val filterCategoryObj = uiState.categories.firstOrNull { it.name.equals(uiState.filterCategory, ignoreCase = true) }
-                        val currentFilterText = if (filterCategoryObj != null) {
-                            "${filterCategoryObj.emoji} ${filterCategoryObj.name}"
-                        } else if (!uiState.filterCategory.isNullOrEmpty()) {
-                            uiState.filterCategory!!
-                        } else {
-                            "All"
-                        }
-
                         Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Text(
+                                text = "🧾 RECENT EXPENSES",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(
-                                    text = "🧾 RECENT EXPENSES",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-
-                                Box {
-                                    OutlinedButton(
-                                        onClick = { filterDropdownExpanded = true },
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.height(36.dp)
-                                    ) {
-                                        Text(currentFilterText, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Filter Categories", modifier = Modifier.size(18.dp))
-                                    }
-
-                                    DropdownMenu(
-                                        expanded = filterDropdownExpanded,
-                                        onDismissRequest = { filterDropdownExpanded = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("All", fontWeight = if (uiState.filterCategory == null) FontWeight.Bold else FontWeight.Normal) },
-                                            onClick = {
-                                                viewModel.selectFilterCategory(null)
-                                                filterDropdownExpanded = false
-                                            }
-                                        )
-                                        uiState.categories.forEach { cat ->
-                                            DropdownMenuItem(
-                                                text = { Text("${cat.emoji} ${cat.name}", fontWeight = if (uiState.filterCategory.equals(cat.name, ignoreCase = true)) FontWeight.Bold else FontWeight.Normal) },
-                                                onClick = {
-                                                    viewModel.selectFilterCategory(cat.name)
-                                                    filterDropdownExpanded = false
-                                                }
-                                            )
-                                        }
-                                    }
+                                item {
+                                    FilterChip(
+                                        selected = uiState.filterCategory == null,
+                                        onClick = { viewModel.selectFilterCategory(null) },
+                                        label = { Text("All") }
+                                    )
+                                }
+                                items(uiState.categories) { cat ->
+                                    FilterChip(
+                                        selected = uiState.filterCategory.equals(cat.name, ignoreCase = true),
+                                        onClick = { viewModel.selectFilterCategory(cat.name) },
+                                        label = { Text("${cat.emoji} ${cat.name}") }
+                                    )
                                 }
                             }
-                            Text(
-                                text = "Select category filter to refine this list",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
                         }
                     }
 
@@ -425,6 +387,7 @@ fun ExpenseScreen(
                             ExpenseItemRow(
                                 expense = expense,
                                 currencyFormat = currencyFormat,
+                                dateFormatter = dateFormatter,
                                 onDeleteClick = { viewModel.setExpenseToDelete(expense) }
                             )
                         }
@@ -500,6 +463,7 @@ fun ExpenseScreen(
 fun ExpenseItemRow(
     expense: Expense,
     currencyFormat: NumberFormat,
+    dateFormatter: java.time.format.DateTimeFormatter,
     onDeleteClick: () -> Unit
 ) {
     Card(
@@ -533,7 +497,7 @@ fun ExpenseItemRow(
                 Text(
                     text = try {
                         val parsed = java.time.LocalDate.parse(expense.date)
-                        parsed.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy"))
+                        parsed.format(dateFormatter)
                     } catch (e: Exception) {
                         expense.date.ifEmpty { "Today" }
                     },
