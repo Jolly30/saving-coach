@@ -112,7 +112,17 @@ class MockSavingChallengeRepository @Inject constructor() : SavingChallengeRepos
 
     override suspend fun createChallenge(challenge: SavingChallenge): String {
         val id = if (challenge.id.isNotBlank()) challenge.id else "ch_${System.currentTimeMillis()}"
-        challenges.value = challenges.value.filter { it.id != id } + challenge.copy(id = id)
+        val updatedChallenge = challenge.copy(id = id)
+        val existingIndex = challenges.value.indexOfFirst { it.id == id }
+        if (existingIndex >= 0) {
+            // Update existing challenge in place to preserve order
+            challenges.value = challenges.value.toMutableList().apply {
+                set(existingIndex, updatedChallenge)
+            }
+        } else {
+            // Add new challenge at the beginning (newest first)
+            challenges.value = listOf(updatedChallenge) + challenges.value
+        }
         return id
     }
 
@@ -131,6 +141,12 @@ class MockSavingChallengeRepository @Inject constructor() : SavingChallengeRepos
 
     override suspend fun deleteChallenge(userId: String, challengeId: String) {
         challenges.value = challenges.value.filter { it.id != challengeId }
+    }
+
+    override suspend fun initializeDefaultChallengesIfNeeded(userId: String, defaultChallenges: List<SavingChallenge>) {
+        if (challenges.value.isEmpty()) {
+            challenges.value = defaultChallenges.map { it.copy(userId = userId) }
+        }
     }
 }
 
