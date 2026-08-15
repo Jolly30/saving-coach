@@ -57,6 +57,12 @@ import com.savingcoach.app.ui.theme.Yellow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import com.savingcoach.app.ui.chat.ChatScreen
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
@@ -82,7 +88,7 @@ fun DashboardScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         val scrollState = rememberScrollState()
-        Box(
+        /*Box(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
@@ -98,6 +104,56 @@ fun DashboardScreen(
                     onNavigateToChallenges = onNavigateToChallenges,
                     onNavigateToCalendarHistory = onNavigateToCalendarHistory,
                     onNavigateToNotifications = onNavigateToNotifications
+                )
+            }
+        }*/
+
+        var showChat by remember { mutableStateOf(false) }
+
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+
+            // Dashboard
+            Column(
+                modifier = Modifier.verticalScroll(scrollState)
+            ) {
+                if (uiState.isLoading && !isRefreshing) {
+                    LoadingOverlay(isLoading = true, message = "Loading dashboard…")
+                } else {
+                    DashboardContent(
+                        uiState = uiState,
+                        onDateTap = viewModel::onDateTap,
+                        onFilterChange = viewModel::onFilterChange,
+                        onDismissTooltip = viewModel::dismissTooltip,
+                        onNavigateToChallenges = onNavigateToChallenges,
+                        onNavigateToCalendarHistory = onNavigateToCalendarHistory,
+                        onNavigateToNotifications = onNavigateToNotifications
+                    )
+                }
+            }
+
+            // Chat Bubble
+            FloatingActionButton(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(20.dp),
+                onClick = {
+                    showChat = true
+                }
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Chat,
+                    contentDescription = "AI Chat"
+                )
+            }
+
+            // Chat Overlay
+            if (showChat) {
+                ChatScreen(
+                    onClose = {
+                        showChat = false
+                    }
                 )
             }
         }

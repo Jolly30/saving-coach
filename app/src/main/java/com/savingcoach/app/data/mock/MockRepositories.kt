@@ -79,6 +79,10 @@ class MockChatRepository @Inject constructor() : ChatRepository {
         messages.value = messages.value + message
     }
 
+    override suspend fun updateMessage(userId: String, message: ChatMessage) {
+        messages.value = messages.value.map { if (it.id == message.id) message else it }
+    }
+
     override suspend fun sendToAi(
         userId: String,
         userMessage: String,

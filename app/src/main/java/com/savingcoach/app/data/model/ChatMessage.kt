@@ -10,7 +10,8 @@ data class ChatMessage(
     val content: String = "",
     val timestamp: Long = 0L,
     val type: String = "query",      // expense, query, advice
-    val parsedExpense: ParsedExpense? = null
+    val parsedExpense: ParsedExpense? = null,
+    val expenseSaved: Boolean = false
 )
 
 @Serializable
@@ -18,5 +19,6 @@ data class ParsedExpense(
     val merchant: String = "",
     val amount: Double = 0.0,
     val category: String = "Other",
-    val date: String = ""
+    val date: String = "",
+    val language: String = "en"
 )
