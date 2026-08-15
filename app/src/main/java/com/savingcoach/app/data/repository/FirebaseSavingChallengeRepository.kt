@@ -83,9 +83,9 @@ class FirebaseSavingChallengeRepository @Inject constructor(
         }
 
     override suspend fun createChallenge(challenge: SavingChallenge): String {
-        val docRef = challengesCol(challenge.userId).document()
-        docRef.set(challenge.copy(id = docRef.id)).await()
-        return docRef.id
+        val id = if (challenge.id.isNotBlank()) challenge.id else challengesCol(challenge.userId).document().id
+        challengesCol(challenge.userId).document(id).set(challenge.copy(id = id)).await()
+        return id
     }
 
     override suspend fun addDeposit(userId: String, challengeId: String, deposit: SavingsDeposit) {
@@ -121,5 +121,27 @@ class FirebaseSavingChallengeRepository @Inject constructor(
         }
         // Delete the challenge document
         challengesCol(userId).document(challengeId).delete().await()
+    }
+
+    override suspend fun initializeDefaultChallengesIfNeeded(userId: String, defaultChallenges: List<SavingChallenge>) {
+        val userDocRef = firestore.collection("users").document(userId)
+        val userDoc = userDocRef.get().await()
+        
+        if (userDoc.exists() && userDoc.getBoolean("hasInitializedDefaults") == true) {
+            return
+        }
+
+        // Use a batch to insert all default challenges
+        val batch = firestore.batch()
+        for (challenge in defaultChallenges) {
+            val id = challengesCol(userId).document().id
+            val challengeRef = challengesCol(userId).document(id)
+            batch.set(challengeRef, challenge.copy(id = id, userId = userId))
+        }
+        
+        // Update user document
+        batch.set(userDocRef, mapOf("hasInitializedDefaults" to true), com.google.firebase.firestore.SetOptions.merge())
+        
+        batch.commit().await()
     }
 }

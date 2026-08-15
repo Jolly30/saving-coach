@@ -10,37 +10,42 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val LightColorScheme = lightColorScheme(
-    primary = Primary,
-    onPrimary = OnPrimary,
-    primaryContainer = PrimaryLight,
-    secondary = Secondary,
-    onSecondary = OnSecondary,
-    secondaryContainer = SecondaryVariant,
-    background = Background,
-    onBackground = OnBackground,
-    surface = Surface,
+    primary = PrimaryBlue,
+    secondary = AccentGreen,
+    background = BackgroundLight,
+    surface = SurfaceWhite,
+    onPrimary = Color.White,
+    onBackground = DarkNavy,
     onSurface = OnSurface,
-    onSurfaceVariant = OnSurfaceVariant
+    onSurfaceVariant = OnSurfaceVariant,
+    surfaceVariant = Color(0xFFF1F5F9),
+    outline = Color(0xFFE0E0E0),
+    error = Red,
+    primaryContainer = LightBluePill
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = PrimaryLight,
-    onPrimary = OnPrimary,
-    primaryContainer = Primary,
-    secondary = Secondary,
-    onSecondary = OnSecondary,
-    secondaryContainer = SecondaryVariant,
+    primary = PrimaryBlue,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFF1E3A5F),
+    secondary = AccentGreen,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFF1A3A2A),
     background = DarkBackground,
     onBackground = DarkOnBackground,
     surface = DarkSurface,
     onSurface = DarkOnSurface,
-    onSurfaceVariant = OnSurfaceVariant
+    onSurfaceVariant = OnSurfaceVariant,
+    surfaceVariant = Color(0xFF2C2C2C),
+    outline = Color(0xFF444444),
+    error = Red
 )
 
 @Composable

@@ -95,15 +95,16 @@ fun MainScreen() {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        /*floatingActionButton = {
-            if (showBottomBar) {
+        floatingActionButton = {
+            val isChallengesScreen = currentDestination?.hierarchy?.any { it.route == Routes.Challenges.route } == true
+            if (showBottomBar && !isChallengesScreen) {
                 FloatingActionButton(
                     onClick = { navController.navigate(Routes.Chat.route) }
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat")
                 }
             }
-        },*/
+        },
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
