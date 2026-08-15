@@ -95,7 +95,7 @@ fun MainScreen() {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        floatingActionButton = {
+        /*floatingActionButton = {
             if (showBottomBar) {
                 FloatingActionButton(
                     onClick = { navController.navigate(Routes.Chat.route) }
@@ -103,7 +103,7 @@ fun MainScreen() {
                     Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat")
                 }
             }
-        },
+        },*/
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
