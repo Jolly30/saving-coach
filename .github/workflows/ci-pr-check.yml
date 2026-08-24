@@ -32,7 +32,9 @@ jobs:
       - name: Setup Local Properties
         run: |
           echo "sdk.dir=${{ env.ANDROID_HOME }}" > local.properties
-          echo "proxy.url=https://proxy-lake-xi-82.vercel.app" >> local.properties
+          echo "proxy.url=${{ secrets.PROXY_URL }}" >> local.properties
+          echo "coingecko.proxy.url=${{ secrets.COINGECKO_PROXY_URL }}" >> local.properties
+          echo "finnhub.proxy.url=${{ secrets.FINNHUB_PROXY_URL }}" >> local.properties
           echo "gemini.api.key=${{ secrets.GEMINI_API_KEY }}" >> local.properties
 
       - name: Setup Gradle
@@ -71,7 +73,9 @@ jobs:
       - name: Setup Local Properties
         run: |
           echo "sdk.dir=${{ env.ANDROID_HOME }}" > local.properties
-          echo "proxy.url=https://proxy-lake-xi-82.vercel.app" >> local.properties
+          echo "proxy.url=${{ secrets.PROXY_URL }}" >> local.properties
+          echo "coingecko.proxy.url=${{ secrets.COINGECKO_PROXY_URL }}" >> local.properties
+          echo "finnhub.proxy.url=${{ secrets.FINNHUB_PROXY_URL }}" >> local.properties
           echo "gemini.api.key=${{ secrets.GEMINI_API_KEY }}" >> local.properties
 
       - name: Setup Gradle
@@ -109,6 +113,9 @@ jobs:
       - name: Setup Local Properties
         run: |
           echo "sdk.dir=${{ env.ANDROID_HOME }}" > local.properties
+          echo "proxy.url=${{ secrets.PROXY_URL }}" >> local.properties
+          echo "coingecko.proxy.url=${{ secrets.COINGECKO_PROXY_URL }}" >> local.properties
+          echo "finnhub.proxy.url=${{ secrets.FINNHUB_PROXY_URL }}" >> local.properties
           echo "gemini.api.key=${{ secrets.GEMINI_API_KEY }}" >> local.properties
 
       - name: Setup Gradle
