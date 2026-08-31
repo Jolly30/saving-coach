@@ -9,6 +9,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import javax.inject.Named
 import javax.inject.Singleton
 
 @Module
@@ -21,7 +22,13 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideFirebaseFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance()
+    fun provideFirebaseFirestore(): FirebaseFirestore {
+        val firestore = FirebaseFirestore.getInstance()
+        firestore.firestoreSettings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
+            .setPersistenceEnabled(true)
+            .build()
+        return firestore
+    }
 
     @Provides
     @Singleton
@@ -34,4 +41,14 @@ object AppModule {
     @Provides
     @Singleton
     fun provideProxyUrl(): String = BuildConfig.proxyurl
+
+    @Provides
+    @Singleton
+    @Named("coingecko_proxy_url")
+    fun provideCoingeckoProxyUrl(): String = BuildConfig.coingeckoproxyurl
+
+    @Provides
+    @Singleton
+    @Named("finnhub_proxy_url")
+    fun provideFinnhubProxyUrl(): String = BuildConfig.finnhubproxyurl
 }
