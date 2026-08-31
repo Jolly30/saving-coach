@@ -178,7 +178,7 @@ class MockAuthRepository @Inject constructor() : AuthRepository {
         return Result.success(null as AuthResult)
     }
 
-    override suspend fun signUpWithEmail(email: String, password: String): Result<AuthResult> {
+    override suspend fun signUpWithEmail(email: String, password: String, username: String): Result<AuthResult> {
         signedIn = true
         return Result.success(null as AuthResult)
     }
