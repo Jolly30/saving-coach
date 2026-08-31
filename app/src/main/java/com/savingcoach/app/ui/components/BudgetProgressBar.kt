@@ -26,7 +26,7 @@ fun BudgetProgressBar(
     percentage: Double,
     modifier: Modifier = Modifier,
     showLabel: Boolean = true,
-    height: Dp = 24.dp,
+    height: Dp = 8.dp,
     label: String = ""
 ) {
     val barColor = when {
