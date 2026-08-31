@@ -10,8 +10,14 @@ import com.savingcoach.app.data.repository.FirebaseAuthRepository
 import com.savingcoach.app.data.repository.FirebaseBudgetRepository
 import com.savingcoach.app.data.repository.FirebaseExpenseCategoryRepository
 import com.savingcoach.app.data.repository.FirebaseExpenseRepository
+import com.savingcoach.app.data.repository.FirebaseInvestmentRepository
 import com.savingcoach.app.data.repository.FirebaseSavingChallengeRepository
+import com.savingcoach.app.data.repository.FirebaseUserRepository
+import com.savingcoach.app.data.repository.InvestmentRepository
 import com.savingcoach.app.data.repository.SavingChallengeRepository
+import com.savingcoach.app.data.repository.UserRepository
+import com.savingcoach.app.data.repository.NotificationRepository
+import com.savingcoach.app.data.repository.FirebaseNotificationRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -57,4 +63,22 @@ abstract class RepositoryModule {
     abstract fun bindExpenseCategoryRepository(
         impl: FirebaseExpenseCategoryRepository
     ): ExpenseCategoryRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindUserRepository(
+        impl: FirebaseUserRepository
+    ): UserRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindInvestmentRepository(
+        impl: FirebaseInvestmentRepository
+    ): InvestmentRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindNotificationRepository(
+        impl: FirebaseNotificationRepository
+    ): NotificationRepository
 }
