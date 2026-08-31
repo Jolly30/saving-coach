@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,21 +30,24 @@ import com.savingcoach.app.data.model.ChallengeTemplate
 import com.savingcoach.app.ui.theme.*
 import java.time.LocalDate
 
+private val EMOJI_REGEX = Regex("[\\x{1F300}-\\x{1F5FF}\\x{1F900}-\\x{1F9FF}\\x{1F600}-\\x{1F64F}\\x{1F680}-\\x{1F6FF}\\x{2600}-\\x{26FF}\\x{2700}-\\x{27BF}\\x{1F1E6}-\\x{1F1FF}\\x{1F191}-\\x{1F251}\\x{1F004}\\x{1F0CF}\\x{1F170}-\\x{1F171}\\x{1F17E}-\\x{1F17F}\\x{1F18E}\\x{3030}\\x{2B50}\\x{2B55}\\x{2934}-\\x{2935}\\x{2B05}-\\x{2B07}\\x{2B1B}-\\x{2B1C}\\x{3297}\\x{3299}\\x{303D}\\x{00A9}\\x{00AE}\\x{2122}\\x{23F3}\\x{24C2}\\x{23E9}-\\x{23EF}\\x{25B6}\\x{23F8}-\\x{23FA}\\x{1FA70}-\\x{1FAFF}]")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditChallengeScreen(
     challenge: SavingChallenge,
     viewModel: ChallengeViewModel,
     onDismiss: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onStop: (SavingChallenge) -> Unit
 ) {
     var title by remember { 
         val raw = challenge.title
         val firstWord = raw.split(" ").firstOrNull() ?: ""
-        val isEmoji = firstWord.isNotEmpty() && firstWord.any { !it.isLetterOrDigit() }
+        val isEmoji = firstWord.isNotEmpty() && EMOJI_REGEX.containsMatchIn(firstWord)
         mutableStateOf(if (isEmoji) raw.removePrefix(firstWord).trim() else raw)
     }
-    var targetAmount by remember { mutableStateOf(challenge.targetAmount.toInt().toString()) }
+    var targetAmount by remember { mutableStateOf(String.format(java.util.Locale.US, "%.0f", challenge.targetAmount)) }
     
     // Parse duration from lastDepositDate suffix
     val durationFromMetadata = remember(challenge) {
@@ -63,7 +67,7 @@ fun EditChallengeScreen(
     var selectedEmoji by remember { 
         val raw = challenge.title
         val firstWord = raw.split(" ").firstOrNull() ?: ""
-        val isEmoji = firstWord.isNotEmpty() && firstWord.any { !it.isLetterOrDigit() }
+        val isEmoji = firstWord.isNotEmpty() && EMOJI_REGEX.containsMatchIn(firstWord)
         mutableStateOf(if (isEmoji) firstWord else "")
     }
     var selectedTemplate by remember { mutableStateOf(challenge.template) }
@@ -74,33 +78,29 @@ fun EditChallengeScreen(
     }
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showStopConfirm by remember { mutableStateOf(false) }
 
-    if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Challenge", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to delete this challenge? This action cannot be undone.", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-            containerColor = MaterialTheme.colorScheme.surface,
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.deleteChallenge(challenge.id)
-                        showDeleteConfirm = false
-                        onDelete()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.surface, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        )
-    }
+    DeleteChallengeDialog(
+        show = showDeleteConfirm,
+        onDismiss = { showDeleteConfirm = false },
+        onConfirm = {
+            viewModel.deleteChallenge(challenge.id)
+            showDeleteConfirm = false
+            onDelete()
+        }
+    )
+
+    StopChallengeDialog(
+        show = showStopConfirm,
+        currentAmount = challenge.currentAmount,
+        currencyPreference = uiState.currencyPreference,
+        onDismiss = { showStopConfirm = false },
+        onConfirm = {
+            viewModel.stopChallenge(challenge.id)
+            showStopConfirm = false
+            onStop(challenge)
+        }
+    )
 
     BackHandler {
         onDismiss()
@@ -117,6 +117,8 @@ fun EditChallengeScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
+            val strings = com.savingcoach.app.ui.localization.AppLocale.current
+
             Spacer(modifier = Modifier.height(4.dp))
 
             // Header
@@ -134,14 +136,14 @@ fun EditChallengeScreen(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = strings.back,
                         modifier = Modifier.size(24.dp),
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
                 Text(
-                    text = "Edit Challenge",
+                    text = strings.editChallengeTitle,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -158,28 +160,27 @@ fun EditChallengeScreen(
             ) {
                 Spacer(modifier = Modifier.height(32.dp))
 
+            val allowedTemplates = when (challenge.template) {
+                ChallengeTemplate.FLEXI, ChallengeTemplate.ENVELOPE -> listOf(
+                    ChallengeTemplate.FLEXI to strings.templateFlexi,
+                    ChallengeTemplate.ENVELOPE to strings.templateEnvelope
+                )
+                ChallengeTemplate.CONSTANT -> listOf(
+                    ChallengeTemplate.CONSTANT to strings.templateConstant
+                )
+                ChallengeTemplate.NO_SPEND -> listOf(
+                    ChallengeTemplate.NO_SPEND to strings.templateNoSpend
+                )
+            }
+
             Text(
-                text = "CHOOSE TEMPLATE",
+                text = if (allowedTemplates.size > 1) strings.chooseTemplate else strings.yourTemplate,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 letterSpacing = 1.sp
             )
             Spacer(modifier = Modifier.height(12.dp))
-            val allowedTemplates = when (challenge.template) {
-                ChallengeTemplate.FLEXI, ChallengeTemplate.ENVELOPE -> listOf(
-                    ChallengeTemplate.FLEXI to "Flexi",
-                    ChallengeTemplate.ENVELOPE to "Envelope"
-                )
-                ChallengeTemplate.CONSTANT -> listOf(
-                    ChallengeTemplate.CONSTANT to "Constant",
-                    ChallengeTemplate.NO_SPEND to "No-Spend"
-                )
-                ChallengeTemplate.NO_SPEND -> listOf(
-                    ChallengeTemplate.NO_SPEND to "No-Spend",
-                    ChallengeTemplate.CONSTANT to "Constant"
-                )
-            }
             
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -192,7 +193,10 @@ fun EditChallengeScreen(
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .weight(1f)
-                            .clickable { selectedTemplate = tmpl }
+                            .then(
+                                if (allowedTemplates.size > 1) Modifier.clickable { selectedTemplate = tmpl }
+                                else Modifier
+                            )
                     ) {
                         Text(
                             text = label,
@@ -211,16 +215,18 @@ fun EditChallengeScreen(
             val textFieldColors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                 focusedBorderColor = ChallengeActive,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                disabledBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
                 unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                 focusedLabelColor = ChallengeActive,
                 unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
 
             Row(
@@ -229,7 +235,7 @@ fun EditChallengeScreen(
             ) {
                 Column {
                     Text(
-                        text = "EMOJI",
+                        text = strings.emojiLabel,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -248,7 +254,7 @@ fun EditChallengeScreen(
                     textStyle = TextStyle(
                         fontSize = 22.sp,
                         textAlign = TextAlign.Center,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = ChallengeActive,
@@ -263,7 +269,7 @@ fun EditChallengeScreen(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "CHALLENGE NAME",
+                        text = strings.challengeNameLabel,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -281,7 +287,7 @@ fun EditChallengeScreen(
             }
             if (isNameDuplicate) {
                 Text(
-                    text = "Challenge name already exists",
+                    text = strings.challengeNameExists,
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 4.dp, start = 76.dp)
@@ -293,7 +299,7 @@ fun EditChallengeScreen(
             if (selectedTemplate == ChallengeTemplate.NO_SPEND) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "DURATION (DAYS)",
+                        text = strings.durationDaysLabel,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -312,7 +318,7 @@ fun EditChallengeScreen(
                     )
                     if (isDurationLower) {
                         Text(
-                            text = "Must be >= ${challenge.completedDaysCount}",
+                            text = strings.mustBeAtLeast(challenge.completedDaysCount.toLong()),
                             color = MaterialTheme.colorScheme.error,
                             fontSize = 10.sp,
                             modifier = Modifier.padding(top = 4.dp, start = 4.dp)
@@ -320,10 +326,13 @@ fun EditChallengeScreen(
                     }
                 }
             } else {
+                val isTargetEnabled = selectedTemplate != ChallengeTemplate.NO_SPEND && challenge.template != ChallengeTemplate.CONSTANT
+                val isDurationEnabled = selectedTemplate != ChallengeTemplate.CONSTANT && challenge.template != ChallengeTemplate.CONSTANT
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "TARGET AMOUNT (MMK)",
+                            text = "${strings.targetAmountLabel} (${com.savingcoach.app.utils.InvestmentCalculations.getCurrencyLabel(uiState.currencyPreference, isInvestment = false)})",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -336,28 +345,32 @@ fun EditChallengeScreen(
                         }
                         OutlinedTextField(
                             value = targetAmount,
-                            onValueChange = { targetAmount = it.filter { char -> char.isDigit() }.take(10) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            onValueChange = { newValue ->
+                                if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
+                                    targetAmount = newValue
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.fillMaxWidth().height(56.dp),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                             colors = textFieldColors,
                             isError = isTargetLower,
-                            enabled = selectedTemplate != ChallengeTemplate.CONSTANT && selectedTemplate != ChallengeTemplate.NO_SPEND
+                            enabled = isTargetEnabled
                         )
                         if (isTargetLower) {
                             Text(
-                                text = "Must be > ${String.format("%,.0f", challenge.currentAmount)}",
+                                text = strings.mustBeGreaterThan(strings.formatAmount(challenge.currentAmount, uiState.currencyPreference, 1.0, isInvestment = false)),
                                 color = MaterialTheme.colorScheme.error,
                                 fontSize = 10.sp,
-                                modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
                             )
                         }
                     }
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "DURATION (DAYS)",
+                            text = strings.durationDaysLabel,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -367,6 +380,18 @@ fun EditChallengeScreen(
                         val isDurationLower = (durationDays.toLongOrNull() ?: 0L) <= challenge.completedDaysCount
                         val minDuration = challenge.completedDaysCount + 1
 
+                        val start = remember(challenge.startDate) {
+                            try { LocalDate.parse(challenge.startDate) } catch(e: Exception) { LocalDate.now() }
+                        }
+                        val lastDay = remember(start) {
+                            start.with(java.time.temporal.TemporalAdjusters.lastDayOfMonth())
+                        }
+                        val maxDays = remember(start, lastDay) {
+                            lastDay.dayOfMonth - start.dayOfMonth + 1
+                        }
+                        val enteredDuration = durationDays.toLongOrNull() ?: 0L
+                        val isDurationTooLong = enteredDuration > maxDays
+
                         OutlinedTextField(
                             value = durationDays,
                             onValueChange = { durationDays = it.filter { char -> char.isDigit() } },
@@ -375,12 +400,19 @@ fun EditChallengeScreen(
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                             colors = textFieldColors,
-                            isError = isDurationLower,
-                            enabled = selectedTemplate != ChallengeTemplate.CONSTANT
+                            isError = isDurationLower || isDurationTooLong,
+                            enabled = isDurationEnabled
                         )
                         if (isDurationLower) {
                             Text(
-                                text = "Must be >= $minDuration",
+                                text = strings.mustBeAtLeast(minDuration.toLong()),
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                            )
+                        } else if (isDurationTooLong) {
+                            Text(
+                                text = strings.mustBeAtMostDays(maxDays),
                                 color = MaterialTheme.colorScheme.error,
                                 fontSize = 10.sp,
                                 modifier = Modifier.padding(top = 4.dp, start = 4.dp)
@@ -393,10 +425,20 @@ fun EditChallengeScreen(
             // Dynamic Constant calculation preview
             val targetVal = targetAmount.toDoubleOrNull() ?: 0.0
             val durationVal = durationDays.toLongOrNull() ?: 0L
-            if (selectedTemplate == ChallengeTemplate.CONSTANT && durationVal > 0) {
+            val startVal = remember(challenge.startDate) {
+                try { LocalDate.parse(challenge.startDate) } catch(e: Exception) { LocalDate.now() }
+            }
+            val lastDayVal = remember(startVal) {
+                startVal.with(java.time.temporal.TemporalAdjusters.lastDayOfMonth())
+            }
+            val maxDaysVal = remember(startVal, lastDayVal) {
+                lastDayVal.dayOfMonth - startVal.dayOfMonth + 1
+            }
+            val isDurationTooLongVal = durationVal > maxDaysVal
+            if (selectedTemplate == ChallengeTemplate.CONSTANT && durationVal > 0 && !isDurationTooLongVal) {
                 val dailyAmount = targetVal / durationVal
                 Text(
-                    text = "Save ${String.format("%,.0f", dailyAmount)} MMK / day",
+                    text = strings.savePerDay(strings.formatAmount(dailyAmount, uiState.currencyPreference, 1.0, isInvestment = false)),
                     color = ChallengeActive,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
@@ -413,7 +455,7 @@ fun EditChallengeScreen(
                 selectedTemplate != ChallengeTemplate.NO_SPEND && (targetAmount.toDoubleOrNull() ?: 0.0) <= challenge.currentAmount
             }
             val isDurationLowerThanSaved = (durationDays.toLongOrNull() ?: 0L) <= challenge.completedDaysCount
-            val isSaveEnabled = title.isNotBlank() && !isNameDuplicate && !isTargetLowerThanSaved && !isDurationLowerThanSaved
+            val isSaveEnabled = title.isNotBlank() && !isNameDuplicate && !isTargetLowerThanSaved && !isDurationLowerThanSaved && !isDurationTooLongVal && durationDays.isNotBlank()
             
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -422,7 +464,9 @@ fun EditChallengeScreen(
                 // Save button
                 Button(
                     onClick = {
-                        val amount = if (selectedTemplate == ChallengeTemplate.NO_SPEND) 0.0 else (targetAmount.toDoubleOrNull() ?: 30000.0)
+                        val targetCurrency = com.savingcoach.app.utils.InvestmentCalculations.getTargetCurrency(uiState.currencyPreference, isInvestment = false)
+                        val defaultAmount = if (targetCurrency == "USD") 10.0 else 30000.0
+                        val amount = if (selectedTemplate == ChallengeTemplate.NO_SPEND) 0.0 else (targetAmount.toDoubleOrNull() ?: defaultAmount)
                         val days = durationDays.toLongOrNull() ?: 30L
 
                         val finalTitle = if (title.isBlank()) "My Challenge" else title
@@ -442,7 +486,8 @@ fun EditChallengeScreen(
                             targetAmount = amount,
                             endDate = newEndDate,
                             template = selectedTemplate,
-                            lastDepositDate = challenge.lastDepositDate.substringBefore("|") + "|" + challenge.completedDaysCount + "|$days"
+                            lastDepositDate = if (challenge.completedDaysCount == 0) "|0|$days" else challenge.lastDepositDate.substringBefore("|") + "|" + challenge.completedDaysCount + "|$days",
+                            currency = targetCurrency
                         )
 
                         viewModel.updateChallengeMock(updatedChallenge)
@@ -458,7 +503,22 @@ fun EditChallengeScreen(
                     ),
                     shape = RoundedCornerShape(24.dp)
                 ) {
-                    Text("Save Changes", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (isSaveEnabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(strings.saveChanges, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (isSaveEnabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                // Stop Challenge button
+                if (challenge.isActive) {
+                    OutlinedButton(
+                        onClick = { showStopConfirm = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentOrange),
+                        border = BorderStroke(1.5.dp, AccentOrange),
+                        shape = RoundedCornerShape(24.dp)
+                    ) {
+                        Text(strings.stopChallengeTitle, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AccentOrange)
+                    }
                 }
 
                 // Delete button
@@ -471,11 +531,82 @@ fun EditChallengeScreen(
                     border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error),
                     shape = RoundedCornerShape(24.dp)
                 ) {
-                    Text("Delete Challenge", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                    Text(strings.deleteChallengeTitle, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                 }
             }
             }
             Spacer(modifier = Modifier.height(48.dp))
         }
+    }
+}
+
+@Composable
+fun DeleteChallengeDialog(
+    show: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
+    if (show) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(strings.deleteChallengeTitle, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold) },
+            text = { Text(strings.deleteChallengeMsg, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            containerColor = MaterialTheme.colorScheme.surface,
+            confirmButton = {
+                Button(
+                    onClick = onConfirm,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(strings.delete, color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text(strings.cancel, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun StopChallengeDialog(
+    show: Boolean,
+    currentAmount: Double,
+    currencyPreference: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
+    if (show) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(strings.stopChallengeTitle, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        strings.stopChallengeMsg(com.savingcoach.app.utils.InvestmentCalculations.formatValue(currentAmount, currencyPreference, 1.0, isInvestment = false)),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            confirmButton = {
+                Button(
+                    onClick = onConfirm,
+                    colors = ButtonDefaults.buttonColors(containerColor = CoralRed),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(strings.stopChallengeConfirm, color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text(strings.stopChallengeKeep, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        )
     }
 }
