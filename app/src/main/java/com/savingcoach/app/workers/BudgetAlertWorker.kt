@@ -37,7 +37,6 @@ class BudgetAlertWorker @AssistedInject constructor(
                 when {
                     percentage >= 100 -> notificationHelper.showBudgetAlert(percentage, totalSpent - budget.limit)
                     percentage >= 90 -> notificationHelper.showBudgetAlert(percentage)
-                    percentage >= 75 -> notificationHelper.showBudgetAlert(percentage)
                 }
             }
 
