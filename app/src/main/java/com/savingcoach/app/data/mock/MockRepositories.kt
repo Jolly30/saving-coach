@@ -137,6 +137,12 @@ class MockSavingChallengeRepository @Inject constructor() : SavingChallengeRepos
         deposits.value = current
     }
 
+    override suspend fun deleteDeposit(userId: String, challengeId: String, depositId: String) {
+        val current = deposits.value.toMutableMap()
+        current[challengeId] = current[challengeId]?.filter { it.id != depositId } ?: emptyList()
+        deposits.value = current
+    }
+
     override suspend fun completeChallenge(userId: String, challengeId: String) {
         challenges.value = challenges.value.map {
             if (it.id == challengeId) it.copy(isCompleted = true, isActive = false) else it

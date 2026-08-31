@@ -34,7 +34,6 @@ class FirebaseSavingChallengeRepository @Inject constructor(
             val listener = challengesCol(userId)
                 .whereEqualTo("isActive", true)
                 .whereEqualTo("isCompleted", false)
-                .orderBy("createdAt", Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         close(error)
@@ -42,7 +41,7 @@ class FirebaseSavingChallengeRepository @Inject constructor(
                     }
                     val challenges = snapshot?.documents?.mapNotNull { doc ->
                         doc.toObject(SavingChallenge::class.java)?.copy(id = doc.id)
-                    } ?: emptyList()
+                    }?.sortedByDescending { it.createdAt } ?: emptyList()
                     trySend(challenges)
                 }
             awaitClose { listener.remove() }
@@ -101,6 +100,10 @@ class FirebaseSavingChallengeRepository @Inject constructor(
                     "updatedAt" to System.currentTimeMillis()
                 )
             ).await()
+    }
+
+    override suspend fun deleteDeposit(userId: String, challengeId: String, depositId: String) {
+        depositsCol(userId, challengeId).document(depositId).delete().await()
     }
 
     override suspend fun completeChallenge(userId: String, challengeId: String) {
