@@ -21,7 +21,13 @@ const providers = [
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: systemPrompt }] },
             contents,
-            generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+            generationConfig: { temperature: 0.7, maxOutputTokens: 800 },
+            safetySettings: [
+              { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+              { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+              { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+              { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+            ],
           }),
         }
       );
@@ -35,32 +41,51 @@ const providers = [
     name: "OpenRouter",
     envKey: "OPENROUTER_API_KEY",
     call: async (messages, systemPrompt, apiKey) => {
-      const body = {
-        model: "deepseek/deepseek-chat-v3-0324",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages.map((m) => ({
-            role: m.role === "ai" ? "assistant" : "user",
-            content: m.content,
-          })),
-        ],
-        temperature: 0.7,
-        max_tokens: 2048,
-      };
+      const models = [
+        "google/gemma-4-31b-it:free",
+        "nvidia/nemotron-3.5-lightning:free",
+        "minimax/minimax-m3:free"
+      ];
+      
+      let lastError = null;
+      for (const model of models) {
+        try {
+          console.log(`Trying OpenRouter model: ${model}...`);
+          const body = {
+            model: model,
+            messages: [
+              { role: "system", content: systemPrompt },
+              ...messages.map((m) => ({
+                role: m.role === "ai" ? "assistant" : "user",
+                content: m.content,
+              })),
+            ],
+            temperature: 0.7,
+            max_tokens: 400,
+          };
 
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://saving-coach.app",
-        },
-        body: JSON.stringify(body),
-      });
+          const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+              "HTTP-Referer": "https://saving-coach.app",
+            },
+            body: JSON.stringify(body),
+          });
 
-      const data = await res.json();
-      if (!res.ok) throw { status: res.status, message: data.error?.message || "OpenRouter error" };
-      return { reply: data.choices?.[0]?.message?.content || "No response." };
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error?.message || `HTTP ${res.status}`);
+          }
+          console.log(`✓ OpenRouter model ${model} succeeded`);
+          return { reply: data.choices?.[0]?.message?.content || "No response." };
+        } catch (err) {
+          console.warn(`✗ OpenRouter model ${model} failed: ${err.message}`);
+          lastError = err;
+        }
+      }
+      throw lastError || new Error("All OpenRouter models failed");
     },
   },
 ];
