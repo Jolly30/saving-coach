@@ -15,6 +15,7 @@ fun AddCategoryDialog(
     globalLimit: Double = 0.0,
     maxAllowedTarget: Double = Double.MAX_VALUE,
     currencyFormat: NumberFormat = remember { NumberFormat.getNumberInstance(Locale.US) },
+    currencyPreference: String = "MMK",
     onDismiss: () -> Unit,
     onConfirm: (emoji: String, name: String, target: Double) -> Unit,
     showTargetField: Boolean = true
@@ -27,10 +28,11 @@ fun AddCategoryDialog(
     val enteredTarget = if (showTargetField) (targetText.toDoubleOrNull() ?: 0.0) else 0.0
     val isExceedingGlobal = globalLimit > 0 && enteredTarget > maxAllowedTarget
     val isGlobalZero = globalLimit == 0.0 && enteredTarget > 0.0
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Custom Category") },
+        title = { Text(strings.addCategory) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -43,7 +45,7 @@ fun AddCategoryDialog(
                 OutlinedTextField(
                     value = nameText,
                     onValueChange = { nameText = it },
-                    label = { Text("Category Name *") },
+                    label = { Text("${strings.categoryName} *") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -57,7 +59,7 @@ fun AddCategoryDialog(
                                     targetText = newValue
                                 }
                             },
-                            label = { Text("Category Target Limit (MMK)") },
+                            label = { Text("${strings.targetLimit} (${com.savingcoach.app.utils.InvestmentCalculations.getCurrencyLabel(currencyPreference, isInvestment = false)})") },
                             isError = isExceedingGlobal || isGlobalZero,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
@@ -65,19 +67,19 @@ fun AddCategoryDialog(
                         )
                         if (isGlobalZero) {
                             Text(
-                                text = "⚠️ Monthly Overall Budget is currently 0 MMK. Please set Global Budget first.",
+                                text = strings.budgetZeroWarning,
                                 color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.bodySmall
                             )
                         } else if (isExceedingGlobal) {
                             Text(
-                                text = "⚠️ Cannot exceed Global Budget! Max available capacity: ${currencyFormat.format(maxAllowedTarget.toLong())} MMK.",
+                                text = strings.budgetExceedWarning(com.savingcoach.app.utils.InvestmentCalculations.formatValue(maxAllowedTarget, currencyPreference, 1.0, isInvestment = false)),
                                 color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.bodySmall
                             )
                         } else if (globalLimit > 0) {
                             Text(
-                                text = "Available Global Capacity: ${currencyFormat.format(maxAllowedTarget.toLong())} MMK",
+                                text = strings.availableCapacityMsg(com.savingcoach.app.utils.InvestmentCalculations.formatValue(maxAllowedTarget, currencyPreference, 1.0, isInvestment = false)),
                                 color = MaterialTheme.colorScheme.outline,
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -99,12 +101,12 @@ fun AddCategoryDialog(
                 },
                 enabled = nameText.isNotBlank() && !isExceedingGlobal && !isGlobalZero
             ) {
-                Text("Add")
+                Text(strings.save)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(strings.cancel)
             }
         }
     )

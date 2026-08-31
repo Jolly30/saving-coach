@@ -1,10 +1,15 @@
 package com.savingcoach.app.ui.challenges
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import com.savingcoach.app.R
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -21,9 +26,17 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material3.*
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.PI
+import kotlin.math.sin
+import kotlin.math.cos
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.Composable
@@ -40,6 +53,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -62,6 +77,8 @@ import com.savingcoach.app.ui.theme.*
 import java.text.NumberFormat
 import java.util.Locale
 
+private val EMOJI_REGEX = Regex("[\\x{1F300}-\\x{1F5FF}\\x{1F900}-\\x{1F9FF}\\x{1F600}-\\x{1F64F}\\x{1F680}-\\x{1F6FF}\\x{2600}-\\x{26FF}\\x{2700}-\\x{27BF}\\x{1F1E6}-\\x{1F1FF}\\x{1F191}-\\x{1F251}\\x{1F004}\\x{1F0CF}\\x{1F170}-\\x{1F171}\\x{1F17E}-\\x{1F17F}\\x{1F18E}\\x{3030}\\x{2B50}\\x{2B55}\\x{2934}-\\x{2935}\\x{2B05}-\\x{2B07}\\x{2B1B}-\\x{2B1C}\\x{3297}\\x{3299}\\x{303D}\\x{00A9}\\x{00AE}\\x{2122}\\x{23F3}\\x{24C2}\\x{23E9}-\\x{23EF}\\x{25B6}\\x{23F8}-\\x{23FA}\\x{1FA70}-\\x{1FAFF}]")
+
 data class DepositItem(val amount: Double, val note: String, val time: String)
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -74,9 +91,11 @@ fun ChallengeDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val challenge = uiState.challengesList.find { it.id == challengeId }
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
 
     androidx.compose.runtime.LaunchedEffect(challengeId) {
         viewModel.selectChallenge(challengeId)
+        viewModel.autoSkipMissedDays(challengeId)
     }
 
     val isPreset100 = challengeId == "preset_2"
@@ -98,30 +117,16 @@ fun ChallengeDetailScreen(
 
     var currentDaysLeft by rememberSaveable(challengeId) {
         mutableIntStateOf(challenge?.let {
-            try {
-                val end = java.time.LocalDate.parse(it.endDate)
-                java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), end).toInt().coerceAtLeast(0)
-            } catch (e: Exception) { 30 }
+            (it.durationDays - it.completedDaysCount).coerceAtLeast(0)
         } ?: 30)
     }
 
-    // Sync local state with Firestore when challenge changes externally (e.g., from another device)
-    // Only reset if the challenge has been updated after our last local update
+    // Sync local state with Firestore when challenge changes
     androidx.compose.runtime.LaunchedEffect(challenge?.id, challenge?.currentAmount, challenge?.completedDaysCount) {
         challenge?.let {
-            // Only sync from Firestore if we haven't made local changes
-            // This prevents resetting local state after user actions
-            val localCompletedSteps = completedSteps
-            val localCurrentAmount = currentAmount
-            if (it.completedDaysCount > localCompletedSteps || it.currentAmount > localCurrentAmount) {
-                // Firestore has newer data - sync from it
-                completedSteps = it.completedDaysCount
-                currentAmount = it.currentAmount
-                currentDaysLeft = try {
-                    val end = java.time.LocalDate.parse(it.endDate)
-                    java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), end).toInt().coerceAtLeast(0)
-                } catch (e: Exception) { 30 }
-            }
+            completedSteps = it.completedDaysCount
+            currentAmount = it.currentAmount
+            currentDaysLeft = (it.durationDays - it.completedDaysCount).coerceAtLeast(0)
         }
     }
 
@@ -148,8 +153,20 @@ fun ChallengeDetailScreen(
     } else 1000.0
     
     val depositHistory = uiState.selectedChallengeDeposits.map {
-        val timeStr = java.text.SimpleDateFormat("yyyy-MM-dd • hh:mm a", java.util.Locale.US).format(java.util.Date(it.createdAt))
+        val timeStr = if (it.note.equals("Skipped", ignoreCase = true)) {
+            "${it.date} • ${strings.missed}"
+        } else {
+            strings.formatExpenseDateTime(it.createdAt, it.date)
+        }
         DepositItem(amount = it.amount, note = it.note, time = timeStr)
+    }
+
+    val skippedIndices = remember(uiState.selectedChallengeDeposits) {
+        uiState.selectedChallengeDeposits
+            .sortedWith(compareBy<com.savingcoach.app.data.model.SavingsDeposit> { it.date }.thenBy { it.createdAt })
+            .mapIndexedNotNull { index, deposit ->
+                if (deposit.note.contains("Skipped", ignoreCase = true) || deposit.amount <= 0.0) index else null
+            }.toSet()
     }
 
     var showDayDialog by remember { mutableStateOf(false) }
@@ -159,6 +176,7 @@ fun ChallengeDetailScreen(
     var customAmountInput by remember { mutableStateOf("") }
     
     var showCompletionDialog by remember { mutableStateOf(false) }
+    var isFailedLocal by remember { mutableStateOf(false) }
     var showFullMapSheet by remember { mutableStateOf(false) }
 
     androidx.compose.runtime.LaunchedEffect(challenge) {
@@ -175,9 +193,19 @@ fun ChallengeDetailScreen(
             }
         }
     }
-    androidx.compose.runtime.LaunchedEffect(challenge?.isCompleted) {
-        if (challenge?.isCompleted == true) {
-            showCompletionDialog = true
+    var hasShownDialogForThisChallenge by remember(challenge?.id) { mutableStateOf(false) }
+
+    androidx.compose.runtime.LaunchedEffect(challenge?.id, challenge?.isCompleted, challenge?.status) {
+        if (!hasShownDialogForThisChallenge) {
+            if (challenge?.status == com.savingcoach.app.data.model.ChallengeStatus.COMPLETED || challenge?.isCompleted == true) {
+                showCompletionDialog = true
+                isFailedLocal = false
+                hasShownDialogForThisChallenge = true
+            } else if (challenge?.status == com.savingcoach.app.data.model.ChallengeStatus.FAILED) {
+                showCompletionDialog = true
+                isFailedLocal = true
+                hasShownDialogForThisChallenge = true
+            }
         }
     }
 
@@ -186,15 +214,14 @@ fun ChallengeDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     
-    var animatingEnvelopeIndex by remember { mutableStateOf<Int?>(null) }
-    var showSurpriseDialog by remember { mutableStateOf(false) }
+    var showEnvelopeAnimation by remember { mutableStateOf(false) }
     var calculatedSurpriseAmount by remember { mutableDoubleStateOf(0.0) }
     
     val outerFormatter = NumberFormat.getNumberInstance(Locale.US)
     
     val todayDateString = java.time.LocalDate.now().toString()
     val lastDepositDateOnly = challenge?.lastDepositDate?.substringBefore("|") ?: ""
-    val hasDepositedToday = lastDepositDateOnly == todayDateString
+    val hasDepositedToday = completedSteps > 0 && lastDepositDateOnly == todayDateString
 
     if (showDayDialog) {
         // Reset selectedDayNumber to current active step when dialog opens
@@ -219,27 +246,26 @@ fun ChallengeDetailScreen(
                             onClick = { showDayDialog = false },
                             modifier = Modifier.size(24.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(Icons.Default.Close, contentDescription = strings.close, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(if (isNoSpend) "HABIT TRACKER" else "SAVING", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (isNoSpend) strings.habitTracker else strings.savings.uppercase(), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     if (isNoSpend) {
                         Text(
-                            text = "Zero Spend Day $selectedDayNumber",
+                            text = strings.zeroSpendDayTitle(selectedDayNumber),
                             fontSize = 22.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     } else {
-                        val formattedDepositAmount = NumberFormat.getNumberInstance(Locale.US).format(depositAmount)
                         Text(
-                            text = "$formattedDepositAmount MMK",
+                            text = strings.formatAmount(depositAmount, uiState.currencyPreference, 1.0, isInvestment = false),
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -250,24 +276,26 @@ fun ChallengeDetailScreen(
 
                     Button(
                         onClick = {
-                            if (completedSteps < totalSteps) {
-                                completedSteps++
-                                if (currentDaysLeft > 0) currentDaysLeft--
+                            val nextSteps = completedSteps + 1
+                            if (nextSteps <= totalSteps) {
                                 if (!isNoSpend) {
-                                    currentAmount += depositAmount
                                     val depositNote = when {
-                                        is7Day -> "Deposit"
-                                        is100 -> "Saved Envelope #$completedSteps"
-                                        else -> "Deposit"
+                                        is7Day -> strings.deposit
+                                        is100 -> strings.savedEnvelopeNumber(nextSteps)
+                                        else -> strings.deposit
                                     }
-                                    viewModel.addDepositMock(challengeId, depositAmount, completedSteps, 1, depositNote)
-                                    if (completedSteps >= totalSteps) {
+                                    viewModel.addDepositMock(challengeId, depositAmount, nextSteps, 1, depositNote)
+                                    val willReachTarget = (currentAmount + depositAmount) >= (targetAmount - 0.01)
+                                    val willCompleteSteps = nextSteps >= totalSteps
+                                    if (willReachTarget || willCompleteSteps) {
+                                        isFailedLocal = if (isNoSpend || is100) false else (!willReachTarget && willCompleteSteps)
                                         viewModel.completeChallenge(challengeId)
                                         showCompletionDialog = true
                                     }
                                 } else {
-                                    viewModel.addDepositMock(challengeId, 0.0, completedSteps, 1, "Day $completedSteps saved")
-                                    if (completedSteps >= totalSteps) {
+                                    viewModel.addDepositMock(challengeId, 0.0, nextSteps, 1, strings.zeroSpendDayTitle(nextSteps))
+                                    if (nextSteps >= totalSteps) {
+                                        isFailedLocal = false
                                         viewModel.completeChallenge(challengeId)
                                         showCompletionDialog = true
                                     }
@@ -281,7 +309,7 @@ fun ChallengeDetailScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = ChallengeActive),
                         shape = RoundedCornerShape(24.dp)
                     ) {
-                        Text("Confirm", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(strings.confirm, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -290,84 +318,27 @@ fun ChallengeDetailScreen(
         }
     }
     
-    if (showSurpriseDialog) {
-        Dialog(onDismissRequest = { showSurpriseDialog = false }) {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        IconButton(
-                            onClick = { showSurpriseDialog = false },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "ENVELOPE SURPRISE",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "You opened an envelope and found:",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "${outerFormatter.format(calculatedSurpriseAmount)} MMK",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = ChallengeActive
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Button(
-                        onClick = {
-                            if (completedSteps < totalSteps) {
-                                completedSteps++
-                                if (currentDaysLeft > 0) currentDaysLeft--
-                                currentAmount += calculatedSurpriseAmount
-                                val depositNote = "Saved Envelope #$selectedDayNumber"
-                                viewModel.addDepositMock(challengeId, calculatedSurpriseAmount, completedSteps, 1, depositNote)
-                                if (completedSteps >= totalSteps) {
-                                    viewModel.completeChallenge(challengeId)
-                                    showCompletionDialog = true
-                                }
-                            }
-                            showSurpriseDialog = false
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ChallengeActive),
-                        shape = RoundedCornerShape(24.dp)
-                    ) {
-                        Text("Save", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+    if (showEnvelopeAnimation) {
+        com.savingcoach.app.ui.components.EnvelopeAnimationDialog(
+            amount = calculatedSurpriseAmount,
+            currencyPreference = uiState.currencyPreference,
+            onDismiss = { showEnvelopeAnimation = false },
+            onSaveClick = {
+                val nextSteps = completedSteps + 1
+                if (nextSteps <= totalSteps) {
+                    val depositNote = strings.savedEnvelopeNumber(selectedDayNumber)
+                    viewModel.addDepositMock(challengeId, calculatedSurpriseAmount, nextSteps, 1, depositNote)
+                    val willReachTarget = (currentAmount + calculatedSurpriseAmount) >= (targetAmount - 0.01)
+                    val willCompleteSteps = nextSteps >= totalSteps
+                    if (willReachTarget || willCompleteSteps) {
+                        isFailedLocal = false // Completing envelopes reaches target successfully
+                        viewModel.completeChallenge(challengeId)
+                        showCompletionDialog = true
                     }
                 }
+                showEnvelopeAnimation = false
             }
-        }
+        )
     }
 
     if (showEnterAmountDialog) {
@@ -386,12 +357,12 @@ fun ChallengeDetailScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Enter amount", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(strings.enterAmount, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         IconButton(
                             onClick = { showEnterAmountDialog = false },
                             modifier = Modifier.size(24.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(Icons.Default.Close, contentDescription = strings.close, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
@@ -399,9 +370,14 @@ fun ChallengeDetailScreen(
 
                     OutlinedTextField(
                         value = customAmountInput,
-                        onValueChange = { customAmountInput = it.filter { char -> char.isDigit() }.take(10) },
+                        onValueChange = { newValue ->
+                            if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
+                                customAmountInput = newValue
+                            }
+                        },
+                        label = { Text("${strings.amount} (${com.savingcoach.app.utils.InvestmentCalculations.getCurrencyLabel(uiState.currencyPreference, isInvestment = false)})") },
                         modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.secondary,
@@ -412,28 +388,38 @@ fun ChallengeDetailScreen(
 
                     Spacer(modifier = Modifier.height(32.dp))
 
+                    val parsedAmount = customAmountInput.toDoubleOrNull()
+                    val isConfirmEnabled = parsedAmount != null && parsedAmount > 0.0
+
                     Button(
                         onClick = {
-                            val amount = customAmountInput.toDoubleOrNull() ?: 10000.0
-                            if (completedSteps < totalSteps) {
-                                completedSteps++
-                                if (currentDaysLeft > 0) currentDaysLeft--
-                                currentAmount += amount
-                                viewModel.addDepositMock(challengeId, amount, completedSteps, 1, "Deposit")
-                                if (currentAmount >= targetAmount || completedSteps >= totalSteps) {
+                            val amount = parsedAmount ?: 0.0
+                            val nextSteps = completedSteps + 1
+                            if (nextSteps <= totalSteps) {
+                                viewModel.addDepositMock(challengeId, amount, nextSteps, 1, strings.deposit)
+                                val willReachTarget = (currentAmount + amount) >= (targetAmount - 0.01)
+                                val willCompleteSteps = nextSteps >= totalSteps
+                                if (willReachTarget || willCompleteSteps) {
+                                    isFailedLocal = !willReachTarget && willCompleteSteps
                                     viewModel.completeChallenge(challengeId)
                                     showCompletionDialog = true
                                 }
                             }
                             showEnterAmountDialog = false
                         },
+                        enabled = isConfirmEnabled,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ChallengeActive),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ChallengeActive,
+                            disabledContainerColor = ChallengeActive.copy(alpha = 0.5f),
+                            contentColor = Color.White,
+                            disabledContentColor = Color.White.copy(alpha = 0.7f)
+                        ),
                         shape = RoundedCornerShape(24.dp)
                     ) {
-                        Text("Confirm", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(strings.confirm, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
@@ -443,20 +429,19 @@ fun ChallengeDetailScreen(
     val handleStepClick: (Int) -> Unit = { stepNumber ->
         if (stepNumber == -1) {
             coroutineScope.launch {
-                snackbarHostState.showSnackbar("You've already completed today's check-in! Come back tomorrow.")
+                snackbarHostState.showSnackbar(strings.alreadyCheckedInMsg)
             }
         } else {
             selectedDayNumber = stepNumber
             if (is100) {
                 val todayStr = java.time.LocalDate.now().toString()
                 val lastDepositDateOnly100 = challenge?.lastDepositDate?.substringBefore("|") ?: ""
-                val alreadyDeposited = lastDepositDateOnly100 == todayStr
+                val alreadyDeposited = completedSteps > 0 && lastDepositDateOnly100 == todayStr
                 if (alreadyDeposited) {
                     coroutineScope.launch {
-                        snackbarHostState.showSnackbar("You've already opened an envelope today! Come back tomorrow.")
+                        snackbarHostState.showSnackbar(strings.alreadyOpenedEnvelopeMsg)
                     }
                 } else {
-                    animatingEnvelopeIndex = stepNumber
                     val remainingEnvelopes = (totalSteps - completedSteps).coerceAtLeast(1)
                     val remainingAmount = (targetAmount - currentAmount).coerceAtLeast(0.0)
 
@@ -482,6 +467,7 @@ fun ChallengeDetailScreen(
                         val maxAllowed = (remainingAmount - ((remainingEnvelopes - 1) * 1.0)).coerceAtLeast(0.0)
                         surprise.coerceAtLeast(1.0).coerceAtMost(maxAllowed)
                     }
+                    showEnvelopeAnimation = true
                 }
             } else if (is7Day) {
                 customAmountInput = ""
@@ -504,11 +490,8 @@ fun ChallengeDetailScreen(
         daysLeft = currentDaysLeft,
         depositHistory = depositHistory,
         challengeTitle = challenge?.title ?: "",
-        animatingEnvelopeIndex = animatingEnvelopeIndex,
-        onAnimationFinished = {
-            showSurpriseDialog = true
-            animatingEnvelopeIndex = null
-        },
+        currencyPreference = uiState.currencyPreference,
+        status = challenge?.status ?: com.savingcoach.app.data.model.ChallengeStatus.ACTIVE,
         onBackClick = onBackClick,
         onStepClick = handleStepClick,
         onSettingsClick = { challenge?.let { onSettingsClick(it) } },
@@ -518,61 +501,133 @@ fun ChallengeDetailScreen(
         },
         onSeeMoreClick = { showFullMapSheet = true },
         snackbarHostState = snackbarHostState,
-        hasDepositedToday = hasDepositedToday
+        hasDepositedToday = hasDepositedToday,
+        skippedIndices = skippedIndices
     )
     
     if (showCompletionDialog) {
+        val isFailed = when {
+            challenge?.status == com.savingcoach.app.data.model.ChallengeStatus.COMPLETED || challenge?.isCompleted == true -> false
+            challenge?.status == com.savingcoach.app.data.model.ChallengeStatus.FAILED -> true
+            !isNoSpend && targetAmount > 0 && currentAmount >= (targetAmount - 0.01) -> false
+            isNoSpend && totalSteps > 0 && completedSteps >= totalSteps -> false
+            else -> isFailedLocal
+        }
+        var showMessageBox by remember { mutableStateOf(false) }
+
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            if (isFailed) {
+                kotlinx.coroutines.delay(2200) // Wait 2.2 seconds
+                showMessageBox = true
+            } else {
+                showMessageBox = true
+            }
+        }
+
         androidx.compose.foundation.layout.Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
+                .background(Color.Black.copy(alpha = 0.6f))
                 .pointerInput(Unit) {
                     detectTapGestures { }
                 },
             contentAlignment = Alignment.Center
         ) {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = DarkSlate,
-                modifier = Modifier.padding(32.dp).fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+            if (isFailed && !showMessageBox) {
+                Box(
+                    modifier = Modifier
+                        .size(160.dp)
+                        .align(Alignment.Center),
+                    contentAlignment = Alignment.Center
                 ) {
-                    androidx.compose.material3.Text(
-                        "🎉 Challenge Completed! 🎉", 
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, 
-                        color = Color.White, 
-                        fontSize = 20.sp, 
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    androidx.compose.material3.Text(
-                        "Amazing job! You have successfully reached your saving goal.", 
-                        color = MutedGray, 
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    androidx.compose.material3.Button(
-                        onClick = { 
-                            showCompletionDialog = false
-                            onBackClick()
-                        },
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = ChallengeActive),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    BrokenPiggyBankAnimation()
+                }
+            }
+
+            val messageBoxAlpha by animateFloatAsState(
+                targetValue = if (showMessageBox) 1f else 0f,
+                animationSpec = tween(durationMillis = 400, easing = LinearOutSlowInEasing),
+                label = "messageBoxAlpha"
+            )
+            val messageBoxScale by animateFloatAsState(
+                targetValue = if (showMessageBox) 1f else 0.8f,
+                animationSpec = tween(durationMillis = 400, easing = CubicBezierEasing(0.34f, 1.56f, 0.64f, 1f)),
+                label = "messageBoxScale"
+            )
+
+            if (showMessageBox) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    shadowElevation = 8.dp,
+                    modifier = Modifier
+                        .padding(32.dp)
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            alpha = messageBoxAlpha
+                            scaleX = messageBoxScale
+                            scaleY = messageBoxScale
+                        }
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        androidx.compose.material3.Text(
-                            "OK", 
-                            color = Color.White, 
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
+                        if (isFailed) {
+                            androidx.compose.material3.Text(
+                                strings.challengeFailedTitle, 
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, 
+                                color = MaterialTheme.colorScheme.error, 
+                                fontSize = 20.sp, 
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            androidx.compose.material3.Text(
+                                strings.challengeFailedDetail, 
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, 
+                                textAlign = TextAlign.Center
+                            )
+                        } else {
+                            androidx.compose.material3.Text(
+                                strings.challengeCompletedTitle, 
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, 
+                                color = MaterialTheme.colorScheme.onSurface, 
+                                fontSize = 20.sp, 
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            androidx.compose.material3.Text(
+                                strings.challengeCompletedMsg, 
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, 
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
+                        androidx.compose.material3.Button(
+                            onClick = { 
+                                showCompletionDialog = false
+                                onBackClick()
+                            },
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = if (isFailed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                        ) {
+                            androidx.compose.material3.Text(
+                                strings.ok, 
+                                color = Color.White, 
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, 
+                                fontSize = 16.sp
+                            )
+                        }
                     }
                 }
             }
-            com.savingcoach.app.ui.components.ConfettiView(modifier = Modifier.fillMaxSize())
+            if (!isFailed) {
+                com.savingcoach.app.ui.components.ConfettiView(modifier = Modifier.fillMaxSize())
+            }
         }
     }
 
@@ -581,7 +636,7 @@ fun ChallengeDetailScreen(
         androidx.compose.material3.ModalBottomSheet(
             onDismissRequest = { showFullMapSheet = false },
             sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.onBackground
+            containerColor = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 modifier = Modifier
@@ -590,7 +645,7 @@ fun ChallengeDetailScreen(
                     .padding(bottom = 16.dp)
             ) {
                 androidx.compose.material3.Text(
-                    text = "Full Progress Map",
+                    text = strings.fullProgressMap,
                     fontSize = 18.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
@@ -608,6 +663,7 @@ fun ChallengeDetailScreen(
                 ) {
                     items(totalSteps) { index ->
                         val isDone = index < completedSteps
+                        val isSkipped = skippedIndices.contains(index)
                         val isActiveStep = index == completedSteps && !hasDepositedToday
                         val isDisabled = index > completedSteps || hasDepositedToday
 
@@ -637,7 +693,14 @@ fun ChallengeDetailScreen(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (!isDone) {
+                                if (isSkipped) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Email,
+                                        contentDescription = null,
+                                        tint = surfaceColor.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                } else if (!isDone) {
                                     Canvas(modifier = Modifier.matchParentSize()) {
                                         drawCircle(
                                             color = if (isActiveStep) outlineColor else MutedGray,
@@ -648,63 +711,35 @@ fun ChallengeDetailScreen(
                                         )
                                     }
                                 }
-                                Icon(
-                                    imageVector = if (isDone) Icons.Default.Check else Icons.Outlined.Email,
-                                    contentDescription = null,
-                                    tint = if (isDone) surfaceColor else MutedGray,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        color = when {
-                                            isDone -> ChallengeActive
-                                            isActiveStep -> ChallengeActiveTrack
-                                            else -> ChallengeInactive
-                                        },
-                                        shape = CircleShape
-                                    )
-                                    .clickable {
-                                        if (isDone) {
-                                        } else if (isDisabled) {
-                                            showFullMapSheet = false
-                                            handleStepClick(-1)
-                                        } else {
-                                            showFullMapSheet = false
-                                            handleStepClick(index + 1)
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isDone) {
+                                if (!isSkipped) {
                                     Icon(
-                                        imageVector = Icons.Default.Check,
+                                        imageVector = if (isDone) Icons.Default.Check else Icons.Outlined.Email,
                                         contentDescription = null,
-                                        tint = surfaceColor,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                } else {
-                                    Canvas(modifier = Modifier.matchParentSize()) {
-                                        drawCircle(
-                                            color = if (isActiveStep) outlineColor else MutedGray,
-                                            style = androidx.compose.ui.graphics.drawscope.Stroke(
-                                                width = 1.5.dp.toPx(),
-                                                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
-                                            )
-                                        )
-                                    }
-                                    androidx.compose.material3.Text(
-                                        text = "${index + 1}",
-                                        color = if (isActiveStep) MaterialTheme.colorScheme.onSurface else MutedGray,
-                                        fontSize = 12.sp,
-                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                        tint = if (isDone) surfaceColor else MutedGray,
+                                        modifier = Modifier.size(14.dp)
                                     )
                                 }
                             }
+                        } else {
+                            ProgressPiggyItem(
+                                stepNumber = index + 1,
+                                isDone = isDone,
+                                isSkipped = isSkipped,
+                                isActiveStep = isActiveStep,
+                                isDisabled = isDisabled,
+                                size = 44.dp,
+                                onClick = {
+                                    if (isDone) {
+                                        // Do nothing
+                                    } else if (isDisabled) {
+                                        showFullMapSheet = false
+                                        handleStepClick(-1)
+                                    } else {
+                                        showFullMapSheet = false
+                                        handleStepClick(index + 1)
+                                    }
+                                }
+                            )
                         }
                     }
                 }
@@ -728,20 +763,22 @@ fun ChallengeDetailScreenContent(
     daysLeft: Int,
     depositHistory: List<DepositItem>,
     challengeTitle: String,
-    animatingEnvelopeIndex: Int?,
-    onAnimationFinished: () -> Unit,
+    currencyPreference: String,
+    status: com.savingcoach.app.data.model.ChallengeStatus,
     onBackClick: () -> Unit,
     onStepClick: (Int) -> Unit,
     onSettingsClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onSeeMoreClick: () -> Unit,
     snackbarHostState: SnackbarHostState,
-    hasDepositedToday: Boolean
+    hasDepositedToday: Boolean,
+    skippedIndices: Set<Int>
 ) {
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
     val formatter = NumberFormat.getNumberInstance(Locale.US)
     
     val firstWord = challengeTitle.split(" ").firstOrNull() ?: ""
-    val isEmoji = firstWord.isNotEmpty() && firstWord.any { !it.isLetterOrDigit() }
+    val isEmoji = firstWord.isNotEmpty() && EMOJI_REGEX.containsMatchIn(firstWord)
     
     val emoji = if (isEmoji) {
         firstWord
@@ -760,28 +797,28 @@ fun ChallengeDetailScreenContent(
     } else {
         challengeTitle.ifBlank {
             when {
-                is100 -> "100 Envelope"
-                is7Day -> "7-Day Sprint"
-                isNoSpend -> "No-Spend Day"
-                else -> "1K a Day"
+                is100 -> strings.challenge100Envelope
+                is7Day -> strings.challenge7DaySprint
+                isNoSpend -> strings.challengeNoSpendWeek
+                else -> strings.challenge1KADay
             }
         }
     }
     
     val description = when {
-        is100 -> "Pick an envelope, save the number"
-        is7Day -> "One intense week of saving"
-        isNoSpend -> "Zero non-essentials for 7 days"
-        else -> "A custom saving streak to hit your goal"
+        is100 -> strings.challengeEnvelopeDesc
+        is7Day && totalSteps == 7 -> strings.challenge7DayDesc
+        isNoSpend && totalSteps == 7 -> strings.challengeNoSpendDesc
+        else -> strings.challengeCustomDesc
     }
     
     val formattedCurrent = formatter.format(currentAmount)
     val formattedTarget = formatter.format(targetAmount)
     
-    val calculatedPercent = if (totalSteps > 0) {
-        ((completedSteps.toFloat() / totalSteps.toFloat()) * 100).toInt()
+    val calculatedPercent = if (isNoSpend || targetAmount == 0.0) {
+        if (totalSteps > 0) ((completedSteps.toFloat() / totalSteps.toFloat()) * 100).toInt() else 0
     } else {
-        0
+        if (targetAmount > 0) ((currentAmount / targetAmount) * 100).toInt() else 0
     }
 
     Scaffold(
@@ -814,14 +851,14 @@ fun ChallengeDetailScreenContent(
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Back",
+                                        contentDescription = strings.back,
                                         tint = MaterialTheme.colorScheme.onBackground,
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
 
                                 Text(
-                                    text = cleanTitle,
+                                    text = strings.localizeChallengeTitle(cleanTitle),
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onBackground,
@@ -841,7 +878,7 @@ fun ChallengeDetailScreenContent(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Settings,
-                                            contentDescription = "Settings",
+                                            contentDescription = strings.settingsTitle,
                                             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                                             modifier = Modifier.size(24.dp)
                                         )
@@ -853,14 +890,14 @@ fun ChallengeDetailScreenContent(
                                         modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                                     ) {
                                         DropdownMenuItem(
-                                            text = { Text("Edit Challenge", color = MaterialTheme.colorScheme.onSurface) },
+                                            text = { Text(strings.editChallengeTitle, color = MaterialTheme.colorScheme.onSurface) },
                                             onClick = {
                                                 showMenu = false
                                                 onSettingsClick()
                                             }
                                         )
                                         DropdownMenuItem(
-                                            text = { Text("Delete Challenge", color = MaterialTheme.colorScheme.error) },
+                                            text = { Text(strings.deleteChallengeTitle, color = MaterialTheme.colorScheme.error) },
                                             onClick = {
                                                 showMenu = false
                                                 showDeleteDialog = true
@@ -871,20 +908,20 @@ fun ChallengeDetailScreenContent(
                                     if (showDeleteDialog) {
                                         AlertDialog(
                                             onDismissRequest = { showDeleteDialog = false },
-                                            title = { Text("Delete Challenge", color = MaterialTheme.colorScheme.onSurface) },
-                                            text = { Text("Are you sure you want to delete this challenge? This action cannot be undone.", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                            title = { Text(strings.deleteChallengeTitle, color = MaterialTheme.colorScheme.onSurface) },
+                                            text = { Text(strings.deleteChallengeMsg, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                                             containerColor = MaterialTheme.colorScheme.surface,
                                             confirmButton = {
                                                 TextButton(onClick = {
                                                     showDeleteDialog = false
                                                     onDeleteClick()
                                                 }) {
-                                                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                                                    Text(strings.delete, color = MaterialTheme.colorScheme.error)
                                                 }
                                             },
                                             dismissButton = {
                                                 TextButton(onClick = { showDeleteDialog = false }) {
-                                                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface)
+                                                    Text(strings.cancel, color = MaterialTheme.colorScheme.onSurface)
                                                 }
                                             }
                                         )
@@ -892,21 +929,12 @@ fun ChallengeDetailScreenContent(
                                 }
                             }
 
-                            // Description
-                            Text(
-                                text = description,
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                            )
-
-                            Spacer(modifier = Modifier.height(20.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
 
                             // Progress text
                             if (isNoSpend) {
                                 Text(
-                                    text = "$completedSteps of $totalSteps days completed",
+                                    text = strings.daysCompletedCount(completedSteps, totalSteps),
                                     color = MaterialTheme.colorScheme.onBackground,
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.ExtraBold,
@@ -916,10 +944,10 @@ fun ChallengeDetailScreenContent(
                                 Text(
                                     text = buildAnnotatedString {
                                         withStyle(SpanStyle(color = MaterialTheme.colorScheme.onBackground, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)) {
-                                            append(formattedCurrent)
+                                            append(strings.formatAmount(currentAmount, currencyPreference, 1.0, isInvestment = false))
                                         }
                                         withStyle(SpanStyle(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f), fontSize = 16.sp, fontWeight = FontWeight.Bold)) {
-                                            append("/$formattedTarget MMK")
+                                            append(" / " + strings.formatAmount(targetAmount, currencyPreference, 1.0, isInvestment = false))
                                         }
                                     },
                                     maxLines = 1,
@@ -933,7 +961,7 @@ fun ChallengeDetailScreenContent(
                             // Progress bar
                             val progressFloat = when {
                                 isNoSpend && totalSteps > 0 -> (completedSteps.toFloat() / totalSteps.toFloat())
-                                !isNoSpend && targetAmount > 0 -> (currentAmount / targetAmount).toFloat()
+                                targetAmount > 0 -> (currentAmount / targetAmount).toFloat()
                                 else -> 0f
                             }.coerceIn(0f, 1f)
                             
@@ -944,8 +972,12 @@ fun ChallengeDetailScreenContent(
                                     .padding(horizontal = 24.dp)
                                     .height(8.dp)
                                     .clip(RoundedCornerShape(4.dp)),
-                                color = if (completedSteps >= totalSteps || currentAmount >= targetAmount) Orange else MaterialTheme.colorScheme.secondary,
-                                trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.15f),
+                                color = when (status) {
+                                    com.savingcoach.app.data.model.ChallengeStatus.FAILED -> MaterialTheme.colorScheme.error
+                                    com.savingcoach.app.data.model.ChallengeStatus.STOPPED -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    else -> MaterialTheme.colorScheme.primary
+                                },
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
                                 strokeCap = StrokeCap.Round
                             )
 
@@ -959,16 +991,25 @@ fun ChallengeDetailScreenContent(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "$calculatedPercent% complete",
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                                    text = strings.percentComplete(calculatedPercent),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    text = if (completedSteps >= totalSteps || currentAmount >= targetAmount) "Completed" else "$daysLeft days left",
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                                    text = when (status) {
+                                        com.savingcoach.app.data.model.ChallengeStatus.COMPLETED -> strings.completed
+                                        com.savingcoach.app.data.model.ChallengeStatus.FAILED -> strings.failed
+                                        com.savingcoach.app.data.model.ChallengeStatus.STOPPED -> strings.stopped
+                                        else -> strings.daysLeftCount(daysLeft.toLong())
+                                    },
+                                    color = when (status) {
+                                        com.savingcoach.app.data.model.ChallengeStatus.COMPLETED -> MaterialTheme.colorScheme.primary
+                                        com.savingcoach.app.data.model.ChallengeStatus.FAILED -> MaterialTheme.colorScheme.error
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
@@ -992,7 +1033,7 @@ fun ChallengeDetailScreenContent(
                             .padding(horizontal = 24.dp, vertical = 20.dp)
                     ) {
                         Text(
-                            text = "PROGRESS MAP",
+                            text = strings.progressMap,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
@@ -1019,19 +1060,19 @@ fun ChallengeDetailScreenContent(
                                 EnvelopeMap(
                                     completedSteps = completedSteps,
                                     totalSteps = totalSteps,
-                                    animatingIndex = animatingEnvelopeIndex,
-                                    onAnimationFinished = onAnimationFinished,
                                     hasDepositedToday = hasDepositedToday,
                                     onStepClick = onStepClick,
                                     startIndex = startIndex,
-                                    displayCount = displayCount
+                                    displayCount = displayCount,
+                                    skippedIndices = skippedIndices
                                 )
                             } else if ((is7Day || isNoSpend) && totalSteps == 7) {
                                 SevenDayMap(
                                     completedSteps = completedSteps,
                                     isNoSpend = isNoSpend,
                                     hasDepositedToday = hasDepositedToday,
-                                    onStepClick = onStepClick
+                                    onStepClick = onStepClick,
+                                    skippedIndices = skippedIndices
                                 )
                             } else {
                                 DotGridMap(
@@ -1040,7 +1081,8 @@ fun ChallengeDetailScreenContent(
                                     hasDepositedToday = hasDepositedToday,
                                     onStepClick = onStepClick,
                                     startIndex = startIndex,
-                                    displayCount = displayCount
+                                    displayCount = displayCount,
+                                    skippedIndices = skippedIndices
                                 )
                             }
 
@@ -1053,7 +1095,7 @@ fun ChallengeDetailScreenContent(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "$completedSteps of $totalSteps steps done",
+                                    text = strings.stepsDoneCount(completedSteps, totalSteps),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = if (isCapped) ChallengeActive else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
@@ -1075,7 +1117,7 @@ fun ChallengeDetailScreenContent(
                     // Deposit History List
                     item {
                         Text(
-                            text = "DEPOSIT HISTORY",
+                            text = strings.depositHistory,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
@@ -1087,7 +1129,8 @@ fun ChallengeDetailScreenContent(
                         DepositHistoryItem(
                             amount = deposit.amount,
                             note = deposit.note,
-                            date = deposit.time
+                            date = deposit.time,
+                            currencyPreference = currencyPreference
                         )
                     }
                 }
@@ -1100,25 +1143,42 @@ fun ChallengeDetailScreenContent(
     }
 
 @Composable
-fun DepositHistoryItem(amount: Double, note: String, date: String) {
-    val formatter = NumberFormat.getNumberInstance(Locale.US)
+fun DepositHistoryItem(amount: Double, note: String, date: String, currencyPreference: String = "MMK") {
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
+    val isSkipped = note.equals("Skipped", ignoreCase = true)
+    val dotColor = if (isSkipped) CoralRed else ChallengeActive
+    val amountColor = if (isSkipped) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f) else ChallengeActive
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Green dot indicator
+        // Dot indicator (Coral Red for skipped, Matcha Green for deposit)
         Box(
             modifier = Modifier
                 .size(8.dp)
-                .background(ChallengeActive, CircleShape)
+                .background(dotColor, CircleShape)
         )
+        val displayNote = when {
+            isSkipped -> strings.skipped
+            note.equals("Deposit", ignoreCase = true) -> strings.deposit
+            note.startsWith("Saved Envelope #") -> {
+                val num = note.substringAfter("#").toIntOrNull()
+                if (num != null) strings.savedEnvelopeNumber(num) else note
+            }
+            note.startsWith("Day ") && note.endsWith(" saved") -> {
+                val num = note.removePrefix("Day ").removeSuffix(" saved").toIntOrNull()
+                if (num != null) strings.zeroSpendDayTitle(num) else note
+            }
+            else -> strings.localizeChallengeTitle(note)
+        }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = note,
-                color = MaterialTheme.colorScheme.onBackground,
+                text = displayNote,
+                color = if (isSkipped) CoralRed else MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Medium,
                 fontSize = 14.sp
             )
@@ -1130,8 +1190,8 @@ fun DepositHistoryItem(amount: Double, note: String, date: String) {
             )
         }
         Text(
-            text = "+${formatter.format(amount)} MMK",
-            color = ChallengeActive,
+            text = if (isSkipped) "+0" else "+" + strings.formatAmount(amount, currencyPreference, 1.0, isInvestment = false),
+            color = amountColor,
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp
         )
@@ -1143,15 +1203,20 @@ fun DepositHistoryItem(amount: Double, note: String, date: String) {
 fun EnvelopeMap(
     completedSteps: Int,
     totalSteps: Int,
-    animatingIndex: Int?,
-    onAnimationFinished: () -> Unit,
     hasDepositedToday: Boolean,
     onStepClick: (Int) -> Unit,
     startIndex: Int = 0,
-    displayCount: Int = totalSteps
+    displayCount: Int = totalSteps,
+    skippedIndices: Set<Int> = emptySet()
 ) {
     val outlineColor = MaterialTheme.colorScheme.outline
+    val outlineVariantColor = MaterialTheme.colorScheme.outlineVariant
     val surfaceColor = MaterialTheme.colorScheme.surface
+    val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
+    val errorColor = MaterialTheme.colorScheme.error
 
     FlowRow(
         maxItemsInEachRow = 10,
@@ -1163,42 +1228,32 @@ fun EnvelopeMap(
             val index = startIndex + i
             if (index >= totalSteps) return@repeat
             val isDone = index < completedSteps
+            val isSkipped = skippedIndices.contains(index)
             val isActiveStep = index == completedSteps && !hasDepositedToday
             val isDisabled = index > completedSteps || hasDepositedToday
-            val isCurrentlyAnimating = index + 1 == animatingIndex
-            
-            val animRotateY by animateFloatAsState(
-                targetValue = if (isCurrentlyAnimating) 180f else 0f,
-                animationSpec = tween(durationMillis = 600),
-                finishedListener = {
-                    if (isCurrentlyAnimating) {
-                        onAnimationFinished()
-                    }
-                }
-            )
-            val animScale by animateFloatAsState(
-                targetValue = if (isCurrentlyAnimating) 1.2f else 1.0f,
-                animationSpec = tween(durationMillis = 600)
-            )
-            
-            val scale = if (isCurrentlyAnimating) animScale else 1.0f
-            val rotation = if (isCurrentlyAnimating) animRotateY else 0f
             
             Box(
                 modifier = Modifier
                     .size(24.dp)
+                    .scale(if (isActiveStep) 1.15f else 1f)
+                    .alpha(if (isDisabled) 0.6f else 1f)
                     .clip(CircleShape)
-                    .graphicsLayer {
-                        this.scaleX = scale
-                        this.scaleY = scale
-                        this.rotationY = rotation
-                        cameraDistance = 8 * density
-                    }
                     .background(
                         color = when {
-                            isDone -> ChallengeActive
-                            isActiveStep -> ChallengeActiveTrack
-                            else -> ChallengeInactive
+                            isSkipped -> errorColor.copy(alpha = 0.15f)
+                            isDone -> primaryColor
+                            isActiveStep -> primaryColor.copy(alpha = 0.15f)
+                            else -> surfaceVariantColor
+                        },
+                        shape = CircleShape
+                    )
+                    .border(
+                        width = if (isActiveStep) 1.5.dp else 1.dp,
+                        color = when {
+                            isSkipped -> errorColor
+                            isActiveStep -> primaryColor
+                            isDone -> primaryColor
+                            else -> outlineVariantColor
                         },
                         shape = CircleShape
                     )
@@ -1213,10 +1268,17 @@ fun EnvelopeMap(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                if (!isDone) {
+                if (isSkipped) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = null,
+                        tint = errorColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                } else if (!isDone) {
                     Canvas(modifier = Modifier.matchParentSize()) {
                         drawCircle(
-                            color = if (isActiveStep) outlineColor else MutedGray,
+                            color = if (isActiveStep) outlineColor else outlineVariantColor,
                             style = Stroke(
                                 width = 1.5.dp.toPx(),
                                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
@@ -1224,96 +1286,136 @@ fun EnvelopeMap(
                         )
                     }
                 }
-                Icon(
-                    imageVector = if (isDone) Icons.Default.Check else Icons.Outlined.Email,
-                    contentDescription = null,
-                    tint = if (isDone) surfaceColor else MutedGray,
-                    modifier = Modifier.size(14.dp)
-                )
+                
+                if (!isSkipped) {
+                    Icon(
+                        imageVector = if (isDone) Icons.Default.Check else Icons.Outlined.Email,
+                        contentDescription = null,
+                        tint = if (isDone) onPrimaryColor else if (isActiveStep) primaryColor else onSurfaceVariantColor,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun SevenDayMap(completedSteps: Int, isNoSpend: Boolean, hasDepositedToday: Boolean, onStepClick: (Int) -> Unit) {
-    val outlineColor = MaterialTheme.colorScheme.outline
-    val surfaceColor = MaterialTheme.colorScheme.surface
+fun ProgressPiggyItem(
+    stepNumber: Int,
+    isDone: Boolean,
+    isSkipped: Boolean,
+    isActiveStep: Boolean,
+    isDisabled: Boolean,
+    size: androidx.compose.ui.unit.Dp = 48.dp,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        when {
+            // 1. MISSED / SKIPPED PIGGY (sad pastel-gray piggy)
+            isSkipped -> {
+                Image(
+                    painter = painterResource(id = R.drawable.piggy_missed),
+                    contentDescription = "Skipped step $stepNumber",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            // 2. SUCCESSFUL DEPOSIT PIGGY (happy pink piggy with crown and gold coins)
+            isDone -> {
+                Image(
+                    painter = painterResource(id = R.drawable.piggy_success),
+                    contentDescription = "Completed step $stepNumber",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            // 3. ACTIVE / READY TODAY PIGGY (alert pink piggy with subtle dot indicator & soft highlight)
+            isActiveStep -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Subtle soft highlight halo
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawCircle(
+                            color = androidx.compose.ui.graphics.Color(0xFF4CAF50).copy(alpha = 0.2f),
+                            radius = size.toPx() / 2.05f
+                        )
+                    }
+                    Image(
+                        painter = painterResource(id = R.drawable.piggy_active),
+                        contentDescription = "Active step $stepNumber",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    // Clean subtle dot indicator (no green number badge)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .offset(y = 3.dp)
+                            .size(6.dp)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    )
+                }
+            }
+            // 4. UPCOMING / LOCKED PIGGY (grayed out)
+            else -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.piggy_active),
+                        contentDescription = "Upcoming step $stepNumber",
+                        contentScale = ContentScale.Fit,
+                        colorFilter = ColorFilter.colorMatrix(
+                            ColorMatrix().apply { setToSaturation(0f) }
+                        ),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .alpha(0.35f)
+                    )
+                }
+            }
+        }
+    }
+}
 
+@Composable
+fun SevenDayMap(completedSteps: Int, isNoSpend: Boolean, hasDepositedToday: Boolean, onStepClick: (Int) -> Unit, skippedIndices: Set<Int> = emptySet()) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         repeat(7) { index ->
             val isDone = index < completedSteps
+            val isSkipped = skippedIndices.contains(index)
             val isActiveStep = index == completedSteps && !hasDepositedToday
             val isDisabled = index > completedSteps || hasDepositedToday
-            
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(
-                        color = when {
-                            isDone -> ChallengeActive
-                            isActiveStep -> ChallengeActiveTrack
-                            else -> ChallengeInactive
-                        },
-                        shape = CircleShape
-                    )
-                    .let {
-                        if (isDone) {
-                            it.border(2.dp, ChallengeActive, CircleShape)
-                        } else {
-                            it
-                        }
-                    }
-                    .clickable {
-                        if (isDone) {
-                            // Do nothing
-                        } else if (isDisabled) {
-                            onStepClick(-1)
-                        } else {
-                            onStepClick(index + 1)
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                if (!isDone) {
-                    Canvas(modifier = Modifier.matchParentSize()) {
-                        drawCircle(
-                            color = if (isActiveStep) outlineColor else MutedGray,
-                            style = Stroke(
-                                width = 2.dp.toPx(),
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
-                            )
-                        )
-                    }
-                }
-                if (isDone) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = surfaceColor,
-                        modifier = Modifier.size(20.dp)
-                    )
-                } else {
-                    if (isNoSpend) {
-                        Text(
-                            text = "${index + 1}",
-                            color = if (isActiveStep) MaterialTheme.colorScheme.surface else MutedGray,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+
+            ProgressPiggyItem(
+                stepNumber = index + 1,
+                isDone = isDone,
+                isSkipped = isSkipped,
+                isActiveStep = isActiveStep,
+                isDisabled = isDisabled,
+                size = 42.dp,
+                onClick = {
+                    if (isDone) {
+                        // Do nothing
+                    } else if (isDisabled) {
+                        onStepClick(-1)
                     } else {
-                        Text(
-                            text = "🔥",
-                            fontSize = 16.sp,
-                            modifier = Modifier.graphicsLayer { alpha = if (isActiveStep) 1f else 0.4f }
-                        )
+                        onStepClick(index + 1)
                     }
                 }
-            }
+            )
         }
     }
 }
@@ -1326,13 +1428,11 @@ fun DotGridMap(
     hasDepositedToday: Boolean,
     onStepClick: (Int) -> Unit,
     startIndex: Int = 0,
-    displayCount: Int = totalSteps
+    displayCount: Int = totalSteps,
+    skippedIndices: Set<Int> = emptySet()
 ) {
-    val outlineColor = MaterialTheme.colorScheme.outline
-    val surfaceColor = MaterialTheme.colorScheme.surface
-
     FlowRow(
-        maxItemsInEachRow = 6, // Match screenshot (6 columns x 5 rows = 30)
+        maxItemsInEachRow = 6, // 6 columns
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth()
@@ -1341,57 +1441,290 @@ fun DotGridMap(
             val index = startIndex + i
             if (index >= totalSteps) return@repeat
             val isDone = index < completedSteps
+            val isSkipped = skippedIndices.contains(index)
             val isActiveStep = index == completedSteps && !hasDepositedToday
             val isDisabled = index > completedSteps || hasDepositedToday
-            
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(
-                        color = when {
-                            isDone -> ChallengeActive
-                            isActiveStep -> ChallengeActiveTrack
-                            else -> ChallengeInactive
-                        },
-                        shape = CircleShape
-                    )
-                    .clickable {
-                        if (isDone) {
-                            // Do nothing
-                        } else if (isDisabled) {
-                            onStepClick(-1)
-                        } else {
-                            onStepClick(index + 1)
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                if (isDone) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = surfaceColor,
-                        modifier = Modifier.size(24.dp)
-                    )
-                } else {
-                    Canvas(modifier = Modifier.matchParentSize()) {
-                        drawCircle(
-                            color = if (isActiveStep) outlineColor else MutedGray,
-                            style = Stroke(
-                                width = 1.5.dp.toPx(),
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
-                            )
-                        )
+
+            ProgressPiggyItem(
+                stepNumber = index + 1,
+                isDone = isDone,
+                isSkipped = isSkipped,
+                isActiveStep = isActiveStep,
+                isDisabled = isDisabled,
+                size = 48.dp,
+                onClick = {
+                    if (isDone) {
+                        // Do nothing
+                    } else if (isDisabled) {
+                        onStepClick(-1)
+                    } else {
+                        onStepClick(index + 1)
                     }
-                    Text(
-                        text = "${index + 1}",
-                        color = if (isActiveStep) MaterialTheme.colorScheme.onSurface else MutedGray,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun BrokenPiggyBankAnimation() {
+    val animProgress = remember { Animatable(0f) }
+    
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        // 2.5 seconds total duration
+        animProgress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 2500, easing = LinearEasing)
+        )
+    }
+
+    val progress = animProgress.value
+
+    // Phase 1 (0.0s - 0.4s): Enter & Float (progress 0.0 to 0.22)
+    // Scale goes 0% -> 105% -> 100% (overshoot)
+    val entranceProgress = (progress / 0.22f).coerceIn(0f, 1f)
+    val coinScale = if (entranceProgress < 0.8f) {
+        (entranceProgress / 0.8f) * 1.05f
+    } else {
+        1.05f - ((entranceProgress - 0.8f) / 0.2f) * 0.05f
+    }
+
+    // Phase 2 (0.4s - 0.6s): Wiggle / Shake (progress 0.22 to 0.33)
+    val isShaking = progress in 0.22f..0.33f
+    val shakeRotation = if (isShaking) {
+        val cycleProgress = ((progress - 0.22f) / 0.11f) * 3f // 3 cycles
+        sin(cycleProgress * 2 * PI.toFloat()) * 3.5f // amplitude
+    } else 0f
+
+    // Phase 2 & 3: Color desaturation (No desaturation - stays golden)
+    val desaturationProgress = 0f
+
+    // Phase 3 (0.6s - 1.4s): Shatter & Fall (progress 0.33 to 0.78)
+    val shatterProgress = ((progress - 0.33f) / 0.45f).coerceIn(0f, 1f)
+
+    // Shimmer path translation sweep (Phase 1: 0.0s - 0.4s)
+    val shimmerOffset = -150f + (300f * entranceProgress)
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val radius = minOf(size.width, size.height) * 0.38f
+
+        // 1. Shards / debris bursting radially outward (Phase 3)
+        if (shatterProgress > 0f && shatterProgress < 1f) {
+            val random = java.util.Random(999)
+            val debrisAlpha = 1f - shatterProgress
+            val burstDistance = 120f * shatterProgress
+            for (i in 0..4) {
+                val angle = (i * (360f / 5f)) * (PI.toFloat() / 180f)
+                val dx = cos(angle) * burstDistance
+                val dy = sin(angle) * burstDistance
+                val shardSize = 8f + random.nextFloat() * 10f
+                
+                val shardPath = Path().apply {
+                    moveTo(cx + dx, cy + dy)
+                    lineTo(cx + dx + shardSize, cy + dy - shardSize * 0.3f)
+                    lineTo(cx + dx + shardSize * 0.5f, cy + dy + shardSize)
+                    close()
+                }
+                
+                val shardColor = lerp(Color(0xFFD4AF37), Color(0xFF9E9E9E), desaturationProgress)
+                drawPath(shardPath, color = shardColor.copy(alpha = debrisAlpha))
+            }
+        }
+
+        // Draw Left & Right halves inside the transform scopes
+        val crackPoints = listOf(
+            androidx.compose.ui.geometry.Offset(cx, cy - radius),
+            androidx.compose.ui.geometry.Offset(cx - 8f, cy - radius * 0.5f),
+            androidx.compose.ui.geometry.Offset(cx + 10f, cy),
+            androidx.compose.ui.geometry.Offset(cx - 12f, cy + radius * 0.5f),
+            androidx.compose.ui.geometry.Offset(cx, cy + radius)
+        )
+
+        // Left Piece half path
+        val leftPath = Path().apply {
+            addArc(
+                androidx.compose.ui.geometry.Rect(cx - radius, cy - radius, cx + radius, cy + radius),
+                90f,
+                180f
+            )
+            crackPoints.forEach { point ->
+                lineTo(point.x, point.y)
+            }
+            close()
+        }
+
+        // Right Piece half path
+        val rightPath = Path().apply {
+            addArc(
+                androidx.compose.ui.geometry.Rect(cx - radius, cy - radius, cx + radius, cy + radius),
+                -90f,
+                180f
+            )
+            crackPoints.asReversed().forEach { point ->
+                lineTo(point.x, point.y)
+            }
+            close()
+        }
+
+        // Interpolated color brushes from bright Gold to Stone Grey
+        val goldLeft1 = lerp(Color(0xFFFFDF00), Color(0xFFB0B0B0), desaturationProgress)
+        val goldLeft2 = lerp(Color(0xFFD4AF37), Color(0xFF8E8E8E), desaturationProgress)
+        val goldLeft3 = lerp(Color(0xFF996515), Color(0xFF6E6E6E), desaturationProgress)
+
+        val goldRight1 = lerp(Color(0xFFFFF066), Color(0xFFC8C8C8), desaturationProgress)
+        val goldRight2 = lerp(Color(0xFFE5C158), Color(0xFF9E9E9E), desaturationProgress)
+        val goldRight3 = lerp(Color(0xFFB58024), Color(0xFF7C7C7C), desaturationProgress)
+
+        val brushLeft = Brush.linearGradient(
+            colors = listOf(goldLeft1, goldLeft2, goldLeft3),
+            start = androidx.compose.ui.geometry.Offset(cx - radius, cy - radius),
+            end = androidx.compose.ui.geometry.Offset(cx, cy + radius)
+        )
+
+        val brushRight = Brush.linearGradient(
+            colors = listOf(goldRight1, goldRight2, goldRight3),
+            start = androidx.compose.ui.geometry.Offset(cx, cy - radius),
+            end = androidx.compose.ui.geometry.Offset(cx + radius, cy + radius)
+        )
+
+        // Wiggle/Shake applied to whole coin group
+        withTransform({
+            scale(coinScale, coinScale, pivot = androidx.compose.ui.geometry.Offset(cx, cy))
+            rotate(shakeRotation, pivot = androidx.compose.ui.geometry.Offset(cx, cy))
+        }) {
+            
+            // Left half Piece motion (Position X -40px, Position Y +60px, Rotation -25 degrees, Opacity 100% -> 0%)
+            val leftShiftX = -40.dp.toPx() * shatterProgress
+            val leftShiftY = 60.dp.toPx() * shatterProgress
+            val leftRotation = -25f * shatterProgress
+            val pieceAlpha = (1f - shatterProgress).coerceIn(0f, 1f)
+
+            withTransform({
+                translate(left = leftShiftX, top = leftShiftY)
+                rotate(leftRotation, pivot = androidx.compose.ui.geometry.Offset(cx - radius / 2f, cy))
+            }) {
+                drawPath(leftPath, brush = brushLeft, alpha = pieceAlpha)
+                
+                // Outer outline border
+                drawPath(
+                    leftPath,
+                    color = Color.Black.copy(alpha = 0.15f * (1f - desaturationProgress * 0.5f)),
+                    style = Stroke(width = 4.dp.toPx()),
+                    alpha = pieceAlpha
+                )
+
+                // Coin inner rim
+                val innerLeftPath = Path().apply {
+                    addArc(
+                        androidx.compose.ui.geometry.Rect(cx - radius + 12f, cy - radius + 12f, cx + radius - 12f, cy + radius - 12f),
+                        90f,
+                        180f
+                    )
+                }
+                drawPath(innerLeftPath, color = Color.White.copy(alpha = 0.25f * (1f - desaturationProgress)), style = Stroke(width = 2.dp.toPx()), alpha = pieceAlpha)
+
+                // Draw currency symbol ($) on left side of coin
+                val dollarPath = Path().apply {
+                    moveTo(cx - 30f, cy - 25f)
+                    lineTo(cx - 15f, cy - 25f)
+                    // Simple S outline
+                    lineTo(cx - 15f, cy - 10f)
+                    lineTo(cx - 30f, cy - 10f)
+                    lineTo(cx - 30f, cy + 10f)
+                    lineTo(cx - 15f, cy + 10f)
+                }
+                drawPath(
+                    dollarPath,
+                    color = lerp(Color(0x40FFFFFF), Color(0x1A000000), desaturationProgress),
+                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round),
+                    alpha = pieceAlpha
+                )
+            }
+
+            // Right half Piece motion (Position X +40px, Position Y +60px, Rotation +25 degrees, Opacity 100% -> 0%)
+            val rightShiftX = 40.dp.toPx() * shatterProgress
+            val rightShiftY = 60.dp.toPx() * shatterProgress
+            val rightRotation = 25f * shatterProgress
+
+            withTransform({
+                translate(left = rightShiftX, top = rightShiftY)
+                rotate(rightRotation, pivot = androidx.compose.ui.geometry.Offset(cx + radius / 2f, cy))
+            }) {
+                drawPath(rightPath, brush = brushRight, alpha = pieceAlpha)
+                
+                drawPath(
+                    rightPath,
+                    color = Color.Black.copy(alpha = 0.15f * (1f - desaturationProgress * 0.5f)),
+                    style = Stroke(width = 4.dp.toPx()),
+                    alpha = pieceAlpha
+                )
+
+                // Coin inner rim
+                val innerRightPath = Path().apply {
+                    addArc(
+                        androidx.compose.ui.geometry.Rect(cx - radius + 12f, cy - radius + 12f, cx + radius - 12f, cy + radius - 12f),
+                        -90f,
+                        180f
+                    )
+                }
+                drawPath(innerRightPath, color = Color.White.copy(alpha = 0.25f * (1f - desaturationProgress)), style = Stroke(width = 2.dp.toPx()), alpha = pieceAlpha)
+            }
+
+            // 2. Shimmer shine path sweep (Phase 1)
+            if (progress < 0.22f) {
+                val shinePath = Path().apply {
+                    moveTo(cx + shimmerOffset - 30f, cy - radius)
+                    lineTo(cx + shimmerOffset + 10f, cy - radius)
+                    lineTo(cx + shimmerOffset + 40f, cy + radius)
+                    lineTo(cx + shimmerOffset, cy + radius)
+                    close()
+                }
+                // Clip shine to the circular coin shape
+                withTransform({
+                    // Simple circular clip logic inside drawing
+                }) {
+                    drawPath(
+                        shinePath,
+                        color = Color.White.copy(alpha = 0.28f)
                     )
                 }
             }
         }
+
+        // Draw growing black fracture zig-zag line (Phase 2 & 3)
+        if (progress > 0.22f && shatterProgress < 0.5f) {
+            val crackVisible = ((progress - 0.22f) / 0.25f).coerceIn(0f, 1f)
+            val crackStrokePath = Path().apply {
+                moveTo(crackPoints[0].x, crackPoints[0].y)
+                val segmentCount = crackPoints.size - 1
+                val activeSegments = (crackVisible * segmentCount).toInt()
+                val lastSegmentProgress = (crackVisible * segmentCount) - activeSegments
+
+                for (i in 0 until activeSegments) {
+                    lineTo(crackPoints[i + 1].x, crackPoints[i + 1].y)
+                }
+                
+                if (activeSegments < segmentCount) {
+                    val start = crackPoints[activeSegments]
+                    val end = crackPoints[activeSegments + 1]
+                    val currentX = start.x + (end.x - start.x) * lastSegmentProgress
+                    val currentY = start.y + (end.y - start.y) * lastSegmentProgress
+                    lineTo(currentX, currentY)
+                }
+            }
+            
+            drawPath(
+                crackStrokePath,
+                color = Color(0xFF263238), // dark zig-zag crack
+                style = Stroke(
+                    width = 3.dp.toPx(),
+                    cap = StrokeCap.Round
+                ),
+                alpha = 1f - (shatterProgress * 2f).coerceIn(0f, 1f)
+            )
+        }
     }
 }
+

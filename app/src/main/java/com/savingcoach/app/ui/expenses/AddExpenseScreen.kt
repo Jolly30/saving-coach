@@ -21,6 +21,7 @@ fun AddExpenseScreen(
     onBackClick: () -> Unit,
     onSaveClick: (amount: Double, category: String, merchant: String, description: String) -> Unit,
     availableCategories: List<ExpenseCategory> = emptyList(),
+    currencyPreference: String = "MMK",
     onAddCategory: ((emoji: String, name: String, target: Double) -> Unit)? = null,
     onDeleteCategory: ((categoryName: String) -> Unit)? = null
 ) {
@@ -35,19 +36,27 @@ fun AddExpenseScreen(
     }
     var isDropdownExpanded by remember { mutableStateOf(false) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var categoryToDelete by remember { mutableStateOf<String?>(null) }
 
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
     val selectedCatObj = categoriesList.firstOrNull { it.name.equals(selectedCategoryName, ignoreCase = true) }
-    val selectedDisplayText = if (selectedCatObj != null) "${selectedCatObj.emoji} ${selectedCatObj.name}" else selectedCategoryName
+    val selectedDisplayText = if (selectedCatObj != null) "${selectedCatObj.emoji} ${strings.localizeCategory(selectedCatObj.name)}" else strings.localizeCategory(selectedCategoryName)
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Log Expense") },
+                title = { Text(strings.logExpenseTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground
+                ),
                 windowInsets = WindowInsets(0.dp)
             )
         },
@@ -70,7 +79,7 @@ fun AddExpenseScreen(
                         amountText = newValue
                     }
                 },
-                label = { Text("Amount (MMK) *") },
+                label = { Text("${strings.amount} (${com.savingcoach.app.utils.InvestmentCalculations.getCurrencyLabel(currencyPreference, isInvestment = false)}) *") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -86,7 +95,7 @@ fun AddExpenseScreen(
                     value = selectedDisplayText,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Select Spending Bucket (Required) *") },
+                    label = { Text(strings.selectSpendingBucketRequired) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
                     modifier = Modifier
@@ -107,20 +116,23 @@ fun AddExpenseScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        "${cat.emoji} ${cat.name}",
+                                        "${cat.emoji} ${strings.localizeCategory(cat.name)}",
                                         fontWeight = FontWeight.Medium,
                                         modifier = Modifier.weight(1f)
                                     )
                                     if (onDeleteCategory != null) {
                                         IconButton(
-                                            onClick = { onDeleteCategory.invoke(cat.name) },
-                                            modifier = Modifier.size(24.dp)
+                                            onClick = { 
+                                                categoryToDelete = cat.name
+                                                isDropdownExpanded = false
+                                            },
+                                            modifier = Modifier.size(36.dp)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Delete,
-                                                contentDescription = "Delete Category",
+                                                contentDescription = strings.delete,
                                                 tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                                                modifier = Modifier.size(16.dp)
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
                                     }
@@ -141,7 +153,7 @@ fun AddExpenseScreen(
                             ) {
                                 Text("➕", style = MaterialTheme.typography.bodyMedium)
                                 Text(
-                                    "Add Custom Spending Bucket",
+                                    strings.addCustomBucket,
                                     fontWeight = FontWeight.Medium,
                                     style = MaterialTheme.typography.bodyMedium
                                 )
@@ -159,7 +171,7 @@ fun AddExpenseScreen(
             OutlinedTextField(
                 value = merchantText,
                 onValueChange = { merchantText = it },
-                label = { Text("Merchant / Store (Optional)") },
+                label = { Text(strings.merchantOptional) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -168,7 +180,7 @@ fun AddExpenseScreen(
             OutlinedTextField(
                 value = descriptionText,
                 onValueChange = { descriptionText = it },
-                label = { Text("Note / Description (Optional)") },
+                label = { Text(strings.noteOptional) },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -186,19 +198,48 @@ fun AddExpenseScreen(
                     .fillMaxWidth()
                     .height(50.dp)
             ) {
-                Text("Save Expense", style = MaterialTheme.typography.titleMedium)
+                Text(strings.saveExpense, style = MaterialTheme.typography.titleMedium)
             }
         }
 
         if (showAddCategoryDialog) {
             AddCategoryDialog(
                 showTargetField = false,
+                currencyPreference = currencyPreference,
                 onDismiss = { showAddCategoryDialog = false },
                 onConfirm = { emoji, name, target ->
                     val cleanName = name.trim()
                     onAddCategory?.invoke(emoji, cleanName, target)
                     selectedCategoryName = cleanName
                     showAddCategoryDialog = false
+                }
+            )
+        }
+
+        if (categoryToDelete != null) {
+            val catObj = categoriesList.firstOrNull { it.name.equals(categoryToDelete, ignoreCase = true) }
+            val displayName = if (catObj != null) "${catObj.emoji} ${strings.localizeCategory(catObj.name)}" else categoryToDelete!!
+            AlertDialog(
+                onDismissRequest = { categoryToDelete = null },
+                title = { Text(strings.deleteBucketTitle) },
+                text = { Text(strings.deleteBucketConfirm(displayName)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            onDeleteCategory?.invoke(categoryToDelete!!)
+                            categoryToDelete = null
+                        },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text(strings.delete)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { categoryToDelete = null }) {
+                        Text(strings.cancel)
+                    }
                 }
             )
         }

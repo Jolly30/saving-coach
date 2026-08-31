@@ -19,6 +19,7 @@ class SpeechRecognizerManager @Inject constructor(
 ) : RecognitionListener {
 
     private var speechRecognizer: SpeechRecognizer? = null
+    private var isCancelling = false
 
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
@@ -33,6 +34,7 @@ class SpeechRecognizerManager @Inject constructor(
     val error: StateFlow<String?> = _error.asStateFlow()
 
     fun startListening() {
+        isCancelling = false
         if (speechRecognizer == null) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
             speechRecognizer?.setRecognitionListener(this)
@@ -40,7 +42,14 @@ class SpeechRecognizerManager @Inject constructor(
 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "my-MM")
+            
+            // Set primary language to system language for maximum compatibility
+            val defaultLanguage = java.util.Locale.getDefault().toLanguageTag()
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, defaultLanguage)
+            
+            // Provide hint for additional fallback/bilingual languages (Burmese & English)
+            putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("en-US", "my-MM"))
+            
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         }
 
@@ -53,11 +62,10 @@ class SpeechRecognizerManager @Inject constructor(
 
     fun stopListening() {
         speechRecognizer?.stopListening()
-        _isListening.value = false
-        _rmsDb.value = 0f
     }
 
     fun cancelListening() {
+        isCancelling = true
         speechRecognizer?.cancel()
         _recognizedText.value = ""
         _isListening.value = false
@@ -81,11 +89,14 @@ class SpeechRecognizerManager @Inject constructor(
     override fun onBufferReceived(buffer: ByteArray?) {}
 
     override fun onEndOfSpeech() {
-        _isListening.value = false
         _rmsDb.value = 0f
     }
 
     override fun onError(error: Int) {
+        if (isCancelling) {
+            // Ignore error callback triggered by manual cancel to avoid UI error banners
+            return
+        }
         val errorMessage = when (error) {
             SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
             SpeechRecognizer.ERROR_CLIENT -> "Client side error"

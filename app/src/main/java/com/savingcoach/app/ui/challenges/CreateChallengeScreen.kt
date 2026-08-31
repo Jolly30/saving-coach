@@ -56,6 +56,8 @@ fun CreateChallengeScreen(
         existingTitle.equals(title.trim(), ignoreCase = true)
     }
 
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -79,14 +81,14 @@ fun CreateChallengeScreen(
             ) {
                 Column {
                     Text(
-                        text = "New Challenge",
+                        text = strings.newChallenge,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.surface
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Design your next savings streak",
+                        text = strings.newChallengeDesc,
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -103,14 +105,14 @@ fun CreateChallengeScreen(
                         .size(36.dp)
                         .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.surface)
+                    Icon(Icons.Default.Close, contentDescription = strings.close, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "CHOOSE TEMPLATE",
+                text = strings.chooseTemplate,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -122,22 +124,23 @@ fun CreateChallengeScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 listOf(
-                    ChallengeTemplate.CONSTANT to "Constant",
-                    ChallengeTemplate.FLEXI to "Flexi",
-                    ChallengeTemplate.ENVELOPE to "Envelope",
-                    ChallengeTemplate.NO_SPEND to "No-Spend"
+                    ChallengeTemplate.CONSTANT to strings.templateConstant,
+                    ChallengeTemplate.FLEXI to strings.templateFlexi,
+                    ChallengeTemplate.ENVELOPE to strings.templateEnvelope,
+                    ChallengeTemplate.NO_SPEND to strings.templateNoSpend
                 ).forEach { (tmpl, label) ->
                     val isSelected = selectedTemplate == tmpl
                     Surface(
-                        color = if (isSelected) ChallengeActive else MaterialTheme.colorScheme.surfaceVariant,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                         shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier
                             .weight(1f)
                             .clickable { selectedTemplate = tmpl }
                     ) {
                         Text(
                             text = label,
-                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center,
@@ -151,15 +154,15 @@ fun CreateChallengeScreen(
 
             // Customization Fields
             val textFieldColors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                 disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                focusedBorderColor = ChallengeActive,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
                 unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                 disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                focusedLabelColor = ChallengeActive,
+                focusedLabelColor = MaterialTheme.colorScheme.primary,
                 unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
@@ -169,7 +172,7 @@ fun CreateChallengeScreen(
             ) {
                 Column {
                     Text(
-                        text = "EMOJI",
+                        text = strings.emojiLabel,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -191,12 +194,7 @@ fun CreateChallengeScreen(
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurface
                     ),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = ChallengeActive,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                    colors = textFieldColors
                 )
             }
 
@@ -204,7 +202,7 @@ fun CreateChallengeScreen(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "CHALLENGE NAME",
+                        text = strings.challengeNameLabel,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -222,7 +220,7 @@ fun CreateChallengeScreen(
             }
             if (isNameDuplicate) {
                 Text(
-                    text = "Challenge name already exists",
+                    text = strings.challengeNameExists,
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 4.dp, start = 76.dp)
@@ -231,10 +229,16 @@ fun CreateChallengeScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            val today = remember { LocalDate.now() }
+            val lastDayOfMonth = remember { today.with(java.time.temporal.TemporalAdjusters.lastDayOfMonth()) }
+            val maxDays = remember { lastDayOfMonth.dayOfMonth - today.dayOfMonth + 1 }
+            val enteredDuration = durationDays.toLongOrNull() ?: 0L
+            val isDurationTooLong = enteredDuration > maxDays
+
             if (selectedTemplate == ChallengeTemplate.NO_SPEND) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "DURATION (DAYS)",
+                        text = strings.durationDaysLabel,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -249,12 +253,20 @@ fun CreateChallengeScreen(
                         shape = RoundedCornerShape(12.dp),
                         colors = textFieldColors
                     )
+                    if (isDurationTooLong) {
+                        Text(
+                            text = strings.mustBeAtMostDays(maxDays),
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                        )
+                    }
                 }
             } else {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "TARGET AMOUNT (MMK)",
+                            text = "${strings.targetAmountLabel} (${com.savingcoach.app.utils.InvestmentCalculations.getCurrencyLabel(uiState.currencyPreference, isInvestment = false)})",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -262,8 +274,12 @@ fun CreateChallengeScreen(
                         )
                         OutlinedTextField(
                             value = targetAmount,
-                            onValueChange = { targetAmount = it.filter { char -> char.isDigit() }.take(10) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            onValueChange = { newValue ->
+                                if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
+                                    targetAmount = newValue
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.fillMaxWidth().height(56.dp),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
@@ -273,7 +289,7 @@ fun CreateChallengeScreen(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "DURATION (DAYS)",
+                            text = strings.durationDaysLabel,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -288,6 +304,14 @@ fun CreateChallengeScreen(
                             shape = RoundedCornerShape(12.dp),
                             colors = textFieldColors
                         )
+                        if (isDurationTooLong) {
+                            Text(
+                                text = strings.mustBeAtMostDays(maxDays),
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -295,10 +319,10 @@ fun CreateChallengeScreen(
             // Dynamic Constant calculation preview
             val targetVal = targetAmount.toDoubleOrNull() ?: 0.0
             val durationVal = durationDays.toLongOrNull() ?: 0L
-            if (selectedTemplate == ChallengeTemplate.CONSTANT && durationVal > 0) {
+            if (selectedTemplate == ChallengeTemplate.CONSTANT && durationVal > 0 && !isDurationTooLong) {
                 val dailyAmount = targetVal / durationVal
                 Text(
-                    text = "Save ${String.format("%,.0f", dailyAmount)} MMK / day",
+                    text = strings.savePerDay(strings.formatAmount(dailyAmount, uiState.currencyPreference, 1.0, isInvestment = false)),
                     color = ChallengeActive,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
@@ -309,9 +333,12 @@ fun CreateChallengeScreen(
             Spacer(modifier = Modifier.height(40.dp))
 
             // Action Button
+            val isButtonEnabled = title.isNotBlank() && !isNameDuplicate && durationDays.isNotBlank() && !isDurationTooLong
             Button(
                 onClick = {
-                    val amount = if (selectedTemplate == ChallengeTemplate.NO_SPEND) 0.0 else (targetAmount.toDoubleOrNull() ?: 30000.0)
+                    val targetCurrency = com.savingcoach.app.utils.InvestmentCalculations.getTargetCurrency(uiState.currencyPreference, isInvestment = false)
+                    val defaultAmount = if (targetCurrency == "USD") 10.0 else 30000.0
+                    val amount = if (selectedTemplate == ChallengeTemplate.NO_SPEND) 0.0 else (targetAmount.toDoubleOrNull() ?: defaultAmount)
                     val days = durationDays.toLongOrNull() ?: 30L
 
                     val finalTitle = if (title.isBlank()) "My Challenge" else title
@@ -329,7 +356,8 @@ fun CreateChallengeScreen(
                         isCompleted = false,
                         createdAt = System.currentTimeMillis(),
                         template = selectedTemplate,
-                        lastDepositDate = "|0|$days"
+                        lastDepositDate = "|0|$days",
+                        currency = targetCurrency
                     )
 
                     viewModel.createChallenge(newChallenge)
@@ -343,18 +371,19 @@ fun CreateChallengeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = title.isNotBlank() && !isNameDuplicate,
+                enabled = isButtonEnabled,
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = ChallengeActive,
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             ) {
                 Text(
-                    text = "Start Challenge",
+                    text = strings.startChallenge,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (title.isNotBlank() && !isNameDuplicate) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isButtonEnabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 

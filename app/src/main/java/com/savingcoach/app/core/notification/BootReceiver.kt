@@ -16,6 +16,7 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             notificationScheduler.scheduleDailyReminders()
             notificationScheduler.scheduleBudgetCheck()
+            notificationScheduler.schedulePortfolioRiskCheck()
         }
     }
 }

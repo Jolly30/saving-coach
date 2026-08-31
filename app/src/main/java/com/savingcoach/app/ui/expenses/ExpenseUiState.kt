@@ -8,6 +8,9 @@ data class ExpenseUiState(
     val monthlyBudget: Budget? = null,
     val totalSpent: Double = 0.0,
     val daysLeftInMonth: Int = 0,
+    val currencyPreference: String = "MMK",
+    val usdRate: Double = 1.0,
+
 
     // Categories / Spending Buckets
     val categories: List<ExpenseCategory> = emptyList(),

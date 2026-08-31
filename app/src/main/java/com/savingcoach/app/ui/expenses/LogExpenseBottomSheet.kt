@@ -34,11 +34,12 @@ fun LogExpenseBottomSheet(
     var descriptionText by remember { mutableStateOf("") }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
 
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
     val selectedCategoryObj = categoriesList.firstOrNull { it.name.equals(selectedCategoryName, ignoreCase = true) }
     val selectedCategoryDisplayText = if (selectedCategoryObj != null) {
-        "${selectedCategoryObj.emoji} ${selectedCategoryObj.name}"
+        "${selectedCategoryObj.emoji} ${strings.localizeCategory(selectedCategoryObj.name)}"
     } else {
-        selectedCategoryName
+        strings.localizeCategory(selectedCategoryName)
     }
 
     ModalBottomSheet(
@@ -57,12 +58,12 @@ fun LogExpenseBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "➕ Log Expense",
+                    text = "➕ ${strings.logExpenseTitle}",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close")
+                    Icon(Icons.Default.Close, contentDescription = strings.close)
                 }
             }
 
@@ -75,7 +76,7 @@ fun LogExpenseBottomSheet(
                         amountText = newValue
                     }
                 },
-                label = { Text("Amount (MMK) *") },
+                label = { Text("${strings.amount} (MMK) *") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -91,7 +92,7 @@ fun LogExpenseBottomSheet(
                     value = selectedCategoryDisplayText,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Select Spending Bucket (Required) *") },
+                    label = { Text(strings.selectSpendingBucketRequired) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
                     modifier = Modifier
@@ -105,7 +106,7 @@ fun LogExpenseBottomSheet(
                 ) {
                     categoriesList.forEach { cat ->
                         DropdownMenuItem(
-                            text = { Text("${cat.emoji} ${cat.name}", fontWeight = FontWeight.Medium) },
+                            text = { Text("${cat.emoji} ${strings.localizeCategory(cat.name)}", fontWeight = FontWeight.Medium) },
                             onClick = {
                                 selectedCategoryName = cat.name
                                 isDropdownExpanded = false
@@ -121,7 +122,7 @@ fun LogExpenseBottomSheet(
                             ) {
                                 Text("➕", style = MaterialTheme.typography.bodyMedium)
                                 Text(
-                                    "Add Custom Spending Bucket",
+                                    strings.addCustomBucket,
                                     fontWeight = FontWeight.Medium,
                                     style = MaterialTheme.typography.bodyMedium
                                 )
@@ -139,7 +140,7 @@ fun LogExpenseBottomSheet(
             OutlinedTextField(
                 value = merchantText,
                 onValueChange = { merchantText = it },
-                label = { Text("Note / Merchant (Optional)") },
+                label = { Text(strings.merchantOptional) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -148,7 +149,7 @@ fun LogExpenseBottomSheet(
             OutlinedTextField(
                 value = descriptionText,
                 onValueChange = { descriptionText = it },
-                label = { Text("Description (Optional)") },
+                label = { Text(strings.noteOptional) },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -165,7 +166,7 @@ fun LogExpenseBottomSheet(
                     .fillMaxWidth()
                     .height(50.dp)
             ) {
-                Text("Save Expense", style = MaterialTheme.typography.titleMedium)
+                Text(strings.saveExpense, style = MaterialTheme.typography.titleMedium)
             }
 
             Spacer(modifier = Modifier.height(24.dp))

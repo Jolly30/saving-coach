@@ -23,12 +23,34 @@ class SavingReminderWorker @AssistedInject constructor(
         return try {
             val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
             val challenges = savingChallengeRepository.getActiveChallenges(userId).first()
-
-            if (challenges.isNotEmpty()) {
-                val challengeNames = challenges.joinToString(", ") { it.title }
-                notificationHelper.showDailyReminder(
-                    "You have ${challenges.size} active saving challenges: $challengeNames. Keep going!"
-                )
+            var triggeredAbandoned = false
+            
+            val fiveDaysInMillis = 5L * 24 * 60 * 60 * 1000L
+            val now = System.currentTimeMillis()
+            
+            for (challenge in challenges) {
+                val deposits = savingChallengeRepository.getDeposits(userId, challenge.id).first()
+                val lastActivityTime = if (deposits.isNotEmpty()) {
+                    deposits.first().createdAt
+                } else {
+                    challenge.createdAt
+                }
+                
+                if (now - lastActivityTime >= fiveDaysInMillis) {
+                    notificationHelper.showAbandonedChallenge(challenge.title)
+                    triggeredAbandoned = true
+                    break // Only show one alert at a time to prevent notification spam
+                }
+            }
+            
+            if (!triggeredAbandoned && challenges.isNotEmpty()) {
+                val count = challenges.size
+                val message = if (count == 1) {
+                    "You have 1 active saving challenge. Keep going!"
+                } else {
+                    "You have $count active saving challenges. Keep going!"
+                }
+                notificationHelper.showDailyReminder(message)
             }
 
             Result.success()
