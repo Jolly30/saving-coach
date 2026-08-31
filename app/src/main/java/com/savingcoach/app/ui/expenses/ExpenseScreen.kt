@@ -1,6 +1,7 @@
 package com.savingcoach.app.ui.expenses
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -21,10 +23,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 import com.savingcoach.app.data.model.Expense
 import com.savingcoach.app.ui.components.BudgetProgressBar
@@ -39,8 +43,9 @@ fun ExpenseScreen(
     onNavigateToAddExpense: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
     val currencyFormat = remember { NumberFormat.getNumberInstance(Locale.US) }
-    val dateFormatter = remember { java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy") }
+    val dateTimeFormatter = remember { java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a") }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Show Snackbar when errorMessage changes
@@ -53,15 +58,20 @@ fun ExpenseScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        "Budget & Expense Hub",
+                        strings.expensesTitle,
                         fontWeight = FontWeight.Bold
                     )
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
+                ),
                 windowInsets = WindowInsets(0.dp)
             )
         },
@@ -88,15 +98,17 @@ fun ExpenseScreen(
                     item {
                         val limit = uiState.monthlyBudget?.limit ?: 0.0
                         val spent = uiState.totalSpent
-                        val rawRemaining = limit - spent
+                        val rawRemaining = limit.toBigDecimal().subtract(spent.toBigDecimal())
                         val percentage = if (limit > 0) (spent / limit) * 100 else 0.0
 
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                containerColor = MaterialTheme.colorScheme.surface
                             ),
-                            shape = RoundedCornerShape(18.dp)
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            shape = RoundedCornerShape(22.dp)
                         ) {
                             Column(
                                 modifier = Modifier
@@ -109,34 +121,53 @@ fun ExpenseScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = "🎯 Monthly Overall Budget",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "🎯",
+                                            fontSize = 20.sp
+                                        )
+                                        Text(
+                                            text = "${strings.monthlyOverallBudget} (${com.savingcoach.app.utils.InvestmentCalculations.getCurrencyLabel(uiState.currencyPreference, isInvestment = false)})",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
                                     IconButton(
                                         onClick = { viewModel.setEditBudgetDialogVisible(true) },
                                         modifier = Modifier.size(36.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Edit,
-                                            contentDescription = "Edit Budget",
+                                            contentDescription = strings.editBudget,
                                             tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(22.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                 }
 
-                                Text(
-                                    text = "${currencyFormat.format(spent.toLong())} MMK Spent / ${currencyFormat.format(limit.toLong())} MMK Target",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    if (limit > 0) {
+                                        com.savingcoach.app.ui.components.AutoScalingText(
+                                            text = strings.formatAmount(limit, uiState.currencyPreference, 1.0, isInvestment = false),
+                                            maxTextSize = 32.sp,
+                                            minTextSize = 18.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
 
                                 BudgetProgressBar(
                                     percentage = percentage,
-                                    height = 22.dp,
+                                    height = 8.dp,
                                     showLabel = false
                                 )
 
@@ -145,23 +176,38 @@ fun ExpenseScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = "${percentage.toInt()}% Used",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (percentage >= 100) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "Remaining: ${currencyFormat.format(rawRemaining.toLong())} MMK",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (rawRemaining < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(
-                                        text = "${uiState.daysLeftInMonth} Days Left",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
+                                    Column(
+                                        modifier = Modifier.weight(1f).padding(end = 8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        com.savingcoach.app.ui.components.AutoScalingText(
+                                            text = "${strings.remaining}: ${strings.formatAmount(rawRemaining.toDouble(), uiState.currencyPreference, 1.0, isInvestment = false)}",
+                                            maxTextSize = 13.sp,
+                                            minTextSize = 9.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (rawRemaining < java.math.BigDecimal.ZERO) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                        )
+                                        com.savingcoach.app.ui.components.AutoScalingText(
+                                            text = "${strings.spent}: ${strings.formatAmount(spent, uiState.currencyPreference, 1.0, isInvestment = false)}",
+                                            maxTextSize = 13.sp,
+                                            minTextSize = 9.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                    ) {
+                                        Text(
+                                            text = "${strings.formatNumber(uiState.daysLeftInMonth)} ${strings.days}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -175,20 +221,24 @@ fun ExpenseScreen(
                             onClick = onNavigateToAddExpense,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(56.dp),
+                                .height(52.dp),
                             shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary
-                            ),
-                            elevation = ButtonDefaults.buttonElevation(
-                                defaultElevation = 4.dp,
-                                pressedElevation = 1.dp
                             )
                         ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = strings.addExpense,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Log New Expense",
+                                text = strings.addExpense,
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary
                             )
                         }
                     }
@@ -203,14 +253,14 @@ fun ExpenseScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "🏷️ SPENDING BUCKETS",
+                                text = "🏷️ ${strings.spendingBuckets}",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             TextButton(onClick = { viewModel.setAddCategoryDialogVisible(true) }) {
                                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("New Bucket")
+                                Text(strings.newBucket)
                             }
                         }
 
@@ -234,25 +284,23 @@ fun ExpenseScreen(
                                 }
 
                                 Card(
-                                    modifier = Modifier.width(330.dp),
-                                    shape = RoundedCornerShape(18.dp),
+                                    modifier = Modifier
+                                        .width(320.dp)
+                                        .height(160.dp),
+                                    shape = RoundedCornerShape(20.dp),
                                     colors = CardDefaults.cardColors(
-                                        containerColor = if (isOverBudget)
-                                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                                        else
-                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                        containerColor = MaterialTheme.colorScheme.surface
                                     ),
-                                    border = if (isOverBudget)
-                                        BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
-                                    else null
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                                 ) {
                                     Column(
                                         modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(20.dp),
-                                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                                            .fillMaxSize()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        // Header Row: Emoji + Category Name | Edit Icon Button
+                                        // Header Row: Emoji Tile + Category Name | Edit Icon Button
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -260,69 +308,103 @@ fun ExpenseScreen(
                                         ) {
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                                                 modifier = Modifier.weight(1f)
                                             ) {
-                                                Text(
-                                                    text = if (isOverBudget) "🚨" else category.emoji,
-                                                    style = MaterialTheme.typography.titleLarge
-                                                )
-                                                Text(
-                                                    text = category.name,
-                                                    style = MaterialTheme.typography.titleLarge,
-                                                    fontWeight = FontWeight.Bold,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(42.dp)
+                                                        .background(
+                                                            MaterialTheme.colorScheme.surfaceVariant,
+                                                            RoundedCornerShape(12.dp)
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = category.emoji,
+                                                        fontSize = 20.sp
+                                                    )
+                                                }
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = strings.localizeCategory(category.name),
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onSurface,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    if (category.target > 0) {
+                                                        Text(
+                                                            text = "${strings.target}: ${strings.formatAmount(category.target, uiState.currencyPreference, 1.0, isInvestment = false)}",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
                                             }
 
                                             IconButton(
                                                 onClick = { viewModel.setCategoryToEdit(category) },
-                                                modifier = Modifier.size(36.dp)
+                                                modifier = Modifier.size(34.dp)
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Edit,
                                                     contentDescription = "Edit Target",
-                                                    tint = if (isOverBudget) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(20.dp)
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
                                                 )
                                             }
                                         }
 
-                                        // Spending Metrics Row: spent X / Y mmk | Percentage
+                                        // Metrics Row: Spent amount + percentage badge
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(
-                                                text = if (category.target > 0)
-                                                    "spent ${currencyFormat.format(category.spent.toLong())}/${currencyFormat.format(category.target.toLong())} mmk"
-                                                else
-                                                    "spent ${currencyFormat.format(category.spent.toLong())} mmk",
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = if (isOverBudget) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "${strings.spent}:",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = strings.formatAmount(category.spent, uiState.currencyPreference, 1.0, isInvestment = false),
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isOverBudget) CoralRed else MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
 
-                                            Text(
-                                                text = "${catPercentage.toInt()}%",
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isOverBudget) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                                            )
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = if (isOverBudget) CoralRed.copy(alpha = 0.12f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                                border = BorderStroke(1.dp, if (isOverBudget) CoralRed.copy(alpha = 0.3f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                                            ) {
+                                                Text(
+                                                    text = "${strings.formatNumber(catPercentage.toInt())}%",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isOverBudget) CoralRed else MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                )
+                                            }
                                         }
 
-                                        // Progress Bar (Always visible for uniform card height)
+                                        // Progress Bar
                                         val progressVal = (catPercentage / 100.0).toFloat().coerceIn(0f, 1f)
                                         LinearProgressIndicator(
                                             progress = { progressVal },
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(10.dp)
-                                                .clip(RoundedCornerShape(5.dp)),
-                                            color = if (isOverBudget) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                            trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                                .height(8.dp)
+                                                .clip(RoundedCornerShape(4.dp)),
+                                            color = if (isOverBudget) CoralRed else MaterialTheme.colorScheme.primary,
+                                            trackColor = MaterialTheme.colorScheme.surfaceVariant
                                         )
                                     }
                                 }
@@ -331,33 +413,145 @@ fun ExpenseScreen(
                     }
 
                     // ==========================================
-                    // SECTION 4: Recent Expenses Header with Filter Chips
+                    // SECTION 4: Recent Expenses Header with Dropdown Filter
                     // ==========================================
                     item {
-                        Column {
+                        var filterMenuExpanded by remember { mutableStateOf(false) }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "🧾 RECENT EXPENSES",
+                                text = "🧾 ${strings.recentExpenses.uppercase()}",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                item {
-                                    FilterChip(
-                                        selected = uiState.filterCategory == null,
-                                        onClick = { viewModel.selectFilterCategory(null) },
-                                        label = { Text("All") }
-                                    )
+
+                            Box {
+                                val currentFilterName = uiState.filterCategory
+                                val currentCategory = uiState.categories.firstOrNull { it.name.equals(currentFilterName, ignoreCase = true) }
+                                val filterText = if (currentCategory != null) {
+                                    "${currentCategory.emoji} ${strings.localizeCategory(currentCategory.name)}"
+                                } else {
+                                    strings.allBuckets
                                 }
-                                items(uiState.categories) { cat ->
-                                    FilterChip(
-                                        selected = uiState.filterCategory.equals(cat.name, ignoreCase = true),
-                                        onClick = { viewModel.selectFilterCategory(cat.name) },
-                                        label = { Text("${cat.emoji} ${cat.name}") }
+
+                                Surface(
+                                    onClick = { filterMenuExpanded = true },
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = filterText,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = "Filter",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                DropdownMenu(
+                                    expanded = filterMenuExpanded,
+                                    onDismissRequest = { filterMenuExpanded = false },
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(16.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                    modifier = Modifier.widthIn(min = 180.dp)
+                                ) {
+                                    val isAllSelected = uiState.filterCategory == null
+                                    DropdownMenuItem(
+                                        modifier = Modifier
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (isAllSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent),
+                                        text = {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Text("🏷️", fontSize = 15.sp)
+                                                    Text(
+                                                        text = strings.allBuckets,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
+                                                        color = if (isAllSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                }
+                                                if (isAllSelected) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Check,
+                                                        contentDescription = "Selected",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.selectFilterCategory(null)
+                                            filterMenuExpanded = false
+                                        }
                                     )
+                                    uiState.categories.forEach { cat ->
+                                        val isSelected = uiState.filterCategory.equals(cat.name, ignoreCase = true)
+                                        DropdownMenuItem(
+                                            modifier = Modifier
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent),
+                                            text = {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                    ) {
+                                                        Text(cat.emoji, fontSize = 15.sp)
+                                                        Text(
+                                                            text = strings.localizeCategory(cat.name),
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                    }
+                                                    if (isSelected) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Check,
+                                                            contentDescription = "Selected",
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            onClick = {
+                                                viewModel.selectFilterCategory(cat.name)
+                                                filterMenuExpanded = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -374,11 +568,11 @@ fun ExpenseScreen(
                             ) {
                                 Text(
                                     text = if (uiState.filterCategory != null && uiState.expenses.isNotEmpty())
-                                        "No expenses in this category."
+                                        strings.noExpensesInCategory
                                     else
-                                        "No expenses yet. Tap + to log your first expense!",
+                                        strings.noExpensesYet,
                                     style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.outline
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -387,7 +581,8 @@ fun ExpenseScreen(
                             ExpenseItemRow(
                                 expense = expense,
                                 currencyFormat = currencyFormat,
-                                dateFormatter = dateFormatter,
+                                currencyPreference = uiState.currencyPreference,
+                                dateTimeFormatter = dateTimeFormatter,
                                 onDeleteClick = { viewModel.setExpenseToDelete(expense) }
                             )
                         }
@@ -401,6 +596,7 @@ fun ExpenseScreen(
                 EditBudgetDialog(
                     currentLimit = globalLimit,
                     currencyFormat = currencyFormat,
+                    currencyPreference = uiState.currencyPreference,
                     onDismiss = { viewModel.setEditBudgetDialogVisible(false) },
                     onConfirm = { newLimit -> viewModel.updateBudgetLimit(newLimit) }
                 )
@@ -415,6 +611,7 @@ fun ExpenseScreen(
                     globalLimit = globalLimit,
                     maxAllowedTarget = maxAllowedForNew,
                     currencyFormat = currencyFormat,
+                    currencyPreference = uiState.currencyPreference,
                     showTargetField = true,
                     onDismiss = { viewModel.setAddCategoryDialogVisible(false) },
                     onConfirm = { emoji, name, target -> viewModel.addCustomCategory(emoji, name, target) }
@@ -431,9 +628,16 @@ fun ExpenseScreen(
                     globalLimit = globalLimit,
                     maxAllowedTarget = maxAllowedForEdit,
                     currencyFormat = currencyFormat,
+                    currencyPreference = uiState.currencyPreference,
                     onDismiss = { viewModel.setCategoryToEdit(null) },
-                    onConfirm = { newTarget -> viewModel.updateCategoryTarget(category.name, newTarget) },
-                    onDelete = { viewModel.deleteCategory(category.name) }
+                    onConfirm = { newTarget ->
+                        viewModel.updateCategoryTarget(category.name, newTarget)
+                        viewModel.setCategoryToEdit(null)
+                    },
+                    onDelete = {
+                        viewModel.deleteCategory(category.name)
+                        viewModel.setCategoryToEdit(null)
+                    }
                 )
             }
 
@@ -441,16 +645,16 @@ fun ExpenseScreen(
             uiState.expenseToDelete?.let { expense ->
                 AlertDialog(
                     onDismissRequest = { viewModel.setExpenseToDelete(null) },
-                    title = { Text("Delete Expense") },
-                    text = { Text("Are you sure you want to delete this expense of ${currencyFormat.format(expense.amount.toLong())} MMK?") },
+                    title = { Text(strings.deleteExpenseConfirmTitle) },
+                    text = { Text(strings.deleteExpenseConfirmMsg(com.savingcoach.app.utils.InvestmentCalculations.formatValue(expense.amount, uiState.currencyPreference, 1.0, isInvestment = false))) },
                     confirmButton = {
                         TextButton(onClick = { viewModel.deleteExpense(expense.id) }) {
-                            Text("Delete", color = MaterialTheme.colorScheme.error)
+                            Text(strings.delete, color = MaterialTheme.colorScheme.error)
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { viewModel.setExpenseToDelete(null) }) {
-                            Text("Cancel")
+                            Text(strings.cancel)
                         }
                     }
                 )
@@ -463,9 +667,11 @@ fun ExpenseScreen(
 fun ExpenseItemRow(
     expense: Expense,
     currencyFormat: NumberFormat,
-    dateFormatter: java.time.format.DateTimeFormatter,
+    currencyPreference: String,
+    dateTimeFormatter: java.time.format.DateTimeFormatter,
     onDeleteClick: () -> Unit
 ) {
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -483,7 +689,7 @@ fun ExpenseItemRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = expense.category,
+                    text = strings.localizeCategory(expense.category),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -495,14 +701,9 @@ fun ExpenseItemRow(
                     )
                 }
                 Text(
-                    text = try {
-                        val parsed = java.time.LocalDate.parse(expense.date)
-                        parsed.format(dateFormatter)
-                    } catch (e: Exception) {
-                        expense.date.ifEmpty { "Today" }
-                    },
+                    text = strings.formatExpenseDateTime(expense.createdAt, expense.date),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -511,7 +712,7 @@ fun ExpenseItemRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "-${currencyFormat.format(expense.amount.toLong())} MMK",
+                    text = "-" + strings.formatAmount(expense.amount, currencyPreference, 1.0, isInvestment = false),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error
@@ -522,7 +723,7 @@ fun ExpenseItemRow(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = strings.delete,
                         tint = MaterialTheme.colorScheme.outline
                     )
                 }
@@ -535,15 +736,17 @@ fun ExpenseItemRow(
 fun EditBudgetDialog(
     currentLimit: Double,
     currencyFormat: NumberFormat,
+    currencyPreference: String = "MMK",
     onDismiss: () -> Unit,
     onConfirm: (newLimit: Double) -> Unit
 ) {
     var limitText by remember { mutableStateOf(if (currentLimit > 0) currentLimit.toBigDecimal().stripTrailingZeros().toPlainString() else "") }
     val enteredLimit = limitText.toDoubleOrNull() ?: 0.0
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Monthly Overall Budget") },
+        title = { Text(strings.editBudget) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
@@ -553,7 +756,7 @@ fun EditBudgetDialog(
                             limitText = newValue
                         }
                     },
-                    label = { Text("Global Budget Limit (MMK)") },
+                    label = { Text("${strings.globalBudgetLimit} (${com.savingcoach.app.utils.InvestmentCalculations.getCurrencyLabel(currencyPreference, isInvestment = false)})") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -567,12 +770,12 @@ fun EditBudgetDialog(
                 },
                 enabled = enteredLimit >= 0
             ) {
-                Text("Save")
+                Text(strings.save)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(strings.cancel)
             }
         }
     )
@@ -584,12 +787,14 @@ fun EditCategoryTargetDialog(
     globalLimit: Double,
     maxAllowedTarget: Double,
     currencyFormat: NumberFormat,
+    currencyPreference: String = "MMK",
     onDismiss: () -> Unit,
     onConfirm: (newTarget: Double) -> Unit,
     onDelete: () -> Unit = {}
 ) {
     var targetText by remember { mutableStateOf(if (category.target > 0) category.target.toBigDecimal().stripTrailingZeros().toPlainString() else "") }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+    val strings = com.savingcoach.app.ui.localization.AppLocale.current
 
     val enteredTarget = targetText.toDoubleOrNull() ?: 0.0
     val isExceedingGlobal = globalLimit > 0 && enteredTarget > maxAllowedTarget
@@ -599,8 +804,8 @@ fun EditCategoryTargetDialog(
     if (showDeleteConfirmation) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirmation = false },
-            title = { Text("Delete Category?") },
-            text = { Text("Are you sure you want to delete '${category.emoji} ${category.name}'? This spending bucket will be removed.") },
+            title = { Text(strings.delete) },
+            text = { Text("${category.emoji} ${category.name} - ${strings.delete}?") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -609,12 +814,12 @@ fun EditCategoryTargetDialog(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.onError)
+                    Text(strings.delete, color = MaterialTheme.colorScheme.onError)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmation = false }) {
-                    Text("Cancel")
+                    Text(strings.cancel)
                 }
             }
         )
@@ -627,11 +832,11 @@ fun EditCategoryTargetDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Edit Category Budget")
+                    Text(strings.edit)
                     IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
+                            contentDescription = strings.close,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -651,7 +856,7 @@ fun EditCategoryTargetDialog(
                                 targetText = newValue
                             }
                         },
-                        label = { Text("Monthly Target Limit (MMK)") },
+                        label = { Text("${strings.targetLimit} (${com.savingcoach.app.utils.InvestmentCalculations.getCurrencyLabel(currencyPreference, isInvestment = false)})") },
                         isError = isExceedingGlobal || isGlobalZero,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
@@ -659,20 +864,20 @@ fun EditCategoryTargetDialog(
                     )
                     if (isGlobalZero) {
                         Text(
-                            text = "⚠️ Monthly Overall Budget is currently 0 MMK. Please set Global Budget first.",
+                            text = strings.budgetZeroWarning,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall
                         )
                     } else if (isExceedingGlobal) {
                         Text(
-                            text = "⚠️ Cannot exceed Global Budget! Max available for this category: ${currencyFormat.format(maxAllowedTarget.toLong())} MMK.",
+                            text = strings.budgetExceedWarning(com.savingcoach.app.utils.InvestmentCalculations.formatValue(maxAllowedTarget, currencyPreference, 1.0, isInvestment = false)),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall
                         )
                     } else if (globalLimit > 0) {
                         Text(
-                            text = "Available Global Capacity: ${currencyFormat.format(maxAllowedTarget.toLong())} MMK",
-                            color = MaterialTheme.colorScheme.outline,
+                            text = strings.availableCapacityMsg(com.savingcoach.app.utils.InvestmentCalculations.formatValue(maxAllowedTarget, currencyPreference, 1.0, isInvestment = false)),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -691,7 +896,7 @@ fun EditCategoryTargetDialog(
                             contentColor = MaterialTheme.colorScheme.error
                         )
                     ) {
-                        Text("Delete", fontWeight = FontWeight.Medium)
+                        Text(strings.delete, fontWeight = FontWeight.Medium)
                     }
                     Spacer(modifier = Modifier.width(32.dp))
                     TextButton(
@@ -702,7 +907,7 @@ fun EditCategoryTargetDialog(
                         },
                         enabled = !isExceedingGlobal && !isGlobalZero
                     ) {
-                        Text("Save", fontWeight = FontWeight.Bold)
+                        Text(strings.save, fontWeight = FontWeight.Bold)
                     }
                 }
             },

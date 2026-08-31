@@ -9,12 +9,16 @@ import com.savingcoach.app.data.model.ExpenseCategoryEntity
 import com.savingcoach.app.data.repository.BudgetRepository
 import com.savingcoach.app.data.repository.ExpenseCategoryRepository
 import com.savingcoach.app.data.repository.ExpenseRepository
+import com.savingcoach.app.data.repository.UserRepository
+import com.savingcoach.app.data.repository.ExchangeRateRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -27,6 +31,9 @@ class ExpenseViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val budgetRepository: BudgetRepository,
     private val expenseCategoryRepository: ExpenseCategoryRepository,
+    private val userRepository: UserRepository,
+    private val exchangeRateRepository: ExchangeRateRepository,
+    private val notificationHelper: com.savingcoach.app.core.notification.NotificationHelper,
     private val auth: FirebaseAuth
 ) : ViewModel() {
 
@@ -35,12 +42,15 @@ class ExpenseViewModel @Inject constructor(
             Regex("^[\\u2600-\\u27BF\\uFE00-\\uFE0F\\u200D\\u20E3\\uD83C-\\uDBFF\\uDC00-\\uDFFF\\u2000-\\u2BFF\\u2300-\\u23FF\\u2B50-\\u2B55\\u2934-\\u2935\\u25AA-\\u25FE\\u2190-\\u21FF\\u2122\\u00A9\\u00AE]+\\s*")
 
         private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+        private data class Sextuple<A, B, C, D, E, F>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E, val sixth: F)
     }
 
     private val sessionExpenses = java.util.Collections.synchronizedMap(LinkedHashMap<String, Expense>())
     private val activeCategories = java.util.Collections.synchronizedList(mutableListOf<ExpenseCategory>())
     private val deletedCategoryNames = java.util.Collections.synchronizedSet(mutableSetOf<String>())
     private var loadJob: Job? = null
+    private var currencyPreference = "MMK"
+    private var usdRate = 1.0
 
     private val _uiState = MutableStateFlow(ExpenseUiState())
     val uiState: StateFlow<ExpenseUiState> = _uiState.asStateFlow()
@@ -50,6 +60,9 @@ class ExpenseViewModel @Inject constructor(
     }
 
     fun loadData() {
+        viewModelScope.launch {
+            exchangeRateRepository.fetchLatestRate(force = false)
+        }
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
@@ -61,8 +74,19 @@ class ExpenseViewModel @Inject constructor(
                     budgetRepository.getBudget(userId, currentMonth),
                     expenseRepository.getExpensesForMonth(userId, currentMonth),
                     expenseCategoryRepository.getCategories(userId, currentMonth),
-                    expenseCategoryRepository.getDeletedCategoryNames(userId, currentMonth)
-                ) { budgetObj, expenseList, savedCategories, persistedDeleted ->
+                    expenseCategoryRepository.getDeletedCategoryNames(userId, currentMonth),
+                    combine(
+                        userRepository.getUserProfileFlow(userId).catch { emit(null) },
+                        exchangeRateRepository.usdToMmkRate
+                    ) { profile, rate -> Pair(profile, rate) }
+                ) { budgetObj, expenseList, savedCategories, persistedDeleted, profileRate ->
+                    val userProfile = profileRate.first
+                    val usdRateVal = profileRate.second
+                    val currencyPref = userProfile?.currencyPreference ?: "MMK"
+
+                    this@ExpenseViewModel.currencyPreference = currencyPref
+                    this@ExpenseViewModel.usdRate = usdRateVal
+
                     // Filter session cache to current month only
                     val filteredSession = sessionExpenses.values.filter { it.date.startsWith(currentMonth) }
                     val combinedList = (expenseList + filteredSession)
@@ -94,16 +118,14 @@ class ExpenseViewModel @Inject constructor(
                     val lastDayOfMonth = now.withDayOfMonth(now.lengthOfMonth())
                     val daysLeft = ChronoUnit.DAYS.between(now, lastDayOfMonth).toInt() + 1
 
-                    Quadruple(budgetObj, combinedList, daysLeft, currentMonth)
-                }.collect { (budgetObj, combinedList, daysLeft, currentMonth) ->
                     updateStateFromData(
                         budget = budgetObj,
                         expenses = combinedList,
                         daysLeft = daysLeft,
-                        userId = auth.currentUser?.uid ?: "",
+                        userId = userId,
                         currentMonth = currentMonth
                     )
-                }
+                }.collect()
             } catch (e: Exception) {
                 val currentMonth = LocalDate.now().toString().substring(0, 7)
                 val filteredSession = sessionExpenses.values.filter { it.date.startsWith(currentMonth) }
@@ -130,30 +152,92 @@ class ExpenseViewModel @Inject constructor(
         currentMonth: String,
         error: String? = null
     ) {
-        val totalSpent = expenses.sumOf { it.amount }
+        val targetCurrency = com.savingcoach.app.utils.InvestmentCalculations.getTargetCurrency(
+            this.currencyPreference, 
+            isInvestment = false
+        )
+
+        val totalSpent = expenses.sumOf { 
+            com.savingcoach.app.utils.InvestmentCalculations.convertAmount(
+                amount = it.amount,
+                fromCurrency = it.currency,
+                toCurrency = targetCurrency,
+                usdRate = this.usdRate
+            )
+        }
+
         val categorySpendingMap = expenses
             .groupBy { extractCleanCategoryName(it.category) }
-            .mapValues { entry -> entry.value.sumOf { it.amount } }
+            .mapValues { entry -> 
+                entry.value.sumOf { 
+                    com.savingcoach.app.utils.InvestmentCalculations.convertAmount(
+                        amount = it.amount,
+                        fromCurrency = it.currency,
+                        toCurrency = targetCurrency,
+                        usdRate = this.usdRate
+                    )
+                } 
+            }
 
+        val budgetCurrency = budget?.currency ?: "MMK"
         val updatedCategories = activeCategories.map { cat ->
             val spentForCat = calculateSpentForCategory(cat.name, categorySpendingMap)
-            cat.copy(spent = spentForCat)
+            val convertedTarget = com.savingcoach.app.utils.InvestmentCalculations.convertAmount(
+                amount = cat.target,
+                fromCurrency = budgetCurrency,
+                toCurrency = targetCurrency,
+                usdRate = this.usdRate
+            )
+            cat.copy(
+                spent = spentForCat,
+                target = convertedTarget
+            )
+        }
+
+        val displayExpenses = expenses.map { expense ->
+            val converted = com.savingcoach.app.utils.InvestmentCalculations.convertAmount(
+                amount = expense.amount,
+                fromCurrency = expense.currency,
+                toCurrency = targetCurrency,
+                usdRate = this.usdRate
+            )
+            expense.copy(
+                amount = converted,
+                currency = targetCurrency
+            )
+        }
+
+        val convertedBudgetLimit = if (budget != null) {
+            com.savingcoach.app.utils.InvestmentCalculations.convertAmount(
+                amount = budget.limit,
+                fromCurrency = budget.currency,
+                toCurrency = targetCurrency,
+                usdRate = this.usdRate
+            )
+        } else {
+            0.0
         }
 
         _uiState.update { state ->
             val filterCat = state.filterCategory
             state.copy(
-                monthlyBudget = budget ?: Budget(
+                monthlyBudget = (budget ?: Budget(
                     userId = userId,
                     month = currentMonth,
-                    limit = 0.0
+                    limit = 0.0,
+                    currency = targetCurrency
+                )).copy(
+                    limit = convertedBudgetLimit,
+                    currency = targetCurrency
                 ),
                 totalSpent = totalSpent,
                 daysLeftInMonth = daysLeft,
                 categories = updatedCategories,
                 categorySpending = categorySpendingMap,
-                expenses = expenses,
-                filteredExpenses = filterExpenses(expenses, filterCat),
+                expenses = displayExpenses,
+                filteredExpenses = filterExpenses(displayExpenses, filterCat),
+                currencyPreference = this.currencyPreference,
+                usdRate = this.usdRate,
                 isLoading = false,
                 errorMessage = error
             )
@@ -208,6 +292,10 @@ class ExpenseViewModel @Inject constructor(
             val userId = auth.currentUser?.uid ?: ""
             val todayStr = LocalDate.now().toString()
             val cleanCategoryName = extractCleanCategoryName(category)
+            val targetCurrency = com.savingcoach.app.utils.InvestmentCalculations.getTargetCurrency(
+                currencyPreference, 
+                isInvestment = false
+            )
 
             val newExpense = Expense(
                 id = UUID.randomUUID().toString(),
@@ -220,7 +308,7 @@ class ExpenseViewModel @Inject constructor(
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis(),
                 source = "manual",
-                currency = "MMK"
+                currency = targetCurrency
             )
 
             try {
@@ -228,6 +316,17 @@ class ExpenseViewModel @Inject constructor(
                 val firestoreId = expenseRepository.addExpense(newExpense)
                 val savedExpense = newExpense.copy(id = firestoreId)
                 sessionExpenses[firestoreId] = savedExpense
+
+                val currentBudget = _uiState.value.monthlyBudget
+                if (currentBudget != null && currentBudget.limit > 0) {
+                    val newTotalSpent = _uiState.value.totalSpent + amount
+                    val percentage = ((newTotalSpent / currentBudget.limit) * 100).toInt()
+                    if (percentage >= 100) {
+                        notificationHelper.showBudgetAlert(percentage, newTotalSpent - currentBudget.limit)
+                    } else if (percentage >= 90) {
+                        notificationHelper.showBudgetAlert(percentage)
+                    }
+                }
             } catch (e: Exception) {
                 // If Firestore fails, keep in session cache with original ID as fallback
                 sessionExpenses[newExpense.id] = newExpense
@@ -283,15 +382,24 @@ class ExpenseViewModel @Inject constructor(
         viewModelScope.launch {
             val userId = auth.currentUser?.uid ?: ""
             val currentMonth = LocalDate.now().toString().substring(0, 7)
+            val targetCurrency = com.savingcoach.app.utils.InvestmentCalculations.getTargetCurrency(
+                currencyPreference, 
+                isInvestment = false
+            )
             val previousBudget = _uiState.value.monthlyBudget
             val currentBudget = previousBudget
-            val updatedBudget = (currentBudget ?: Budget(userId = userId, month = currentMonth)).copy(limit = newLimit)
+            val updatedBudget = (currentBudget ?: Budget(userId = userId, month = currentMonth)).copy(
+                limit = newLimit,
+                currency = targetCurrency
+            )
 
-            _uiState.update { it.copy(monthlyBudget = updatedBudget, isEditBudgetDialogOpen = false) }
+            // Optimistically set display budget
+            val displayUpdatedBudget = updatedBudget.copy(limit = newLimit, currency = targetCurrency)
+            _uiState.update { it.copy(monthlyBudget = displayUpdatedBudget, isEditBudgetDialogOpen = false) }
 
             try {
                 if (currentBudget != null && currentBudget.id.isNotEmpty()) {
-                    budgetRepository.updateLimit(userId, currentMonth, newLimit)
+                    budgetRepository.setBudget(userId, updatedBudget)
                 } else {
                     budgetRepository.setBudget(userId, updatedBudget)
                 }
