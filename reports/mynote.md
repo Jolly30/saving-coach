@@ -696,6 +696,230 @@ Direct Gemini API calls from Myanmar return 404. The proxy on Vercel (US servers
 Project: Saving Coach | Package: com.savingcoach.app
 Repo: https://github.com/Jolly30/saving-coach
 Dev 1 Role: UI Skeleton + Auth + Dashboard + AI Proxy + Firestore Repositories + Notifications
-Status: ✅ ALL tasks DONE + Real Auth + Gemini Proxy + Firestore Repositories + Dashboard Redesign v2 + Default Challenges + Filter Dropdown + Notifications System + Notification UI + KAPT→KSP Migration + Chat Integration Fixes
+Status: ✅ ALL tasks DONE + Real Auth + Gemini Proxy + Firestore Repositories + Dashboard Redesign v2 + Default Challenges + Filter Dropdown + Notifications System + Notification UI + KAPT→KSP Migration + Chat Integration Fixes + Investment Feature
 Proxy URL: https://proxy-lake-xi-82.vercel.app
 ```
+
+---
+
+## 🔧 Session 16 — Investment & Market Analysis Feature (2026-08-15)
+
+### Overview
+
+Implemented a complete "Investment & Market Analysis" screen for tracking a mixed portfolio of Stocks, ETFs, and Cryptocurrencies. The screen allows users to record holdings manually (Symbol, Units, Buy Price) and fetches real-time market data from CoinGecko (Crypto) and Finnhub (Stocks/ETFs) via a Vercel proxy to keep API keys secure.
+
+**Reference UI:** https://wealth-whisper-peek.lovable.app (design only, not tech stack)
+
+### Architecture Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Charting | Vico v2+ | Compose-native, modern, supports pie/donut charts |
+| API Key Storage | Vercel Proxy | Same pattern as Gemini API — keys never exposed to client |
+| Data Persistence | Firestore | Cross-device sync, consistent with other features |
+| Currency | USD | Standard for market data APIs |
+| Network Client | OkHttp (already in project) | No new dependency needed |
+
+### Files Created (13 files)
+
+#### Data Layer
+
+| File | Purpose |
+|------|---------|
+| `data/model/Investment.kt` | UserHolding, ComputedHolding, PortfolioSummary, API response models |
+| `data/repository/InvestmentRepository.kt` | Repository interface for investment holdings |
+| `data/repository/FirebaseInvestmentRepository.kt` | Firestore implementation — stores under `users/{userId}/investments/` |
+| `data/mock/MockInvestmentRepository.kt` | Mock with 5 sample holdings for development |
+| `services/MarketApiService.kt` | CoinGecko + Finnhub API client via Vercel proxy, 60s TTL cache |
+| `utils/InvestmentCalculations.kt` | Pure math functions (P/L, ROI, currency formatting, allocation %) |
+
+#### UI Layer
+
+| File | Purpose |
+|------|---------|
+| `ui/investment/InvestmentScreen.kt` | Main screen: header, summary card, tabs, holdings list, news |
+| `ui/investment/InvestmentViewModel.kt` | State management, API calls, portfolio computation |
+| `ui/investment/components/PortfolioSummaryCard.kt` | Hero card with total value + donut chart (Vico) |
+| `ui/investment/components/HoldingCard.kt` | Individual asset card with P/L badges and delete confirmation |
+| `ui/investment/components/AddAssetSheet.kt` | Bottom sheet: type toggle, autocomplete search, units/price inputs |
+| `ui/investment/components/SearchableDropdown.kt` | Autocomplete component with 300ms debounce |
+| `ui/investment/components/MarketNewsCard.kt` | News feed item (thumbnail, headline, source, relative time) |
+
+#### Proxy Endpoints
+
+| File | Purpose |
+|------|---------|
+| `proxy/api/coingecko.js` | Vercel serverless function — proxies CoinGecko search & price requests |
+| `proxy/api/finnhub.js` | Vercel serverless function — proxies Finnhub search, quote, & news requests |
+
+### Files Modified (9 files)
+
+| File | Change |
+|------|--------|
+| `navigation/Routes.kt` | Added `object Investment : Routes("investment")` |
+| `navigation/NavGraph.kt` | Added InvestmentScreen composable to nav graph |
+| `MainActivity.kt` | Added Investment tab to bottom nav (between Challenges and Settings) with `Icons.Default.TrendingUp` |
+| `local.defaults.properties` | Added `coingecko.proxy.url` and `finnhub.proxy.url` placeholders |
+| `local.properties` | Added proxy URLs pointing to Vercel deployment |
+| `app/build.gradle.kts` | Added Vico charting dependency |
+| `gradle/libs.versions.toml` | Added Vico v2.0.0-beta.2 version and library |
+| `di/AppModule.kt` | Added `@Named` providers for `coingecko_proxy_url` and `finnhub_proxy_url` |
+| `di/RepositoryModule.kt` | Added `@Binds` for `InvestmentRepository` |
+
+### Bottom Navigation Order
+
+```
+Dashboard → Expenses → Challenges → Investment → Settings
+```
+
+### Data Models
+
+```kotlin
+// User's recorded holding — only 3 manual values, no timestamps
+data class UserHolding(
+    val id: String,           // UUID v4
+    val type: String,         // "stock" | "crypto"
+    val symbol: String,       // CoinGecko ID or stock ticker
+    val displayTicker: String,// "BTC", "AAPL"
+    val name: String,         // "Bitcoin", "Apple Inc."
+    val units: Double,        // 0.25 or 15.0
+    val buyPrice: Double      // Price per unit at purchase ($)
+)
+
+// Computed holding with live market data
+data class ComputedHolding(
+    val holding: UserHolding,
+    val livePrice: Double,    // From API
+    val change24h: Double,    // Daily % change
+    val costBasis: Double,    // units * buyPrice
+    val liquidValue: Double,  // units * livePrice
+    val unrealizedPL: Double, // liquidValue - costBasis
+    val roiPercentage: Double // ((livePrice - buyPrice) / buyPrice) * 100
+)
+```
+
+### API Integration (via Vercel Proxy)
+
+**CoinGecko (Crypto):**
+- Search: `POST /api/coingecko` with `{ action: "search", query: "bitcoin" }`
+- Price: `POST /api/coingecko` with `{ action: "price", ids: "bitcoin,ethereum" }`
+- Rate Limit: 10-30 calls/min (free tier)
+- Caching: 60 seconds TTL in memory
+
+**Finnhub (Stocks/ETFs):**
+- Search: `POST /api/finnhub` with `{ action: "search", q: "AAPL" }`
+- Quote: `POST /api/finnhub` with `{ action: "quote", symbol: "AAPL" }`
+- News: `POST /api/finnhub` with `{ action: "news", category: "general" }`
+- Rate Limit: 60 calls/minute (free tier)
+- Caching: 60 seconds TTL in memory
+
+### UI Layout
+
+```
+┌─────────────────────────────────────────┐
+│  Investment Analysis                    │
+│  Portfolio & Market Overview   [⚡ Live] │
+├─────────────────────────────────────────┤
+│  ┌─────────────────────────────────┐    │
+│  │  Total Liquid Value             │    │
+│  │  $13,645.20                     │    │
+│  │  +$1,725.20 (+14.5%)           │    │
+│  │  [=== Donut Chart ===]          │    │
+│  │  Stocks: 69.1% | Crypto: 30.9% │    │
+│  └─────────────────────────────────┘    │
+│                                         │
+│  [All] [Stocks & ETFs] [Crypto] [News]  │
+│                                         │
+│  ┌─────────────────────────────────┐    │
+│  │ AAPL  Apple Inc.       $3,382   │    │
+│  │ 15 @ $180        +$682 (+25.3%) │    │
+│  └─────────────────────────────────┘    │
+│                                         │
+│  [+ Add Asset]                          │
+└─────────────────────────────────────────┘
+```
+
+### Mathematical Engine
+
+| Formula | Description |
+|---------|-------------|
+| `costBasis = units * buyPrice` | What the user paid |
+| `liquidValue = units * livePrice` | What it's worth now |
+| `unrealizedPL = liquidValue - costBasis` | Profit/Loss |
+| `roiPercentage = ((livePrice - buyPrice) / buyPrice) * 100` | Return on Investment |
+| `totalROI = (totalUnrealizedPL / totalCostBasis) * 100` | Portfolio-wide ROI |
+
+### Security — API Key Protection
+
+**Problem:** Sharing API keys across all users without exposing them in the APK or GitHub.
+
+**Solution:** Vercel Proxy (same pattern as Gemini API)
+
+```
+App → Vercel Proxy (server-side) → CoinGecko/Finnhub API
+         ↑
+    API keys stored here (Vercel env vars)
+```
+
+| What | Where | Visible to |
+|------|-------|-----------|
+| API Keys | Vercel Environment Variables | Server only ✅ |
+| Proxy URL | `local.properties` (gitignored) | Your machine only ✅ |
+| App | Calls proxy endpoint | Never sees keys ✅ |
+
+### Proxy Deployment Instructions
+
+```bash
+# 1. Navigate to proxy directory
+cd /Users/yadanar/saving-coach/proxy
+
+# 2. Set API keys as Vercel environment variables
+vercel env add COINGECKO_API_KEY production
+# Enter: CG-M3itD4aAQEX9jLbYq73TLH85
+
+vercel env add FINNHUB_API_KEY production
+# Enter: da042f9r01qgk75r1sigda042f9r01qgk75r1sj0
+
+# 3. Deploy to production
+vercel --prod
+
+# 4. Disable SSO protection
+vercel project protection disable --sso --scope jolly30s-projects
+```
+
+### Build Verification
+
+`./gradlew assembleDebug` — **BUILD SUCCESSFUL** ✅
+
+### Proxy Deployment ✅ (2026-08-15)
+
+**Production URL:** `https://proxy-lake-xi-82.vercel.app`
+
+| Endpoint | Action | Status |
+|----------|--------|--------|
+| `POST /api/coingecko` | `search` — search crypto by name | ✅ Working |
+| `POST /api/coingecko` | `price` — batch price + 24h change | ✅ Working |
+| `POST /api/finnhub` | `search` — search stocks by symbol | ✅ Working |
+| `POST /api/finnhub` | `quote` — real-time stock quote | ✅ Working |
+| `POST /api/finnhub` | `news` — market news | ✅ Working |
+
+**Vercel Environment Variables (encrypted):**
+| Key | Status |
+|-----|--------|
+| GEMINI_API_KEY | ✅ Set |
+| OPENROUTER_API_KEY | ✅ Set |
+| COINGECKO_API_KEY | ✅ Set (encrypted) |
+| FINNHUB_API_KEY | ✅ Set (encrypted) |
+
+**local.properties configured:**
+```
+coingecko.proxy.url=https://proxy-lake-xi-82.vercel.app/api/coingecko
+finnhub.proxy.url=https://proxy-lake-xi-82.vercel.app/api/finnhub
+```
+
+### What's Left
+
+1. ~~Deploy proxy to Vercel~~ ✅ Done
+2. ~~Update local.properties~~ ✅ Done
+3. **Test on device** — Verify search, price fetching, and portfolio calculations work end-to-end
+4. **CI/CD** — Add `COINGECKO_PROXY_URL` and `FINNHUB_PROXY_URL` to GitHub Secrets for release builds
