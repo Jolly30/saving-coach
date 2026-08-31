@@ -9,5 +9,6 @@ data class SavingsDeposit(
     val amount: Double = 0.0,
     val date: String = "",           // YYYY-MM-DD
     val note: String = "",
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    val currency: String = "MMK"
 )
