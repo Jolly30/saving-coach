@@ -135,22 +135,6 @@ class MockSavingChallengeRepository @Inject constructor() : SavingChallengeRepos
         val list = (current[challengeId] ?: emptyList()) + deposit
         current[challengeId] = list
         deposits.value = current
-
-        // Also increment challenge currentAmount to match Firebase repository behavior
-        challenges.value = challenges.value.map {
-            if (it.id == challengeId) {
-                it.copy(currentAmount = it.currentAmount + deposit.amount)
-            } else {
-                it
-            }
-        }
-    }
-
-    override suspend fun deleteDeposit(userId: String, challengeId: String, depositId: String) {
-        val current = deposits.value.toMutableMap()
-        val list = (current[challengeId] ?: emptyList()).filter { it.id != depositId }
-        current[challengeId] = list
-        deposits.value = current
     }
 
     override suspend fun completeChallenge(userId: String, challengeId: String) {
@@ -183,30 +167,14 @@ class MockAuthRepository @Inject constructor() : AuthRepository {
         return Result.success(null as AuthResult)
     }
 
-    override suspend fun signInWithEmailOrUsername(input: String, password: String): Result<AuthResult> {
+    override suspend fun signInWithEmail(email: String, password: String): Result<AuthResult> {
         signedIn = true
-        // Safe cast hack for mock
-        @Suppress("UNCHECKED_CAST")
-        return Result.success(Any() as AuthResult)
+        return Result.success(null as AuthResult)
     }
 
-    override suspend fun signUpWithEmail(email: String, password: String, username: String): Result<AuthResult> {
+    override suspend fun signUpWithEmail(email: String, password: String): Result<AuthResult> {
         signedIn = true
-        // Safe cast hack for mock
-        @Suppress("UNCHECKED_CAST")
-        return Result.success(Any() as AuthResult)
-    }
-
-    override suspend fun updateEmail(newEmail: String): Result<Unit> {
-        return Result.success(Unit)
-    }
-
-    override suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
-        return Result.success(Unit)
-    }
-
-    override suspend fun changePassword(oldPassword: String, newPassword: String): Result<Unit> {
-        return Result.success(Unit)
+        return Result.success(null as AuthResult)
     }
 
     override suspend fun signOut() {
