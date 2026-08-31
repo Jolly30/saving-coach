@@ -8,6 +8,7 @@ import com.savingcoach.app.workers.BudgetAlertWorker
 import com.savingcoach.app.workers.DailyExpenseReminderWorker
 import com.savingcoach.app.workers.InactiveAlertWorker
 import com.savingcoach.app.workers.SavingReminderWorker
+import com.savingcoach.app.workers.PortfolioRiskWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -25,6 +26,7 @@ class NotificationScheduler @Inject constructor(
         private const val BUDGET_CHECK_WORK = "budget_check_work"
         private const val SAVING_REMINDER_WORK = "saving_reminder_work"
         private const val INACTIVE_CHECK_WORK = "inactive_check_work"
+        private const val PORTFOLIO_RISK_WORK = "portfolio_risk_work"
     }
 
     fun scheduleDailyReminders() {
@@ -51,19 +53,19 @@ class NotificationScheduler @Inject constructor(
 
         workManager.enqueueUniquePeriodicWork(
             DAILY_REMINDER_WORK,
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             expenseReminderRequest
         )
 
         workManager.enqueueUniquePeriodicWork(
             SAVING_REMINDER_WORK,
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             savingReminderRequest
         )
 
         workManager.enqueueUniquePeriodicWork(
             INACTIVE_CHECK_WORK,
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             inactiveAlertRequest
         )
     }
@@ -76,8 +78,21 @@ class NotificationScheduler @Inject constructor(
 
         workManager.enqueueUniquePeriodicWork(
             BUDGET_CHECK_WORK,
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             budgetCheckRequest
+        )
+    }
+
+    fun schedulePortfolioRiskCheck() {
+        val portfolioRiskRequest = PeriodicWorkRequestBuilder<PortfolioRiskWorker>(
+            12, TimeUnit.HOURS // Check every 12 hours
+        )
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            PORTFOLIO_RISK_WORK,
+            ExistingPeriodicWorkPolicy.UPDATE,
+            portfolioRiskRequest
         )
     }
 
