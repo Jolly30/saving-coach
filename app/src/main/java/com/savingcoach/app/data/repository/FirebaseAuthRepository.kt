@@ -35,6 +35,15 @@ class FirebaseAuthRepository @Inject constructor(
         }
     }
 
+    override suspend fun signInWithEmailOrUsername(input: String, password: String): Result<AuthResult> {
+        return try {
+            val result = firebaseAuth.signInWithEmailAndPassword(input, password).await()
+            Result.success(result)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     override suspend fun signUpWithEmail(email: String, password: String, username: String): Result<AuthResult> {
         return try {
             val result = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
@@ -46,5 +55,14 @@ class FirebaseAuthRepository @Inject constructor(
 
     override suspend fun signOut() {
         firebaseAuth.signOut()
+    }
+
+    override suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+        return try {
+            firebaseAuth.sendPasswordResetEmail(email).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }
