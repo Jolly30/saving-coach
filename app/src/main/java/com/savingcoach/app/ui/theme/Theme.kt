@@ -17,41 +17,67 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val LightColorScheme = lightColorScheme(
-    primary = PrimaryBlue,
-    secondary = AccentGreen,
-    background = BackgroundLight,
-    surface = SurfaceWhite,
+    primary = MatchaPrimary,
     onPrimary = Color.White,
-    onBackground = DarkNavy,
-    onSurface = OnSurface,
-    onSurfaceVariant = OnSurfaceVariant,
-    surfaceVariant = Color(0xFFF1F5F9),
-    outline = Color(0xFFE0E0E0),
-    error = Red,
-    primaryContainer = LightBluePill
+    primaryContainer = CreamSurfaceVariant,
+    onPrimaryContainer = DarkRoast,
+    secondary = WarmCaramel,
+    onSecondary = Color.White,
+    secondaryContainer = WarmCaramelContainer,
+    onSecondaryContainer = WarmCaramelVariant,
+    background = CreamBackground,
+    onBackground = DarkRoast,
+    surface = CreamSurface,
+    onSurface = DarkRoast,
+    surfaceVariant = CreamSurfaceVariant,
+    onSurfaceVariant = EarthySlate,
+    surfaceContainer = CreamSurface,
+    surfaceContainerLow = CreamBackground,
+    surfaceContainerHigh = CreamSurfaceVariant,
+    surfaceContainerHighest = CreamSurfaceVariant,
+    surfaceDim = CreamSurfaceVariant,
+    surfaceBright = CreamSurface,
+    outline = CreamOutline,
+    outlineVariant = CreamOutlineVariant,
+    error = CoralRed,
+    onError = Color.White,
+    errorContainer = Color(0xFFFDE8E8),
+    onErrorContainer = CoralRedDark
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = PrimaryBlue,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF1E3A5F),
-    secondary = AccentGreen,
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFF1A3A2A),
-    background = DarkBackground,
-    onBackground = DarkOnBackground,
-    surface = DarkSurface,
-    onSurface = DarkOnSurface,
-    onSurfaceVariant = OnSurfaceVariant,
-    surfaceVariant = Color(0xFF2C2C2C),
-    outline = Color(0xFF444444),
-    error = Red
+    primary = DarkMatchaPrimary,
+    onPrimary = Color(0xFF141412),
+    primaryContainer = DarkMatchaPrimaryContainer,
+    onPrimaryContainer = Color(0xFFD2EED8),
+    secondary = DarkMatchaSecondary,
+    onSecondary = Color(0xFF141412),
+    secondaryContainer = Color(0xFF3D2A1C),
+    onSecondaryContainer = Color(0xFFFBE4D2),
+    background = DarkMatchaBackground,
+    onBackground = DarkMatchaOnBackground,
+    surface = DarkMatchaSurface,
+    onSurface = DarkMatchaOnSurface,
+    surfaceVariant = DarkMatchaSurfaceVariant,
+    onSurfaceVariant = DarkMatchaOnSurfaceVariant,
+    surfaceContainer = DarkMatchaSurface,
+    surfaceContainerLow = DarkMatchaBackground,
+    surfaceContainerHigh = DarkMatchaSurfaceVariant,
+    surfaceContainerHighest = DarkMatchaSurfaceVariant,
+    surfaceDim = DarkMatchaBackground,
+    surfaceBright = DarkMatchaSurface,
+    outline = DarkMatchaOutline,
+    outlineVariant = DarkMatchaOutlineVariant,
+    error = CoralRed,
+    onError = Color.White,
+    errorContainer = Color(0xFF5A1E1E),
+    onErrorContainer = Color(0xFFFFB4AB)
 )
 
 @Composable
 fun SavingCoachTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -67,7 +93,7 @@ fun SavingCoachTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
+            window.statusBarColor = colorScheme.background.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }
