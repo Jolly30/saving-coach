@@ -127,6 +127,9 @@ dependencies {
     // Commons CSV
     implementation(libs.commons.csv)
 
+    // Vico Charts
+    implementation(libs.vico.compose.m3)
+
     // WorkManager & Notifications
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("androidx.hilt:hilt-work:1.2.0")
