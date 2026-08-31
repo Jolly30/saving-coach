@@ -192,6 +192,14 @@ class MockAuthRepository @Inject constructor() : AuthRepository {
         return Result.success(Unit)
     }
 
+    override suspend fun updateEmail(newEmail: String): Result<Unit> {
+        return Result.success(Unit)
+    }
+
+    override suspend fun changePassword(oldPassword: String, newPassword: String): Result<Unit> {
+        return Result.success(Unit)
+    }
+
     override suspend fun signOut() {
         signedIn = false
     }

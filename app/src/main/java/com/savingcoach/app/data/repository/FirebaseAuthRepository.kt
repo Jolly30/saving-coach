@@ -65,4 +65,25 @@ class FirebaseAuthRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    override suspend fun updateEmail(newEmail: String): Result<Unit> {
+        return try {
+            firebaseAuth.currentUser?.updateEmail(newEmail)?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun changePassword(oldPassword: String, newPassword: String): Result<Unit> {
+        return try {
+            val credential = com.google.firebase.auth.EmailAuthProvider
+                .getCredential(firebaseAuth.currentUser?.email ?: "", oldPassword)
+            firebaseAuth.currentUser?.reauthenticate(credential)?.await()
+            firebaseAuth.currentUser?.updatePassword(newPassword)?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
