@@ -10,6 +10,7 @@ interface SavingChallengeRepository {
     fun getDeposits(userId: String, challengeId: String): Flow<List<SavingsDeposit>>
     suspend fun createChallenge(challenge: SavingChallenge): String
     suspend fun addDeposit(userId: String, challengeId: String, deposit: SavingsDeposit)
+    suspend fun deleteDeposit(userId: String, challengeId: String, depositId: String)
     suspend fun completeChallenge(userId: String, challengeId: String)
     suspend fun deleteChallenge(userId: String, challengeId: String)
     suspend fun initializeDefaultChallengesIfNeeded(userId: String, defaultChallenges: List<SavingChallenge>)

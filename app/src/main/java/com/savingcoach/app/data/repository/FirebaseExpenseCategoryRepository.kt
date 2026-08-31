@@ -12,18 +12,19 @@ import javax.inject.Singleton
 /**
  * Firestore implementation of [ExpenseCategoryRepository].
  *
- * Stores per-user, per-month category configurations at:
- *   users/{userId}/expense_categories/{YYYY-MM}
+ * Stores per-user, per-month category configurations nested under the "budgets" subcollection
+ * to comply with existing write security rules:
+ *   users/{userId}/budgets/{YYYY-MM}
  */
 @Singleton
 class FirebaseExpenseCategoryRepository @Inject constructor(
     private val firestore: FirebaseFirestore
 ) : ExpenseCategoryRepository {
 
-    private fun categoriesDoc(userId: String, yearMonth: String) =
+    private fun budgetsDoc(userId: String, yearMonth: String) =
         firestore.collection("users")
             .document(userId)
-            .collection("expense_categories")
+            .collection("budgets")
             .document(yearMonth)
 
     override fun getCategories(userId: String, yearMonth: String): Flow<List<ExpenseCategoryEntity>> =
@@ -33,7 +34,7 @@ class FirebaseExpenseCategoryRepository @Inject constructor(
                 close()
                 return@callbackFlow
             }
-            val listener = categoriesDoc(userId, yearMonth)
+            val listener = budgetsDoc(userId, yearMonth)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null || !snapshot.exists()) {
                         trySend(emptyList())
@@ -62,7 +63,7 @@ class FirebaseExpenseCategoryRepository @Inject constructor(
                 close()
                 return@callbackFlow
             }
-            val listener = categoriesDoc(userId, yearMonth)
+            val listener = budgetsDoc(userId, yearMonth)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null || !snapshot.exists()) {
                         trySend(emptySet())
@@ -91,8 +92,22 @@ class FirebaseExpenseCategoryRepository @Inject constructor(
                     "isCustom" to cat.isCustom
                 )
             },
-            "deletedCategories" to deletedNames.toList()
+            "deletedCategories" to deletedNames.toList(),
+            "updatedAt" to System.currentTimeMillis()
         )
-        categoriesDoc(userId, yearMonth).set(data).await()
+        val docRef = budgetsDoc(userId, yearMonth)
+        val doc = docRef.get().await()
+        if (doc.exists()) {
+            docRef.update(data).await()
+        } else {
+            val fullData = data + mapOf(
+                "id" to yearMonth,
+                "userId" to userId,
+                "month" to yearMonth,
+                "limit" to 0.0,
+                "createdAt" to System.currentTimeMillis()
+            )
+            docRef.set(fullData).await()
+        }
     }
 }
