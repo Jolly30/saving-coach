@@ -19,6 +19,16 @@ import com.savingcoach.app.ui.dashboard.DashboardScreen
 import com.savingcoach.app.ui.expenses.AddExpenseScreen
 import com.savingcoach.app.ui.expenses.ExpenseScreen
 import com.savingcoach.app.ui.expenses.ExpenseViewModel
+import com.savingcoach.app.ui.onboarding.AgeScreen
+import com.savingcoach.app.ui.onboarding.GenderScreen
+import com.savingcoach.app.ui.onboarding.SalaryScreen
+import com.savingcoach.app.ui.onboarding.FieldOfWorkScreen
+import com.savingcoach.app.ui.settings.EditAgeScreen
+import com.savingcoach.app.ui.settings.EditEmailScreen
+import com.savingcoach.app.ui.settings.EditGenderScreen
+import com.savingcoach.app.ui.settings.EditSalaryScreen
+import com.savingcoach.app.ui.settings.EditFieldOfWorkScreen
+import com.savingcoach.app.ui.auth.ForgotPasswordScreen
 
 @Composable
 fun NavGraph(
@@ -38,7 +48,7 @@ fun NavGraph(
                     }
                 },
                 onNeedsOnboarding = {
-                    navController.navigate(Routes.Onboarding.route) {
+                    navController.navigate(Routes.OnboardingAge.route) {
                         popUpTo(Routes.Auth.route) { inclusive = true }
                     }
                 },
@@ -48,16 +58,29 @@ fun NavGraph(
             )
         }
 
+        composable(Routes.ForgotPassword.route) {
+            ForgotPasswordScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         composable(Routes.Dashboard.route) {
             DashboardScreen(
-                onNavigateToChallenges = {
-                    navController.navigate(Routes.Challenges.route)
+                onNavigateToChallenges = { challengeId ->
+                    if (challengeId != null) {
+                        navController.navigate("${Routes.Challenges.route}?challengeId=$challengeId")
+                    } else {
+                        navController.navigate(Routes.Challenges.route)
+                    }
                 },
                 onNavigateToCalendarHistory = {
                     navController.navigate(Routes.CalendarHistory.route)
                 },
                 onNavigateToNotifications = {
                     navController.navigate(Routes.Notifications.route)
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Routes.Settings.route)
                 }
             )
         }
@@ -72,11 +95,25 @@ fun NavGraph(
             )
         }
 
-        composable(Routes.Challenges.route) {
+        composable(
+            route = "${Routes.Challenges.route}?challengeId={challengeId}",
+            arguments = listOf(androidx.navigation.navArgument("challengeId") {
+                type = androidx.navigation.NavType.StringType
+                nullable = true
+            })
+        ) { backStackEntry ->
+            val challengeId = backStackEntry.arguments?.getString("challengeId")
             com.savingcoach.app.ui.challenges.ChallengesScreen(
+                initialChallengeId = challengeId,
                 onChallengeClick = { id ->
                     navController.navigate("challenge_detail/$id")
                 }
+            )
+        }
+
+        composable(Routes.Investment.route) {
+            com.savingcoach.app.ui.investment.InvestmentScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -97,6 +134,7 @@ fun NavGraph(
                     navController.popBackStack()
                 },
                 availableCategories = uiState.categories,
+                currencyPreference = uiState.currencyPreference,
                 onAddCategory = { emoji, name, target ->
                     viewModel.addCustomCategory(emoji, name, target)
                 },
@@ -132,9 +170,141 @@ fun NavGraph(
             )
         }
 
-        composable(Routes.Settings.route) {
-            // TODO: Dev 5 — Replace with SettingsScreen
-            PlaceholderScreen("Settings")
+        composable(
+            route = Routes.Settings.route,
+            enterTransition = {
+                slideIntoContainer(
+                    towards = androidx.compose.animation.AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = androidx.compose.animation.core.tween(300)
+                )
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    towards = androidx.compose.animation.AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = androidx.compose.animation.core.tween(300)
+                )
+            }
+        ) {
+            com.savingcoach.app.ui.settings.SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEditUsername = {
+                    navController.navigate(Routes.EditUsername.route)
+                },
+                onNavigateToEditAge = {
+                    navController.navigate(Routes.EditAge.route)
+                },
+                onNavigateToEditGender = {
+                    navController.navigate(Routes.EditGender.route)
+                },
+                onNavigateToEditSalary = {
+                    navController.navigate(Routes.EditSalary.route)
+                },
+                onNavigateToEditFieldOfWork = {
+                    navController.navigate(Routes.EditFieldOfWork.route)
+                },
+                onNavigateToEditEmail = {
+                    navController.navigate(Routes.EditEmail.route)
+                },
+                onNavigateToChangePassword = {
+                    navController.navigate(Routes.ChangePassword.route)
+                },
+                onNavigateToExportData = {
+                    navController.navigate(Routes.ExportData.route)
+                },
+                onNavigateToEditCurrency = {
+                    navController.navigate(Routes.EditCurrency.route)
+                },
+                onNavigateToEditLanguage = {
+                    navController.navigate(Routes.EditLanguage.route)
+                },
+                onNavigateToAuth = {
+                    navController.navigate(Routes.Auth.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Routes.EditCurrency.route) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) { navController.getBackStackEntry(Routes.Settings.route) }
+            com.savingcoach.app.ui.settings.EditCurrencyScreen(
+                viewModel = hiltViewModel(parentEntry),
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.EditLanguage.route) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) { navController.getBackStackEntry(Routes.Settings.route) }
+            com.savingcoach.app.ui.settings.EditLanguageScreen(
+                viewModel = hiltViewModel(parentEntry),
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.EditUsername.route) { backStackEntry ->
+
+            val parentEntry = remember(backStackEntry) { navController.getBackStackEntry(Routes.Settings.route) }
+            com.savingcoach.app.ui.settings.EditUsernameScreen(
+                viewModel = hiltViewModel(parentEntry),
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.EditEmail.route) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) { navController.getBackStackEntry(Routes.Settings.route) }
+            EditEmailScreen(
+                viewModel = hiltViewModel(parentEntry),
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.EditAge.route) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) { navController.getBackStackEntry(Routes.Settings.route) }
+            EditAgeScreen(
+                viewModel = hiltViewModel(parentEntry),
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.EditGender.route) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) { navController.getBackStackEntry(Routes.Settings.route) }
+            EditGenderScreen(
+                viewModel = hiltViewModel(parentEntry),
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.EditSalary.route) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) { navController.getBackStackEntry(Routes.Settings.route) }
+            EditSalaryScreen(
+                viewModel = hiltViewModel(parentEntry),
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.EditFieldOfWork.route) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) { navController.getBackStackEntry(Routes.Settings.route) }
+            EditFieldOfWorkScreen(
+                viewModel = hiltViewModel(parentEntry),
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.ChangePassword.route) {
+            com.savingcoach.app.ui.settings.ChangePasswordScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToForgotPassword = {
+                    navController.navigate(Routes.ForgotPassword.route)
+                }
+            )
+        }
+
+        composable(Routes.ExportData.route) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) { navController.getBackStackEntry(Routes.Settings.route) }
+            com.savingcoach.app.ui.settings.ExportScreen(
+                viewModel = hiltViewModel(parentEntry),
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         composable(Routes.CalendarHistory.route) {
@@ -146,6 +316,46 @@ fun NavGraph(
         composable(Routes.Notifications.route) {
             com.savingcoach.app.ui.notifications.NotificationsScreen(
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.OnboardingAge.route) {
+            AgeScreen(
+                onNavigateNext = {
+                    navController.navigate(Routes.OnboardingGender.route) {
+                        popUpTo(Routes.OnboardingAge.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Routes.OnboardingGender.route) {
+            GenderScreen(
+                onNavigateNext = {
+                    navController.navigate(Routes.OnboardingFieldOfWork.route) {
+                        popUpTo(Routes.OnboardingGender.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Routes.OnboardingFieldOfWork.route) {
+            FieldOfWorkScreen(
+                onNavigateNext = {
+                    navController.navigate(Routes.OnboardingSalary.route) {
+                        popUpTo(Routes.OnboardingFieldOfWork.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Routes.OnboardingSalary.route) {
+            SalaryScreen(
+                onNavigateNext = {
+                    navController.navigate(Routes.Dashboard.route) {
+                        popUpTo(Routes.OnboardingSalary.route) { inclusive = true }
+                    }
+                }
             )
         }
     }
