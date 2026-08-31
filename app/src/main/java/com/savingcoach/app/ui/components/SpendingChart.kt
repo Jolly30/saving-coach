@@ -35,21 +35,22 @@ data class ChartSlice(
 )
 
 private val chartColors = listOf(
-    Color(0xFF4CAF50),
-    Color(0xFF2196F3),
-    Color(0xFFFFC107),
-    Color(0xFFFF9800),
-    Color(0xFFF44336),
-    Color(0xFF9C27B0),
-    Color(0xFF00BCD4),
-    Color(0xFF607D8B)
+    Color(0xFF386641), // MatchaPrimary
+    Color(0xFFC68B59), // WarmCaramel
+    Color(0xFF5E946E), // MatchaPrimaryLight
+    Color(0xFFDCA134), // HoneyYellow
+    Color(0xFFDE7C44), // WarmOrange
+    Color(0xFFD65252), // CoralRed
+    Color(0xFF3B8A50), // MatchaGreen
+    Color(0xFF5A695D)  // EarthySlate
 )
 
 @Composable
 fun SpendingChart(
     slices: List<ChartSlice>,
     modifier: Modifier = Modifier,
-    showLegend: Boolean = true
+    showLegend: Boolean = true,
+    currencyPreference: String = "MMK"
 ) {
     if (slices.isEmpty()) return
 
@@ -118,8 +119,9 @@ fun SpendingChart(
                             modifier = Modifier.weight(1f)
                         )
 
+                        val formattedVal = com.savingcoach.app.utils.InvestmentCalculations.formatValue(slice.value, currencyPreference, 1.0, isInvestment = false)
                         Text(
-                            text = "${slice.value.toInt()} MMK ($percentage%)",
+                            text = "$formattedVal ($percentage%)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
