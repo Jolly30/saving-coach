@@ -3,6 +3,7 @@ package com.savingcoach.app.ui.auth
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,6 +54,8 @@ fun Context.getActivity(): Activity? = when (this) {
 @Composable
 fun AuthScreen(
     onSignedIn: () -> Unit,
+    onNeedsOnboarding: () -> Unit,
+    onNavigateToForgotPassword: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -64,9 +67,11 @@ fun AuthScreen(
 
     val credentialManager = remember { CredentialManager.create(context) }
 
-    LaunchedEffect(uiState.isSignedIn) {
+    LaunchedEffect(uiState.isSignedIn, uiState.needsOnboarding) {
         if (uiState.isSignedIn) {
             onSignedIn()
+        } else if (uiState.needsOnboarding) {
+            onNeedsOnboarding()
         }
     }
 
@@ -105,9 +110,9 @@ fun AuthScreen(
 
             // Email field
             OutlinedTextField(
-                value = uiState.email,
-                onValueChange = viewModel::onEmailChanged,
-                label = { Text("Email") },
+                value = uiState.emailOrUsername,
+                onValueChange = viewModel::onEmailOrUsernameChanged,
+                label = { Text(if (uiState.isSignUp) "Email" else "Email or Username") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Email,
@@ -119,7 +124,8 @@ fun AuthScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Password field
+            Spacer(modifier = Modifier.height(16.dp))
+
             OutlinedTextField(
                 value = uiState.password,
                 onValueChange = viewModel::onPasswordChanged,
@@ -134,11 +140,29 @@ fun AuthScreen(
                 enabled = !uiState.isLoading
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            if (!uiState.isSignUp) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    androidx.compose.material3.TextButton(
+                        onClick = onNavigateToForgotPassword,
+                        enabled = !uiState.isLoading
+                    ) {
+                        Text(
+                            text = "Forgot Password?",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Sign In / Sign Up button
             Button(
-                onClick = viewModel::signInWithEmail,
+                onClick = viewModel::submit,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),

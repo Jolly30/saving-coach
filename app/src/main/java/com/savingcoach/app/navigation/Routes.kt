@@ -12,4 +12,6 @@ sealed class Routes(val route: String) {
     object Settings : Routes("settings")
     object CalendarHistory : Routes("calendar_history")
     object Notifications : Routes("notifications")
+    object ForgotPassword : Routes("forgot_password")
+    object Onboarding : Routes("onboarding")
 }
