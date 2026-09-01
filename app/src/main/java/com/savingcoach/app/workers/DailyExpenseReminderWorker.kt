@@ -30,9 +30,12 @@ class DailyExpenseReminderWorker @AssistedInject constructor(
             val todayExpenses = expenseRepository.getExpensesForDate(userId, today).first()
 
             if (todayExpenses.isEmpty()) {
-                notificationHelper.showDailyReminder(
+                val message = if (notificationHelper.isBurmeseLanguage) {
+                    "ယနေ့ အသုံးစရိတ်များကို စာရင်းသွင်းရန် မမေ့ပါနှင့်!"
+                } else {
                     "Don't forget to log your expenses today!"
-                )
+                }
+                notificationHelper.showDailyReminder(message)
             }
 
             Result.success()

@@ -53,19 +53,19 @@ class NotificationScheduler @Inject constructor(
 
         workManager.enqueueUniquePeriodicWork(
             DAILY_REMINDER_WORK,
-            ExistingPeriodicWorkPolicy.UPDATE,
+            ExistingPeriodicWorkPolicy.KEEP,
             expenseReminderRequest
         )
 
         workManager.enqueueUniquePeriodicWork(
             SAVING_REMINDER_WORK,
-            ExistingPeriodicWorkPolicy.UPDATE,
+            ExistingPeriodicWorkPolicy.KEEP,
             savingReminderRequest
         )
 
         workManager.enqueueUniquePeriodicWork(
             INACTIVE_CHECK_WORK,
-            ExistingPeriodicWorkPolicy.UPDATE,
+            ExistingPeriodicWorkPolicy.KEEP,
             inactiveAlertRequest
         )
     }
@@ -78,7 +78,7 @@ class NotificationScheduler @Inject constructor(
 
         workManager.enqueueUniquePeriodicWork(
             BUDGET_CHECK_WORK,
-            ExistingPeriodicWorkPolicy.UPDATE,
+            ExistingPeriodicWorkPolicy.KEEP,
             budgetCheckRequest
         )
     }
@@ -91,7 +91,7 @@ class NotificationScheduler @Inject constructor(
 
         workManager.enqueueUniquePeriodicWork(
             PORTFOLIO_RISK_WORK,
-            ExistingPeriodicWorkPolicy.UPDATE,
+            ExistingPeriodicWorkPolicy.KEEP,
             portfolioRiskRequest
         )
     }

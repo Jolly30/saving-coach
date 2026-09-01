@@ -2,6 +2,7 @@ package com.savingcoach.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,8 +13,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -22,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.savingcoach.app.data.model.SavingChallenge
 import com.savingcoach.app.data.model.ChallengeTemplate
 import com.savingcoach.app.data.model.ChallengeStatus
+import com.savingcoach.app.ui.theme.CoralRed
 
 val SavingChallenge.daysLeft: Long get() = (durationDays - completedDaysCount).coerceAtLeast(0).toLong()
 
@@ -82,29 +86,33 @@ fun ChallengeCard(
     } else 0f
 
     val percentage = (progressFloat * 100).toInt().coerceIn(0, 100)
-
     val strings = com.savingcoach.app.ui.localization.AppLocale.current
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
-    // Dynamic color & status styling based on challenge state
-    val (statusColor, statusBg, statusLabel) = when (challenge.status) {
-        ChallengeStatus.ACTIVE -> Triple(
+    // Original dynamic color & status styling based on challenge state
+    val (statusColor, statusBg, statusBorder, statusLabel) = when (challenge.status) {
+        ChallengeStatus.ACTIVE -> Quadruple(
             MaterialTheme.colorScheme.primary,
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
             strings.daysLeftCount(challenge.daysLeft)
         )
-        ChallengeStatus.COMPLETED -> Triple(
+        ChallengeStatus.COMPLETED -> Quadruple(
             Color(0xFF81C784),
             Color(0xFF81C784).copy(alpha = 0.15f),
+            Color(0xFF81C784).copy(alpha = 0.3f),
             strings.completed
         )
-        ChallengeStatus.FAILED -> Triple(
+        ChallengeStatus.FAILED -> Quadruple(
             MaterialTheme.colorScheme.error,
             MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+            MaterialTheme.colorScheme.error.copy(alpha = 0.3f),
             strings.failed
         )
-        ChallengeStatus.STOPPED -> Triple(
+        ChallengeStatus.STOPPED -> Quadruple(
             Color(0xFFB0BEC5),
             Color(0xFFB0BEC5).copy(alpha = 0.15f),
+            Color(0xFFB0BEC5).copy(alpha = 0.3f),
             strings.stopped
         )
     }
@@ -112,15 +120,17 @@ fun ChallengeCard(
     val (emoji, rawTitle) = getEmojiAndTitle(challenge.title)
     val localizedTitle = strings.localizeChallengeTitle(rawTitle)
 
-    Surface(
+    Card(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 2.dp,
         modifier = modifier
             .fillMaxWidth()
-            .height(176.dp)
+            .height(180.dp)
     ) {
         Column(
             modifier = Modifier
@@ -138,7 +148,8 @@ fun ChallengeCard(
                 // Status pill / Days left chip
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = statusBg
+                    color = statusBg,
+                    border = BorderStroke(1.dp, statusBorder)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -163,7 +174,7 @@ fun ChallengeCard(
                     }
                 }
 
-                // Emoji Progress %
+                // Progress %
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant
@@ -179,35 +190,16 @@ fun ChallengeCard(
                 }
             }
 
-            // 2. Center: Circular progress ring circling the user input emoji
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(80.dp)
-            ) {
-                // Subtle inner circular backdrop for emoji
-                Box(
-                    modifier = Modifier
-                        .size(62.dp)
-                        .clip(CircleShape)
-                        .background(statusBg),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = emoji,
-                        fontSize = 32.sp
-                    )
-                }
-
-                // Circular Progress Indicator circling the emoji
-                CircularProgressIndicator(
-                    progress = { progressFloat },
-                    color = statusColor,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    strokeWidth = 6.dp,
-                    strokeCap = StrokeCap.Round,
-                    modifier = Modifier.size(80.dp)
-                )
-            }
+            // 2. Center: Interactive Liquid Wave Progress with device tilt physics & floating emoji
+            LiquidWaveProgress(
+                progress = progressFloat,
+                emoji = emoji,
+                primaryColor = MaterialTheme.colorScheme.primary,
+                containerBg = MaterialTheme.colorScheme.surfaceVariant,
+                borderColor = MaterialTheme.colorScheme.outlineVariant,
+                size = 80.dp,
+                isDark = isDark
+            )
 
             // 3. Bottom: Challenge Name
             Text(
@@ -219,8 +211,12 @@ fun ChallengeCard(
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 2.dp)
             )
         }
     }
 }
+
+private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)

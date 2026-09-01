@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -36,6 +37,7 @@ fun ChangePasswordScreen(
     var newPassword by remember { mutableStateOf("") }
     var oldPasswordVisible by remember { mutableStateOf(false) }
     var newPasswordVisible by remember { mutableStateOf(false) }
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     Column(
         modifier = Modifier
@@ -59,7 +61,7 @@ fun ChangePasswordScreen(
                 text = strings.changePasswordTitle,
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(start = 8.dp)
             )
         }
@@ -73,19 +75,20 @@ fun ChangePasswordScreen(
                 text = "Keep your account secure by using a strong password.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 24.dp)
+                fontSize = 14.sp,
+                modifier = Modifier.padding(bottom = 20.dp)
             )
 
             val fieldColors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
                 unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                focusedContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFFAF7F0),
+                unfocusedContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFFAF7F0),
+                focusedBorderColor = if (isDark) Color(0xFF81C784) else Color(0xFF336846),
+                unfocusedBorderColor = if (isDark) Color(0xFF38403A) else Color(0xFFE2DDD0),
+                focusedLabelColor = if (isDark) Color(0xFF81C784) else Color(0xFF336846),
                 unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                cursorColor = MaterialTheme.colorScheme.primary
+                cursorColor = if (isDark) Color(0xFF81C784) else Color(0xFF336846)
             )
 
             OutlinedTextField(
@@ -96,7 +99,7 @@ fun ChangePasswordScreen(
                 },
                 label = { Text(strings.currentPassword) },
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 visualTransformation = if (oldPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
@@ -108,7 +111,7 @@ fun ChangePasswordScreen(
                         Icon(
                             imageVector = image, 
                             contentDescription = if (oldPasswordVisible) "Hide password" else "Show password",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (isDark) Color(0xFF6E7B73) else Color(0xFFA59F91)
                         )
                     }
                 },
@@ -126,7 +129,7 @@ fun ChangePasswordScreen(
                 },
                 label = { Text(strings.newPassword) },
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 visualTransformation = if (newPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
@@ -138,7 +141,7 @@ fun ChangePasswordScreen(
                         Icon(
                             imageVector = image, 
                             contentDescription = if (newPasswordVisible) "Hide password" else "Show password",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (isDark) Color(0xFF6E7B73) else Color(0xFFA59F91)
                         )
                     }
                 },
@@ -154,7 +157,7 @@ fun ChangePasswordScreen(
                     modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
                 )
             } else {
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(28.dp))
             }
 
             val isButtonEnabled = oldPassword.isNotBlank() && newPassword.isNotBlank() && !uiState.isLoading
@@ -170,11 +173,12 @@ fun ChangePasswordScreen(
                     .fillMaxWidth()
                     .height(52.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    containerColor = if (isDark) Color(0xFF3B6E4A) else Color(0xFF336846),
+                    disabledContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFEDE9DF),
+                    contentColor = Color.White,
+                    disabledContentColor = if (isDark) Color(0xFF5A665E) else Color(0xFFA39E92)
                 ),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 enabled = isButtonEnabled
             ) {
                 if (uiState.isLoading) {
@@ -182,14 +186,13 @@ fun ChangePasswordScreen(
                 } else {
                     Text(
                         text = strings.save,
-                        color = if (isButtonEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             TextButton(
                 onClick = onNavigateToForgotPassword,
@@ -197,7 +200,7 @@ fun ChangePasswordScreen(
             ) {
                 Text(
                     text = "Forgot old password?",
-                    color = MaterialTheme.colorScheme.primary,
+                    color = if (isDark) Color(0xFF81C784) else Color(0xFF336846),
                     fontWeight = FontWeight.SemiBold
                 )
             }

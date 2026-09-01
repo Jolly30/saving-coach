@@ -67,6 +67,9 @@ class NotificationHelper @Inject constructor(
     )
     val inAppNotificationFlow: SharedFlow<InAppNotification> = _inAppNotificationFlow.asSharedFlow()
 
+    val isBurmeseLanguage: Boolean
+        get() = isBurmese
+
     private val isBurmese: Boolean
         get() = try {
             languagePreferencesProvider.get().language.value == AppLanguage.MY
@@ -100,10 +103,10 @@ class NotificationHelper @Inject constructor(
             val reminderChannel = NotificationChannel(
                 DAILY_REMINDER_CHANNEL_ID,
                 "Daily Reminders",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Daily reminders to log expenses and check savings"
-                enableVibration(false)
+                enableVibration(true)
             }
 
             val notificationManager = context.getSystemService(NotificationManager::class.java)
@@ -229,9 +232,10 @@ class NotificationHelper @Inject constructor(
             .setSmallIcon(icon)
             .setContentTitle(title)
             .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .build()
 
         // 1. Emit in-app banner for on-screen display inside the app

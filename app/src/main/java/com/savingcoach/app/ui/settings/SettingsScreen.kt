@@ -16,7 +16,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -256,25 +259,52 @@ fun SettingsSection(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    val cardBrush = if (isDark) {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF242925),
+                Color(0xFF1D211E),
+                Color(0xFF161917)
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFFFFFFF),
+                Color(0xFFFBF9F2),
+                Color(0xFFF5F1E6)
+            )
+        )
+    }
+
     Column {
         Text(
-            text = title,
+            text = title.uppercase(),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.sp,
-            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
+            color = if (isDark) Color(0xFF81C784).copy(alpha = 0.85f) else Color(0xFF336846),
+            fontWeight = FontWeight.Bold,
+            fontSize = 11.5.sp,
+            letterSpacing = 1.2.sp,
+            modifier = Modifier.padding(bottom = 8.dp, start = 6.dp)
         )
         Card(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
+                containerColor = Color.Transparent
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF38403A) else Color(0xFFE5E0CE)),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(content = content)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(cardBrush)
+            ) {
+                Column(content = content)
+            }
         }
     }
 }
@@ -286,25 +316,30 @@ fun SettingsItem(
     showArrow: Boolean = true,
     onClick: () -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 18.dp, vertical = 15.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (value.isNotEmpty()) {
                 Text(
                     text = value,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontSize = 14.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
@@ -312,8 +347,8 @@ fun SettingsItem(
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
+                    tint = if (isDark) Color(0xFF6E7B73) else Color(0xFFA59F91),
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
@@ -328,24 +363,29 @@ fun SettingsThemeItem(
     darkLabel: String = "Dark",
     onSelectMode: (AppThemeMode) -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 18.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = themeLabel,
             style = MaterialTheme.typography.bodyLarge,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface
         )
         // Segmented Control
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(4.dp),
+                .clip(RoundedCornerShape(18.dp))
+                .background(if (isDark) Color(0xFF161A17) else Color(0xFFECE7DB))
+                .border(1.dp, if (isDark) Color(0xFF2C342E) else Color(0xFFDDD7C8), RoundedCornerShape(18.dp))
+                .padding(3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             ThemeOption(
@@ -371,10 +411,16 @@ fun ThemeOption(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    val selectedBg = if (isDark) Color(0xFF2D4636) else Color(0xFF386848)
+    val selectedContent = if (isDark) Color(0xFF81C784) else Color.White
+    val unselectedContent = if (isDark) Color(0xFF7C8880) else Color(0xFF8C8578)
+
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) selectedBg else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -383,14 +429,14 @@ fun ThemeOption(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+            modifier = Modifier.size(15.dp),
+            tint = if (selected) selectedContent else unselectedContent
         )
         Text(
             text = label,
-            fontSize = 13.sp,
-            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+            fontSize = 12.5.sp,
+            color = if (selected) selectedContent else unselectedContent,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
         )
     }
 }
@@ -402,17 +448,20 @@ fun SettingsSwitchItem(
     onCheckedChange: (Boolean) -> Unit
 ) {
     var checked by remember { mutableStateOf(initialValue) }
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 18.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface
         )
         Switch(
@@ -422,10 +471,10 @@ fun SettingsSwitchItem(
                 onCheckedChange(it)
             },
             colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                checkedThumbColor = Color.White,
+                checkedTrackColor = if (isDark) Color(0xFF43704C) else Color(0xFF336846),
+                uncheckedThumbColor = if (isDark) Color(0xFF7C8880) else Color(0xFFB5AFA4),
+                uncheckedTrackColor = if (isDark) Color(0xFF1E2420) else Color(0xFFE5DEC8)
             )
         )
     }
@@ -433,9 +482,11 @@ fun SettingsSwitchItem(
 
 @Composable
 fun SettingsDivider() {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
     HorizontalDivider(
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        color = if (isDark) Color(0xFF2B322D) else Color(0xFFEDE8DD),
         thickness = 0.8.dp,
-        modifier = Modifier.padding(horizontal = 16.dp)
+        modifier = Modifier.padding(horizontal = 18.dp)
     )
 }

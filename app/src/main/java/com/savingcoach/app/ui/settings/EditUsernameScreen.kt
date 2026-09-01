@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,7 +26,7 @@ fun EditUsernameScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = com.savingcoach.app.ui.localization.AppLocale.current
     var username by remember { mutableStateOf(if (uiState.username == "Unknown" || uiState.username == "Loading...") "" else uiState.username) }
-    val backgroundColor = MaterialTheme.colorScheme.background
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     LaunchedEffect(uiState.username) {
         if (username.isEmpty() && uiState.username != "Unknown" && uiState.username != "Loading...") {
@@ -36,7 +37,7 @@ fun EditUsernameScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Row(
             modifier = Modifier
@@ -56,26 +57,21 @@ fun EditUsernameScreen(
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 16.dp)
+                modifier = Modifier.padding(start = 8.dp)
             )
         }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(20.dp)
         ) {
-            Text(
-                text = strings.yourUsername,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
             Text(
                 text = strings.usernameDesc,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 24.dp)
+                fontSize = 14.sp,
+                modifier = Modifier.padding(bottom = 20.dp)
             )
 
             OutlinedTextField(
@@ -86,10 +82,17 @@ fun EditUsernameScreen(
                 },
                 label = { Text(strings.usernameLabel) },
                 singleLine = true,
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary
+                    focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                    focusedContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFFAF7F0),
+                    unfocusedContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFFAF7F0),
+                    focusedBorderColor = if (isDark) Color(0xFF81C784) else Color(0xFF336846),
+                    unfocusedBorderColor = if (isDark) Color(0xFF38403A) else Color(0xFFE2DDD0),
+                    focusedLabelColor = if (isDark) Color(0xFF81C784) else Color(0xFF336846),
+                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             )
 
@@ -101,7 +104,7 @@ fun EditUsernameScreen(
                     modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
                 )
             } else {
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(28.dp))
             }
 
             Button(
@@ -114,17 +117,19 @@ fun EditUsernameScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(52.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
+                    containerColor = if (isDark) Color(0xFF3B6E4A) else Color(0xFF336846),
+                    disabledContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFEDE9DF),
+                    contentColor = Color.White,
+                    disabledContentColor = if (isDark) Color(0xFF5A665E) else Color(0xFFA39E92)
                 ),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(20.dp),
                 enabled = username.isNotBlank() && username != uiState.username
             ) {
                 Text(
                     text = strings.save,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
             }

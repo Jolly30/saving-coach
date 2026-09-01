@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -27,7 +28,7 @@ fun EditEmailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = com.savingcoach.app.ui.localization.AppLocale.current
     var editingEmail by remember { mutableStateOf(if (uiState.email == "Unknown" || uiState.email == "Loading...") "" else uiState.email) }
-    val backgroundColor = MaterialTheme.colorScheme.background
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     LaunchedEffect(uiState.email) {
         if (editingEmail.isEmpty() && uiState.email != "Unknown" && uiState.email != "Loading...") {
@@ -38,7 +39,7 @@ fun EditEmailScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Row(
             modifier = Modifier
@@ -58,26 +59,21 @@ fun EditEmailScreen(
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 16.dp)
+                modifier = Modifier.padding(start = 8.dp)
             )
         }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(20.dp)
         ) {
-            Text(
-                text = strings.yourEmail,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
             Text(
                 text = strings.emailDesc,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 24.dp)
+                fontSize = 14.sp,
+                modifier = Modifier.padding(bottom = 20.dp)
             )
 
             OutlinedTextField(
@@ -88,16 +84,17 @@ fun EditEmailScreen(
                 },
                 label = { Text(strings.email) },
                 singleLine = true,
+                shape = RoundedCornerShape(16.dp),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = MaterialTheme.colorScheme.onBackground,
                     unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    focusedContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFFAF7F0),
+                    unfocusedContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFFAF7F0),
+                    focusedBorderColor = if (isDark) Color(0xFF81C784) else Color(0xFF336846),
+                    unfocusedBorderColor = if (isDark) Color(0xFF38403A) else Color(0xFFE2DDD0),
+                    focusedLabelColor = if (isDark) Color(0xFF81C784) else Color(0xFF336846),
                     unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             )
@@ -107,10 +104,10 @@ fun EditEmailScreen(
                     text = uiState.error!!,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
                 )
             } else {
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(28.dp))
             }
 
             Button(
@@ -121,17 +118,19 @@ fun EditEmailScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(52.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
+                    containerColor = if (isDark) Color(0xFF3B6E4A) else Color(0xFF336846),
+                    disabledContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFEDE9DF),
+                    contentColor = Color.White,
+                    disabledContentColor = if (isDark) Color(0xFF5A665E) else Color(0xFFA39E92)
                 ),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(20.dp),
                 enabled = editingEmail.isNotBlank() && editingEmail != uiState.email
             ) {
                 Text(
                     text = strings.save,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
             }

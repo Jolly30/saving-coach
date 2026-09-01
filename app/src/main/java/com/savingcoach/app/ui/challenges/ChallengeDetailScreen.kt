@@ -165,7 +165,7 @@ fun ChallengeDetailScreen(
         uiState.selectedChallengeDeposits
             .sortedWith(compareBy<com.savingcoach.app.data.model.SavingsDeposit> { it.date }.thenBy { it.createdAt })
             .mapIndexedNotNull { index, deposit ->
-                if (deposit.note.contains("Skipped", ignoreCase = true) || deposit.amount <= 0.0) index else null
+                if (deposit.note.contains("Skipped", ignoreCase = true)) index else null
             }.toSet()
     }
 
@@ -1335,7 +1335,7 @@ fun ProgressPiggyItem(
                     modifier = Modifier.fillMaxSize()
                 )
             }
-            // 3. ACTIVE / READY TODAY PIGGY (alert pink piggy with subtle dot indicator & soft highlight)
+            // 3. ACTIVE / READY TODAY PIGGY (alert pink piggy with soft highlight)
             isActiveStep -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -1353,14 +1353,6 @@ fun ProgressPiggyItem(
                         contentDescription = "Active step $stepNumber",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize()
-                    )
-                    // Clean subtle dot indicator (no green number badge)
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .offset(y = 3.dp)
-                            .size(6.dp)
-                            .background(MaterialTheme.colorScheme.primary, CircleShape)
                     )
                 }
             }

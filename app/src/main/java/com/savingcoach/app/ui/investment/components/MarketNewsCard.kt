@@ -2,6 +2,7 @@ package com.savingcoach.app.ui.investment.components
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,94 +48,119 @@ fun MarketNewsCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    val cardBrush = if (isDark) {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF242925),
+                Color(0xFF1D211E),
+                Color(0xFF161917)
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFFFFFFF),
+                Color(0xFFFBF9F2),
+                Color(0xFFF5F1E6)
+            )
+        )
+    }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .padding(horizontal = 20.dp, vertical = 6.dp)
             .clickable {
-                // Open article in browser
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(news.url))
                 context.startActivity(intent)
             },
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Color.Transparent
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, if (isDark) Color(0xFF38403A) else Color(0xFFE5E0CE))
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .background(cardBrush)
+                .padding(14.dp)
         ) {
-            // Thumbnail (placeholder - would load image in production)
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "📰",
-                    fontSize = 32.sp
-                )
-            }
-
-            // Content
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                // Source pill
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Thumbnail tile
+                Box(
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (isDark) Color(0xFF2C332E) else Color(0xFFEFECE2)),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = news.source.ifEmpty { "News" },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Text(
-                        text = "·",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Text(
-                        text = formatRelativeTime(news.datetime),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "📰",
+                        fontSize = 26.sp
                     )
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                // Content
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    // Source pill
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = news.source.ifEmpty { "News" },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isDark) Color(0xFF81C784) else Color(0xFF2E6B4F),
+                            fontWeight = FontWeight.Bold
+                        )
 
-                // Headline
-                Text(
-                    text = news.headline,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                        Text(
+                            text = "·",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
 
-                // Summary preview
-                if (news.summary.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = formatRelativeTime(news.datetime),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    // Headline
                     Text(
-                        text = news.summary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = news.headline,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+
+                    // Summary preview
+                    if (news.summary.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        Text(
+                            text = news.summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }

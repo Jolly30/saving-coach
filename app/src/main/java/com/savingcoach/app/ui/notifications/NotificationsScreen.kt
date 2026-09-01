@@ -60,8 +60,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -339,95 +342,146 @@ fun NotificationRow(
 ) {
     val (icon, tint) = getNotificationIconAndColor(item.type)
     val (displayTitle, displayMessage) = localizeNotificationContent(item, isBurmese)
-    
-    val backgroundColor = if (item.isRead) {
-        MaterialTheme.colorScheme.surfaceVariant
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    val cardBrush = if (isDark) {
+        if (!item.isRead) {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFF242925),
+                    Color(0xFF1D211E),
+                    Color(0xFF161917)
+                )
+            )
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFF1C201D),
+                    Color(0xFF171A17),
+                    Color(0xFF131513)
+                )
+            )
+        }
     } else {
-        MaterialTheme.colorScheme.primaryContainer
+        if (!item.isRead) {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFFFFFFFF),
+                    Color(0xFFFBF9F2),
+                    Color(0xFFF5F1E6)
+                )
+            )
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFFF7F5EE),
+                    Color(0xFFF2EFE8),
+                    Color(0xFFECE7DC)
+                )
+            )
+        }
     }
 
-    val borderStrokeColor = if (item.isRead) {
-        Color.Transparent
+    val cardBorder = if (isDark) {
+        if (!item.isRead) Color(0xFF38403A) else Color(0xFF282F2A)
     } else {
-        MaterialTheme.colorScheme.primary
+        if (!item.isRead) Color(0xFFE5E0CE) else Color(0xFFE2DDD0)
     }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        border = if (item.isRead) null else androidx.compose.foundation.BorderStroke(1.dp, borderStrokeColor)
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (item.isRead) 0.dp else 2.dp),
+        border = BorderStroke(1.dp, cardBorder)
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .background(cardBrush)
+                .padding(14.dp)
         ) {
-            if (isSelectMode) {
-                CircularCheckbox(
-                    checked = isSelected,
-                    onCheckedChange = { onClick() }
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-            }
-
-            // Icon Container
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(tint.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = item.type,
-                    tint = tint,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+                if (isSelectMode) {
+                    CircularCheckbox(
+                        checked = isSelected,
+                        onCheckedChange = { onClick() }
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                }
 
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Text content
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Icon Container Badge
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(tint.copy(alpha = if (isDark) 0.16f else 0.12f))
+                        .border(1.dp, tint.copy(alpha = if (isDark) 0.25f else 0.20f), RoundedCornerShape(13.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = displayTitle,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = if (item.isRead) FontWeight.SemiBold else FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = item.type,
+                        tint = tint,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
-                
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                Text(
-                    text = displayMessage,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                // Text content
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = displayTitle,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = if (item.isRead) FontWeight.SemiBold else FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+
+                        if (!item.isRead) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isDark) Color(0xFF81C784) else Color(0xFF2E6B4F))
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Text(
+                        text = displayMessage,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     )
-                )
-                
-                Spacer(modifier = Modifier.height(6.dp))
-                
-                Text(
-                    text = formatTimestamp(item.timestamp, isBurmese),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    Text(
+                        text = formatTimestamp(item.timestamp, isBurmese),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                        )
                     )
-                )
+                }
             }
         }
     }

@@ -17,6 +17,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditGenderScreen(
@@ -26,7 +30,26 @@ fun EditGenderScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = com.savingcoach.app.ui.localization.AppLocale.current
     var selectedGender by remember { mutableStateOf(if (uiState.gender == "Unknown" || uiState.gender == "Loading...") "" else uiState.gender) }
-    val backgroundColor = MaterialTheme.colorScheme.background
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    val cardBrush = if (isDark) {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF242925),
+                Color(0xFF1D211E),
+                Color(0xFF161917)
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFFFFFFF),
+                Color(0xFFFBF9F2),
+                Color(0xFFF5F1E6)
+            )
+        )
+    }
+
     val genderOptions = listOf(
         Pair("Male", strings.male),
         Pair("Female", strings.female),
@@ -42,7 +65,7 @@ fun EditGenderScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Row(
             modifier = Modifier
@@ -62,64 +85,74 @@ fun EditGenderScreen(
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 16.dp)
+                modifier = Modifier.padding(start = 8.dp)
             )
         }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(20.dp)
         ) {
             Text(
                 text = strings.selectGender,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 14.sp,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.onPrimary),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                border = BorderStroke(1.dp, if (isDark) Color(0xFF38403A) else Color(0xFFE5E0CE))
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    genderOptions.forEachIndexed { index, (key, label) ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { 
-                                    selectedGender = key
-                                    viewModel.clearError() 
-                                }
-                                .padding(vertical = 14.dp, horizontal = 16.dp)
-                        ) {
-                            RadioButton(
-                                selected = (selectedGender == key),
-                                onClick = { 
-                                    selectedGender = key 
-                                    viewModel.clearError()
-                                },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = MaterialTheme.colorScheme.primary,
-                                    unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(cardBrush)
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        genderOptions.forEachIndexed { index, (key, label) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { 
+                                        selectedGender = key
+                                        viewModel.clearError() 
+                                    }
+                                    .padding(vertical = 15.dp, horizontal = 18.dp)
+                            ) {
+                                RadioButton(
+                                    selected = (selectedGender == key),
+                                    onClick = { 
+                                        selectedGender = key 
+                                        viewModel.clearError()
+                                    },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = if (isDark) Color(0xFF81C784) else Color(0xFF336846),
+                                        unselectedColor = if (isDark) Color(0xFF6E7B73) else Color(0xFFA59F91)
+                                    )
                                 )
-                            )
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.padding(start = 16.dp)
-                            )
-                        }
-                        if (index < genderOptions.lastIndex) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                thickness = 0.8.dp
-                            )
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    modifier = Modifier.padding(start = 12.dp)
+                                )
+                            }
+                            if (index < genderOptions.lastIndex) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 18.dp),
+                                    color = if (isDark) Color(0xFF2B322D) else Color(0xFFEDE8DD),
+                                    thickness = 0.8.dp
+                                )
+                            }
                         }
                     }
                 }
@@ -133,30 +166,32 @@ fun EditGenderScreen(
                     modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
                 )
             } else {
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(28.dp))
             }
 
             Button(
                 onClick = {
-                    if (selectedGender != null) {
-                        viewModel.updateGender(selectedGender!!) {
+                    if (selectedGender.isNotBlank()) {
+                        viewModel.updateGender(selectedGender) {
                             onNavigateBack()
                         }
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(52.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
+                    containerColor = if (isDark) Color(0xFF3B6E4A) else Color(0xFF336846),
+                    disabledContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFEDE9DF),
+                    contentColor = Color.White,
+                    disabledContentColor = if (isDark) Color(0xFF5A665E) else Color(0xFFA39E92)
                 ),
-                shape = RoundedCornerShape(24.dp),
-                enabled = selectedGender != null && selectedGender != uiState.gender
+                shape = RoundedCornerShape(20.dp),
+                enabled = selectedGender.isNotBlank() && selectedGender != uiState.gender
             ) {
                 Text(
                     text = strings.save,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
             }

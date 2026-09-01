@@ -24,7 +24,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.font.FontWeight
@@ -112,55 +114,79 @@ fun ChallengesScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
+                val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+                val heroBrush = if (isDark) {
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF242925),
+                            Color(0xFF1D211E),
+                            Color(0xFF161917)
+                        )
+                    )
+                } else {
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFFFFFFFF),
+                            Color(0xFFFBF9F2),
+                            Color(0xFFF5F1E6)
+                        )
+                    )
+                }
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(26.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                        containerColor = Color.Transparent
                     ),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    border = BorderStroke(1.dp, if (isDark) Color(0xFF38403A) else Color(0xFFE5E0CE))
                 ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(heroBrush)
+                            .padding(22.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "${strings.totalSaved.uppercase()} (${com.savingcoach.app.utils.InvestmentCalculations.getCurrencyLabel(uiState.currencyPreference, isInvestment = false)})",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "🏆 ${strings.allTime}",
-                                    style = MaterialTheme.typography.labelSmall,
+                                    text = "${strings.totalSaved.uppercase()} (${com.savingcoach.app.utils.InvestmentCalculations.getCurrencyLabel(uiState.currencyPreference, isInvestment = false)})",
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isDark) Color(0xFF2E3830) else Color(0xFFE8EFE8),
+                                    border = BorderStroke(1.dp, if (isDark) Color(0xFF3F4E42) else Color(0xFFD0E0D2))
+                                ) {
+                                    Text(
+                                        text = "🏆 ${strings.allTime}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isDark) Color(0xFF81C784) else Color(0xFF2E6B4F),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                com.savingcoach.app.ui.components.AutoScalingText(
+                                    text = strings.formatAmount(uiState.totalSaved, uiState.currencyPreference, 1.0, isInvestment = false),
+                                    maxTextSize = 38.sp,
+                                    minTextSize = 20.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                             }
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            com.savingcoach.app.ui.components.AutoScalingText(
-                                text = strings.formatAmount(uiState.totalSaved, uiState.currencyPreference, 1.0, isInvestment = false),
-                                maxTextSize = 36.sp,
-                                minTextSize = 18.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
                         }
                     }
                 }
@@ -222,10 +248,10 @@ fun ChallengesScreen(
                             }
                         },
                         singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            focusedContainerColor = if (isDark) Color(0xFF242925) else Color(0xFFEFECE2),
+                            unfocusedContainerColor = if (isDark) Color(0xFF242925) else Color(0xFFEFECE2),
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent,
                             disabledIndicatorColor = Color.Transparent,
@@ -250,9 +276,9 @@ fun ChallengesScreen(
                         Surface(
                             onClick = { isFilterMenuExpanded = true },
                             modifier = Modifier.fillMaxHeight(),
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            shape = RoundedCornerShape(18.dp),
+                            color = if (isDark) Color(0xFF242925) else Color(0xFFEFECE2),
+                            border = BorderStroke(1.dp, if (isDark) Color(0xFF38403A) else Color(0xFFE2DDD0))
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 14.dp),
@@ -277,10 +303,10 @@ fun ChallengesScreen(
                         DropdownMenu(
                             expanded = isFilterMenuExpanded,
                             onDismissRequest = { isFilterMenuExpanded = false },
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            shape = RoundedCornerShape(16.dp),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                            modifier = Modifier.widthIn(min = 160.dp)
+                            containerColor = if (isDark) Color(0xFF242925) else Color(0xFFFCFBF7),
+                            shape = RoundedCornerShape(22.dp),
+                            border = BorderStroke(1.dp, if (isDark) Color(0xFF38403A) else Color(0xFFE5E0CE)),
+                            modifier = Modifier.widthIn(min = 170.dp)
                         ) {
                             ChallengeFilter.values().forEach { filterOption ->
                                 val isSelected = selectedFilter == filterOption
@@ -294,8 +320,8 @@ fun ChallengesScreen(
                                 DropdownMenuItem(
                                     modifier = Modifier
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent),
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isSelected) (if (isDark) Color(0xFF2F3831) else Color(0xFFE8EFE8)) else Color.Transparent),
                                     text = {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -306,13 +332,13 @@ fun ChallengesScreen(
                                                 text = optionLabel,
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                color = if (isSelected) (if (isDark) Color(0xFF81C784) else Color(0xFF2E6B4F)) else MaterialTheme.colorScheme.onSurface
                                             )
                                             if (isSelected) {
                                                 Icon(
                                                     imageVector = Icons.Default.Check,
                                                     contentDescription = "Selected",
-                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    tint = if (isDark) Color(0xFF81C784) else Color(0xFF2E6B4F),
                                                     modifier = Modifier.size(16.dp)
                                                 )
                                             }

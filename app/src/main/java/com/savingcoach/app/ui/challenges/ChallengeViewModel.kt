@@ -434,10 +434,10 @@ class ChallengeViewModel @Inject constructor(
                 val validDeposits = mutableListOf<SavingsDeposit>()
                 for ((date, dateDeposits) in depositsByDate) {
                     if (dateDeposits.size > 1) {
-                        val realDeposits = dateDeposits.filter { it.amount > 0 }
+                        val realDeposits = dateDeposits.filter { !it.note.contains("Skipped", ignoreCase = true) }
                         if (realDeposits.isNotEmpty()) {
                             validDeposits.addAll(realDeposits)
-                            val skippedToDelete = dateDeposits.filter { it.amount == 0.0 }
+                            val skippedToDelete = dateDeposits.filter { it.note.contains("Skipped", ignoreCase = true) }
                             for (s in skippedToDelete) {
                                 repository.deleteDeposit(userId, challengeId, s.id)
                             }

@@ -227,13 +227,7 @@ fun CreateChallengeScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            val today = remember { LocalDate.now() }
-            val lastDayOfMonth = remember { today.with(java.time.temporal.TemporalAdjusters.lastDayOfMonth()) }
-            val maxDays = remember { lastDayOfMonth.dayOfMonth - today.dayOfMonth + 1 }
-            val enteredDuration = durationDays.toLongOrNull() ?: 0L
-            val isDurationTooLong = enteredDuration > maxDays
+            val durationVal = durationDays.toLongOrNull() ?: 0L
 
             if (selectedTemplate == ChallengeTemplate.NO_SPEND) {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -253,14 +247,6 @@ fun CreateChallengeScreen(
                         shape = RoundedCornerShape(12.dp),
                         colors = textFieldColors
                     )
-                    if (isDurationTooLong) {
-                        Text(
-                            text = strings.mustBeAtMostDays(maxDays),
-                            color = MaterialTheme.colorScheme.error,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(top = 4.dp, start = 4.dp)
-                        )
-                    }
                 }
             } else {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -304,22 +290,13 @@ fun CreateChallengeScreen(
                             shape = RoundedCornerShape(12.dp),
                             colors = textFieldColors
                         )
-                        if (isDurationTooLong) {
-                            Text(
-                                text = strings.mustBeAtMostDays(maxDays),
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 4.dp, start = 4.dp)
-                            )
-                        }
                     }
                 }
             }
 
             // Dynamic Constant calculation preview
             val targetVal = targetAmount.toDoubleOrNull() ?: 0.0
-            val durationVal = durationDays.toLongOrNull() ?: 0L
-            if (selectedTemplate == ChallengeTemplate.CONSTANT && durationVal > 0 && !isDurationTooLong) {
+            if (selectedTemplate == ChallengeTemplate.CONSTANT && durationVal > 0) {
                 val dailyAmount = targetVal / durationVal
                 Text(
                     text = strings.savePerDay(strings.formatAmount(dailyAmount, uiState.currencyPreference, 1.0, isInvestment = false)),
@@ -333,7 +310,7 @@ fun CreateChallengeScreen(
             Spacer(modifier = Modifier.height(40.dp))
 
             // Action Button
-            val isButtonEnabled = title.isNotBlank() && !isNameDuplicate && durationDays.isNotBlank() && !isDurationTooLong
+            val isButtonEnabled = title.isNotBlank() && !isNameDuplicate && durationDays.isNotBlank() && durationVal > 0
             Button(
                 onClick = {
                     val targetCurrency = com.savingcoach.app.utils.InvestmentCalculations.getTargetCurrency(uiState.currencyPreference, isInvestment = false)
