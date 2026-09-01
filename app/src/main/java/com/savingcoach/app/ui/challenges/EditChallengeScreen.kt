@@ -305,7 +305,8 @@ fun EditChallengeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
                     )
-                    val isDurationLower = (durationDays.toLongOrNull() ?: 0L) < challenge.completedDaysCount
+                    val minDuration = challenge.completedDaysCount.coerceAtLeast(1)
+                    val isDurationLower = (durationDays.toLongOrNull() ?: 0L) < minDuration
                     OutlinedTextField(
                         value = durationDays,
                         onValueChange = { durationDays = it.filter { char -> char.isDigit() } },
@@ -318,7 +319,7 @@ fun EditChallengeScreen(
                     )
                     if (isDurationLower) {
                         Text(
-                            text = strings.mustBeAtLeast(challenge.completedDaysCount.toLong()),
+                            text = strings.mustBeAtLeast(minDuration.toLong()),
                             color = MaterialTheme.colorScheme.error,
                             fontSize = 10.sp,
                             modifier = Modifier.padding(top = 4.dp, start = 4.dp)
@@ -341,7 +342,7 @@ fun EditChallengeScreen(
                         val isTargetLower = if (challenge.currentAmount == 0.0) {
                             (targetAmount.toDoubleOrNull() ?: 0.0) <= 0.0
                         } else {
-                            (targetAmount.toDoubleOrNull() ?: 0.0) <= challenge.currentAmount
+                            (targetAmount.toDoubleOrNull() ?: 0.0) < challenge.currentAmount
                         }
                         OutlinedTextField(
                             value = targetAmount,
@@ -377,20 +378,8 @@ fun EditChallengeScreen(
                             modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
                         )
                         
-                        val isDurationLower = (durationDays.toLongOrNull() ?: 0L) <= challenge.completedDaysCount
-                        val minDuration = challenge.completedDaysCount + 1
-
-                        val start = remember(challenge.startDate) {
-                            try { LocalDate.parse(challenge.startDate) } catch(e: Exception) { LocalDate.now() }
-                        }
-                        val lastDay = remember(start) {
-                            start.with(java.time.temporal.TemporalAdjusters.lastDayOfMonth())
-                        }
-                        val maxDays = remember(start, lastDay) {
-                            lastDay.dayOfMonth - start.dayOfMonth + 1
-                        }
-                        val enteredDuration = durationDays.toLongOrNull() ?: 0L
-                        val isDurationTooLong = enteredDuration > maxDays
+                        val minDuration = challenge.completedDaysCount.coerceAtLeast(1)
+                        val isDurationLower = (durationDays.toLongOrNull() ?: 0L) < minDuration
 
                         OutlinedTextField(
                             value = durationDays,
@@ -400,19 +389,12 @@ fun EditChallengeScreen(
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                             colors = textFieldColors,
-                            isError = isDurationLower || isDurationTooLong,
+                            isError = isDurationLower,
                             enabled = isDurationEnabled
                         )
                         if (isDurationLower) {
                             Text(
                                 text = strings.mustBeAtLeast(minDuration.toLong()),
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 10.sp,
-                                modifier = Modifier.padding(top = 4.dp, start = 4.dp)
-                            )
-                        } else if (isDurationTooLong) {
-                            Text(
-                                text = strings.mustBeAtMostDays(maxDays),
                                 color = MaterialTheme.colorScheme.error,
                                 fontSize = 10.sp,
                                 modifier = Modifier.padding(top = 4.dp, start = 4.dp)
@@ -425,17 +407,7 @@ fun EditChallengeScreen(
             // Dynamic Constant calculation preview
             val targetVal = targetAmount.toDoubleOrNull() ?: 0.0
             val durationVal = durationDays.toLongOrNull() ?: 0L
-            val startVal = remember(challenge.startDate) {
-                try { LocalDate.parse(challenge.startDate) } catch(e: Exception) { LocalDate.now() }
-            }
-            val lastDayVal = remember(startVal) {
-                startVal.with(java.time.temporal.TemporalAdjusters.lastDayOfMonth())
-            }
-            val maxDaysVal = remember(startVal, lastDayVal) {
-                lastDayVal.dayOfMonth - startVal.dayOfMonth + 1
-            }
-            val isDurationTooLongVal = durationVal > maxDaysVal
-            if (selectedTemplate == ChallengeTemplate.CONSTANT && durationVal > 0 && !isDurationTooLongVal) {
+            if (selectedTemplate == ChallengeTemplate.CONSTANT && durationVal > 0) {
                 val dailyAmount = targetVal / durationVal
                 Text(
                     text = strings.savePerDay(strings.formatAmount(dailyAmount, uiState.currencyPreference, 1.0, isInvestment = false)),
@@ -449,13 +421,14 @@ fun EditChallengeScreen(
             Spacer(modifier = Modifier.height(40.dp))
 
             // Action Buttons
+            val minDurationAllowed = challenge.completedDaysCount.coerceAtLeast(1)
             val isTargetLowerThanSaved = if (challenge.currentAmount == 0.0) {
                 selectedTemplate != ChallengeTemplate.NO_SPEND && (targetAmount.toDoubleOrNull() ?: 0.0) <= 0.0
             } else {
-                selectedTemplate != ChallengeTemplate.NO_SPEND && (targetAmount.toDoubleOrNull() ?: 0.0) <= challenge.currentAmount
+                selectedTemplate != ChallengeTemplate.NO_SPEND && (targetAmount.toDoubleOrNull() ?: 0.0) < challenge.currentAmount
             }
-            val isDurationLowerThanSaved = (durationDays.toLongOrNull() ?: 0L) <= challenge.completedDaysCount
-            val isSaveEnabled = title.isNotBlank() && !isNameDuplicate && !isTargetLowerThanSaved && !isDurationLowerThanSaved && !isDurationTooLongVal && durationDays.isNotBlank()
+            val isDurationLowerThanSaved = (durationDays.toLongOrNull() ?: 0L) < minDurationAllowed
+            val isSaveEnabled = title.isNotBlank() && !isNameDuplicate && !isTargetLowerThanSaved && !isDurationLowerThanSaved && durationDays.isNotBlank() && durationVal > 0
             
             Column(
                 modifier = Modifier.fillMaxWidth(),

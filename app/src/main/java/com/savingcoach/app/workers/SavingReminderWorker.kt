@@ -45,10 +45,14 @@ class SavingReminderWorker @AssistedInject constructor(
             
             if (!triggeredAbandoned && challenges.isNotEmpty()) {
                 val count = challenges.size
-                val message = if (count == 1) {
-                    "You have 1 active saving challenge. Keep going!"
+                val message = if (notificationHelper.isBurmeseLanguage) {
+                    "သင့်တွင် လုပ်ဆောင်နေသော ငွေစုစိန်ခေါ်မှု $count ခု ရှိပါသည်။ ဆက်လက်ကြိုးစားပါ!"
                 } else {
-                    "You have $count active saving challenges. Keep going!"
+                    if (count == 1) {
+                        "You have 1 active saving challenge. Keep going!"
+                    } else {
+                        "You have $count active saving challenges. Keep going!"
+                    }
                 }
                 notificationHelper.showDailyReminder(message)
             }

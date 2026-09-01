@@ -24,6 +24,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +33,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -43,6 +46,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -145,15 +150,30 @@ fun InvestmentScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
             // Tab row
             TabRow(
                 selectedTabIndex = uiState.selectedTab.ordinal,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary
+                containerColor = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.primary,
+                indicator = { tabPositions ->
+                    if (uiState.selectedTab.ordinal < tabPositions.size) {
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[uiState.selectedTab.ordinal]),
+                            height = 3.dp,
+                            color = if (isDark) Color(0xFF81C784) else Color(0xFF2E6B4F)
+                        )
+                    }
+                },
+                divider = {
+                    HorizontalDivider(color = if (isDark) Color(0xFF38403A) else Color(0xFFE5E0CE))
+                }
             ) {
                 InvestmentTab.entries.forEach { tab ->
+                    val isSelected = uiState.selectedTab == tab
                     Tab(
-                        selected = uiState.selectedTab == tab,
+                        selected = isSelected,
                         onClick = { viewModel.selectTab(tab) },
                         text = {
                             Text(
@@ -163,7 +183,8 @@ fun InvestmentScreen(
                                     InvestmentTab.CRYPTO -> strings.crypto
                                     InvestmentTab.NEWS -> strings.marketNews
                                 },
-                                fontWeight = if (uiState.selectedTab == tab) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) (if (isDark) Color(0xFF81C784) else Color(0xFF2E6B4F)) else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     )

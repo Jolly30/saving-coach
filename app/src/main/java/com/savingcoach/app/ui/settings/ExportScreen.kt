@@ -18,7 +18,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,9 +39,7 @@ fun ExportScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = com.savingcoach.app.ui.localization.AppLocale.current
     val context = LocalContext.current
-    val backgroundColor = MaterialTheme.colorScheme.background
-    val primaryTextColor = MaterialTheme.colorScheme.onBackground
-    val borderColor = MaterialTheme.colorScheme.outlineVariant
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     var selectedType by remember { mutableStateOf("Spending") }
     var startDateStr by remember { mutableStateOf<String?>(null) }
@@ -64,20 +64,23 @@ fun ExportScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(backgroundColor)
-                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack, 
+                        contentDescription = strings.back,
+                        tint = MaterialTheme.colorScheme.onBackground
+                    )
                 }
                 Text(
                     text = strings.exportDataTitle, 
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold, 
-                    color = primaryTextColor,
-                    modifier = Modifier.weight(1f).offset(x = (-24).dp), // Offset by half the icon width to center it
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    fontWeight = FontWeight.SemiBold, 
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(start = 8.dp)
                 )
             }
         },
@@ -85,7 +88,7 @@ fun ExportScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(backgroundColor)
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(16.dp)
             ) {
                 Button(
@@ -107,27 +110,29 @@ fun ExportScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(24.dp),
+                        .height(52.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
+                        containerColor = if (isDark) Color(0xFF3B6E4A) else Color(0xFF336846),
+                        disabledContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFEDE9DF),
+                        contentColor = Color.White
                     )
                 ) {
                     if (uiState.isExporting) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                     } else {
-                        Text(strings.exportToCsv, fontWeight = FontWeight.Medium, fontSize = 16.sp, color = Color.White)
+                        Text(strings.exportToCsv, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
                     }
                 }
             }
         },
-        containerColor = backgroundColor
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 18.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Segmented Toggle
@@ -135,10 +140,10 @@ fun ExportScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp))
-                        .padding(4.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(if (isDark) Color(0xFF161A17) else Color(0xFFECE7DB))
+                        .border(1.dp, if (isDark) Color(0xFF2C342E) else Color(0xFFDDD7C8), RoundedCornerShape(18.dp))
+                        .padding(3.dp)
                 ) {
                     SegmentedButton(
                         text = strings.spendingTab,
@@ -174,10 +179,11 @@ fun ExportScreen(
             item {
                 Column {
                     Text(
-                        text = strings.dateRange,
+                        text = strings.dateRange.uppercase(),
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.5.sp,
+                        letterSpacing = 1.2.sp,
+                        color = if (isDark) Color(0xFF81C784).copy(alpha = 0.85f) else Color(0xFF336846),
                         modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
                     )
                     Row(
@@ -209,7 +215,7 @@ fun ExportScreen(
                         ) {
                             Text(
                                 strings.clearDates,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = if (isDark) Color(0xFF81C784) else Color(0xFF336846),
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -232,7 +238,7 @@ fun ExportScreen(
                                 else -> strings.filterByInvestment
                             },
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
+                            fontSize = 14.5.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
@@ -247,7 +253,7 @@ fun ExportScreen(
                         onValueChange = { searchQuery = it },
                         modifier = Modifier
                             .width(140.dp)
-                            .height(50.dp),
+                            .height(48.dp),
                         placeholder = { 
                             Text(
                                 strings.searchPlaceholder, 
@@ -258,13 +264,13 @@ fun ExportScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                            focusedContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFFAF7F0),
+                            unfocusedContainerColor = if (isDark) Color(0xFF222724) else Color(0xFFFAF7F0),
                             focusedTextColor = MaterialTheme.colorScheme.onSurface,
                             unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                            cursorColor = MaterialTheme.colorScheme.primary
+                            focusedBorderColor = if (isDark) Color(0xFF81C784) else Color(0xFF336846),
+                            unfocusedBorderColor = if (isDark) Color(0xFF38403A) else Color(0xFFE2DDD0),
+                            cursorColor = if (isDark) Color(0xFF81C784) else Color(0xFF336846)
                         ),
                         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
                     )
@@ -327,26 +333,25 @@ fun SegmentedButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val backgroundColor by animateColorAsState(
-        if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent, label = "bg"
-    )
-    val textColor by animateColorAsState(
-        if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, label = "text"
-    )
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    val selectedBg = if (isDark) Color(0xFF2D4636) else Color(0xFF386848)
+    val selectedText = if (isDark) Color(0xFF81C784) else Color.White
+    val unselectedText = if (isDark) Color(0xFF7C8880) else Color(0xFF8C8578)
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(backgroundColor)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isSelected) selectedBg else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
+            .padding(vertical = 9.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text, 
-            color = textColor, 
+            color = if (isSelected) selectedText else unselectedText, 
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            fontSize = 14.sp
+            fontSize = 13.5.sp
         )
     }
 }
@@ -360,10 +365,29 @@ fun DatePickerCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    val cardBrush = if (isDark) {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF242925),
+                Color(0xFF1D211E),
+                Color(0xFF161917)
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFFFFFFF),
+                Color(0xFFFBF9F2),
+                Color(0xFFF5F1E6)
+            )
+        )
+    }
     
     Card(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .clickable {
                 val calendar = Calendar.getInstance()
                 if (dateStr != null) {
@@ -385,20 +409,27 @@ fun DatePickerCard(
                 ).show()
             },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Color.Transparent
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = BorderStroke(1.dp, if (isDark) Color(0xFF38403A) else Color(0xFFE5E0CE)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = dateStr ?: selectDateText,
-                fontSize = 15.sp,
-                fontWeight = if (dateStr != null) FontWeight.Bold else FontWeight.Normal,
-                color = if (dateStr != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-            )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(cardBrush)
+                .padding(16.dp)
+        ) {
+            Column {
+                Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = dateStr ?: selectDateText,
+                    fontSize = 14.5.sp,
+                    fontWeight = if (dateStr != null) FontWeight.Bold else FontWeight.Normal,
+                    color = if (dateStr != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
         }
     }
 }
@@ -409,35 +440,65 @@ fun SelectableItemCard(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
-        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(
-            1.dp,
-            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant
-        ),
-        shadowElevation = if (isSelected) 0.dp else 1.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = title,
-                modifier = Modifier.weight(1f),
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                fontSize = 15.sp
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    val cardBrush = if (isDark) {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF242925),
+                Color(0xFF1D211E),
+                Color(0xFF161917)
             )
-            if (isSelected) {
-                Icon(
-                    Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFFFFFFF),
+                Color(0xFFFBF9F2),
+                Color(0xFFF5F1E6)
+            )
+        )
+    }
+
+    val selectedBg = if (isDark) Color(0xFF233528) else Color(0xFFE8F3EB)
+    val selectedBorder = if (isDark) Color(0xFF43704C) else Color(0xFF6CA37C)
+    val unselectedBorder = if (isDark) Color(0xFF38403A) else Color(0xFFE5E0CE)
+
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        border = BorderStroke(1.dp, if (isSelected) selectedBorder else unselectedBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 0.dp else 1.5.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(if (isSelected) Brush.linearGradient(listOf(selectedBg, selectedBg)) else cardBrush)
+                .padding(horizontal = 18.dp, vertical = 14.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isSelected) (if (isDark) Color(0xFF81C784) else Color(0xFF2D693F)) else MaterialTheme.colorScheme.onSurface,
+                    fontSize = 14.5.sp
                 )
+                if (isSelected) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "Selected",
+                        tint = if (isDark) Color(0xFF81C784) else Color(0xFF2D693F),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }

@@ -1,10 +1,14 @@
 package com.savingcoach.app.ui.expenses
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.text.NumberFormat
@@ -29,16 +33,27 @@ fun AddCategoryDialog(
     val isExceedingGlobal = globalLimit > 0 && enteredTarget > maxAllowedTarget
     val isGlobalZero = globalLimit == 0.0 && enteredTarget > 0.0
     val strings = com.savingcoach.app.ui.localization.AppLocale.current
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(strings.addCategory) },
+        shape = RoundedCornerShape(26.dp),
+        containerColor = if (isDark) Color(0xFF222724) else Color(0xFFFCFBF7),
+        title = {
+            Text(
+                text = "🏷️ ${strings.addCategory}",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = emojiText,
                     onValueChange = { emojiText = it },
                     label = { Text("Emoji") },
+                    shape = RoundedCornerShape(16.dp),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -46,6 +61,7 @@ fun AddCategoryDialog(
                     value = nameText,
                     onValueChange = { nameText = it },
                     label = { Text("${strings.categoryName} *") },
+                    shape = RoundedCornerShape(16.dp),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -54,7 +70,6 @@ fun AddCategoryDialog(
                         OutlinedTextField(
                             value = targetText,
                             onValueChange = { newValue ->
-                                // Allow empty or valid number: digits with optional single decimal
                                 if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
                                     targetText = newValue
                                 }
@@ -62,6 +77,7 @@ fun AddCategoryDialog(
                             label = { Text("${strings.targetLimit} (${com.savingcoach.app.utils.InvestmentCalculations.getCurrencyLabel(currencyPreference, isInvestment = false)})") },
                             isError = isExceedingGlobal || isGlobalZero,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            shape = RoundedCornerShape(16.dp),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -99,14 +115,21 @@ fun AddCategoryDialog(
                         )
                     }
                 },
-                enabled = nameText.isNotBlank() && !isExceedingGlobal && !isGlobalZero
+                enabled = nameText.isNotBlank() && !isExceedingGlobal && !isGlobalZero,
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
             ) {
-                Text(strings.save)
+                Text(strings.save, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(strings.cancel)
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(strings.cancel, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )

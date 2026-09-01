@@ -44,9 +44,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -370,35 +373,60 @@ private fun SummaryCard(
     modifier: Modifier = Modifier,
     valueColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    val cardBrush = if (isDark) {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF242925),
+                Color(0xFF1D211E),
+                Color(0xFF161917)
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFFFFFFF),
+                Color(0xFFFBF9F2),
+                Color(0xFFF5F1E6)
+            )
+        )
+    }
+
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, if (isDark) Color(0xFF38403A) else Color(0xFFE5E0CE))
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.Start
+                .background(cardBrush)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            com.savingcoach.app.ui.components.AutoScalingText(
-                text = title,
-                maxTextSize = 12.sp,
-                minTextSize = 9.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            com.savingcoach.app.ui.components.AutoScalingText(
-                text = value,
-                maxTextSize = 16.sp,
-                minTextSize = 10.sp,
-                color = valueColor,
-                fontWeight = FontWeight.Bold
-            )
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.Start
+            ) {
+                com.savingcoach.app.ui.components.AutoScalingText(
+                    text = title.uppercase(),
+                    maxTextSize = 10.5.sp,
+                    minTextSize = 8.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                com.savingcoach.app.ui.components.AutoScalingText(
+                    text = value,
+                    maxTextSize = 17.sp,
+                    minTextSize = 10.sp,
+                    color = valueColor,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -413,98 +441,123 @@ private fun ChallengeCarouselCard(
     isActive: Boolean,
     currencyPreference: String
 ) {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    val cardBrush = if (isDark) {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF242925),
+                Color(0xFF1D211E),
+                Color(0xFF161917)
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFFFFFFF),
+                Color(0xFFFBF9F2),
+                Color(0xFFF5F1E6)
+            )
+        )
+    }
+
     Card(
         modifier = Modifier
             .requiredWidth(270.dp)
             .requiredHeight(135.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Color.Transparent
         ),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        border = BorderStroke(1.dp, if (isDark) Color(0xFF38403A) else Color(0xFFE5E0CE))
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .background(cardBrush)
+                .padding(16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).padding(end = 8.dp)
-                )
-                if (isActive) {
-                    val strings = com.savingcoach.app.ui.localization.AppLocale.current
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-                    ) {
-                        Text(
-                            text = strings.active,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-            if (isActive) {
-                val strings = com.savingcoach.app.ui.localization.AppLocale.current
-                val displayCurrent = if (currencyPreference.isEmpty()) "" else strings.formatAmount(currentAmount, currencyPreference, 1.0, isInvestment = false)
-                val displayTarget = if (currencyPreference.isEmpty()) "" else strings.formatAmount(targetAmount, currencyPreference, 1.0, isInvestment = false)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                    )
+                    if (isActive) {
+                        val strings = com.savingcoach.app.ui.localization.AppLocale.current
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isDark) Color(0xFF1E2B21) else Color(0xFFEDF5EE),
+                            border = BorderStroke(1.dp, if (isDark) Color(0xFF2E4233) else Color(0xFFD2E6D5))
+                        ) {
+                            Text(
+                                text = strings.active,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) Color(0xFF81C784) else Color(0xFF2E6B4F),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+                if (isActive) {
+                    val strings = com.savingcoach.app.ui.localization.AppLocale.current
+                    val displayCurrent = if (currencyPreference.isEmpty()) "" else strings.formatAmount(currentAmount, currencyPreference, 1.0, isInvestment = false)
+                    val displayTarget = if (currencyPreference.isEmpty()) "" else strings.formatAmount(targetAmount, currencyPreference, 1.0, isInvestment = false)
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = displayCurrent,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "/ $displayTarget",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Text(
-                            text = displayCurrent,
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = "${strings.formatNumber(progress.toInt())}%",
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "/ $displayTarget",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isDark) Color(0xFF81C784) else Color(0xFF2E6B4F)
                         )
                     }
+                    BudgetProgressBar(percentage = progress, showLabel = false, height = 8.dp)
+                } else {
+                    val strings = com.savingcoach.app.ui.localization.AppLocale.current
                     Text(
-                        text = "${strings.formatNumber(progress.toInt())}%",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        text = if (strings.save == "သိမ်းမည်") "စတင်ရန် နှိပ်ပါ" else "Tap to activate",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+                    BudgetProgressBar(percentage = 0.0, showLabel = false, height = 8.dp)
                 }
-                BudgetProgressBar(percentage = progress, showLabel = false, height = 8.dp)
-            } else {
-                val strings = com.savingcoach.app.ui.localization.AppLocale.current
-                Text(
-                    text = if (strings.save == "သိမ်းမည်") "စတင်ရန် နှိပ်ပါ" else "Tap to activate",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                BudgetProgressBar(percentage = 0.0, showLabel = false, height = 8.dp)
             }
         }
     }

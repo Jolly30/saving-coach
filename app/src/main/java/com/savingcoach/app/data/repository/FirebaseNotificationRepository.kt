@@ -33,7 +33,11 @@ class FirebaseNotificationRepository @Inject constructor(
                         return@addSnapshotListener
                     }
                     val items = snapshot?.documents?.mapNotNull { doc ->
-                        doc.toObject(NotificationItem::class.java)?.copy(id = doc.id)
+                        val obj = doc.toObject(NotificationItem::class.java)?.copy(id = doc.id)
+                        if (obj != null) {
+                            val isRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: false
+                            obj.copy(isRead = isRead)
+                        } else null
                     } ?: emptyList()
                     trySend(items)
                 }
@@ -53,7 +57,7 @@ class FirebaseNotificationRepository @Inject constructor(
 
     override suspend fun markAsRead(userId: String, notificationId: String) {
         notificationsCol(userId).document(notificationId)
-            .update("isRead", true)
+            .update(mapOf("isRead" to true, "read" to true))
             .await()
     }
 

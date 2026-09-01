@@ -408,8 +408,15 @@ class DashboardViewModel @Inject constructor(
                     }
                 }
 
-                // Sum savings deposited in the current month (in display currency)
-                val totalSaved = dailySavingsMap.values.sum()
+                // Sum all-time savings across all challenges (in display currency) to match Challenges tab
+                val totalSaved = allChallengesList.sumOf { challenge ->
+                    com.savingcoach.app.utils.InvestmentCalculations.convertAmount(
+                        amount = challenge.currentAmount,
+                        fromCurrency = challenge.currency,
+                        toCurrency = expenseTargetCurrency,
+                        usdRate = usdRate
+                    )
+                }
 
                 val convertedActiveChallenges = activeList.map { challenge ->
                     val convTarget = com.savingcoach.app.utils.InvestmentCalculations.convertAmount(
