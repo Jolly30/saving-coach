@@ -32,9 +32,11 @@ fun SalaryScreen(
 ) {
     var selectedRange by remember { mutableStateOf<String?>(null) }
     val salaryOptions = listOf(
-        "Under 5.4M MMK",
-        "5.4M - 10M MMK",
-        "Over 10M MMK",
+        "Under 1,000,000 MMK",
+        "1,000,000 - 3,000,000 MMK",
+        "3,000,000 - 5,400,000 MMK",
+        "5,400,000 - 10,000,000 MMK",
+        "Above 10,000,000 MMK",
         "Rather not answer"
     )
     
@@ -53,15 +55,7 @@ fun SalaryScreen(
                 color = MaterialTheme.colorScheme.primary
             )
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text(
-                text = "We use this to give you better budgeting recommendations.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(32.dp))
             
             Column(modifier = Modifier.fillMaxWidth()) {
                 salaryOptions.forEach { option ->

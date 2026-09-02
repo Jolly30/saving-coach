@@ -31,12 +31,17 @@ class FirebaseSavingChallengeRepository @Inject constructor(
 
     override fun getActiveChallenges(userId: String): Flow<List<SavingChallenge>> =
         callbackFlow {
+            if (userId.isBlank()) {
+                trySend(emptyList())
+                close()
+                return@callbackFlow
+            }
             val listener = challengesCol(userId)
                 .whereEqualTo("isActive", true)
                 .whereEqualTo("isCompleted", false)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        close(error)
+                        trySend(emptyList())
                         return@addSnapshotListener
                     }
                     val challenges = snapshot?.documents?.mapNotNull { doc ->
@@ -49,11 +54,16 @@ class FirebaseSavingChallengeRepository @Inject constructor(
 
     override fun getAllChallenges(userId: String): Flow<List<SavingChallenge>> =
         callbackFlow {
+            if (userId.isBlank()) {
+                trySend(emptyList())
+                close()
+                return@callbackFlow
+            }
             val listener = challengesCol(userId)
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        close(error)
+                        trySend(emptyList())
                         return@addSnapshotListener
                     }
                     val challenges = snapshot?.documents?.mapNotNull { doc ->
@@ -66,11 +76,16 @@ class FirebaseSavingChallengeRepository @Inject constructor(
 
     override fun getDeposits(userId: String, challengeId: String): Flow<List<SavingsDeposit>> =
         callbackFlow {
+            if (userId.isBlank() || challengeId.isBlank()) {
+                trySend(emptyList())
+                close()
+                return@callbackFlow
+            }
             val listener = depositsCol(userId, challengeId)
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        close(error)
+                        trySend(emptyList())
                         return@addSnapshotListener
                     }
                     val deposits = snapshot?.documents?.mapNotNull { doc ->

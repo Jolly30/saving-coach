@@ -16,6 +16,30 @@ class FirebaseAuthRepository @Inject constructor(
 
     override fun getCurrentUserId(): String? = firebaseAuth.currentUser?.uid
 
+    override fun getCurrentUserEmail(): String? = firebaseAuth.currentUser?.email
+
+    override fun isEmailVerified(): Boolean = firebaseAuth.currentUser?.isEmailVerified == true
+
+    override suspend fun sendEmailVerification(): Result<Unit> {
+        return try {
+            val user = firebaseAuth.currentUser ?: throw IllegalStateException("No signed-in user")
+            user.sendEmailVerification().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun reloadUser(): Result<Boolean> {
+        return try {
+            val user = firebaseAuth.currentUser ?: throw IllegalStateException("No signed-in user")
+            user.reload().await()
+            Result.success(user.isEmailVerified)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     override suspend fun signInWithGoogle(idToken: String): Result<AuthResult> {
         return try {
             val credential = GoogleAuthProvider.getCredential(idToken, null)

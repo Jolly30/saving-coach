@@ -170,9 +170,7 @@ fun ChatScreen(
         }
     } else {
         Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding(),
+            modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
             ChatWindowContent(viewModel, isDialog = false, onClose = onClose)
@@ -468,37 +466,15 @@ fun ChatWindowContent(
         }
 
         // Input Area
-        AnimatedContent(targetState = isListening, label = "inputArea") { listening ->
-            if (listening) {
-                VoiceInputUi(
-                    partialText = partialVoiceText,
-                    rmsDb = rmsDb,
-                    onCancel = { viewModel.cancelVoiceInput() },
-                    onSend = { viewModel.stopVoiceInput() }
-                )
-            } else {
-                NormalInputArea(
-                    inputText = inputText,
-                    isTyping = isTyping,
-                    onInputChanged = { viewModel.updateInputText(it) },
-                    onSend = {
-                        viewModel.sendMessage(inputText)
-                        viewModel.updateInputText("")
-                    },
-                    onMicClick = {
-                        val hasPermission = ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.RECORD_AUDIO
-                        ) == PackageManager.PERMISSION_GRANTED
-                        if (hasPermission) {
-                            viewModel.startVoiceInput()
-                        } else {
-                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        }
-                    }
-                )
+        NormalInputArea(
+            inputText = inputText,
+            isTyping = isTyping,
+            onInputChanged = { viewModel.updateInputText(it) },
+            onSend = {
+                viewModel.sendMessage(inputText)
+                viewModel.updateInputText("")
             }
-        }
+        )
 
         if (showEnvelopeAnim && envelopeAnimMessage != null) {
             com.savingcoach.app.ui.components.EnvelopeAnimationDialog(
@@ -527,8 +503,7 @@ fun NormalInputArea(
     inputText: String,
     isTyping: Boolean,
     onInputChanged: (String) -> Unit,
-    onSend: () -> Unit,
-    onMicClick: () -> Unit
+    onSend: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -536,27 +511,6 @@ fun NormalInputArea(
             .padding(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Text Input
-        /*Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(48.dp)
-                .background(LightGrayBg, RoundedCornerShape(24.dp))
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            if (inputText.isEmpty()) {
-                Text("Ask anything about your finances...", color = Color.Gray, fontSize = 14.sp)
-            }
-            BasicTextField(
-                value = inputText,
-                onValueChange = onInputChanged,
-                textStyle = TextStyle(color = TextBlack, fontSize = 14.sp),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                cursorBrush = SolidColor(EmeraldGreen)
-            )
-        }*/
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -566,7 +520,6 @@ fun NormalInputArea(
             contentAlignment = Alignment.CenterStart
         ) {
             if (inputText.isEmpty()) {
-                // Updated to a short, clean placeholder
                 Text("Ask AI...", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
             }
             BasicTextField(
@@ -579,19 +532,6 @@ fun NormalInputArea(
             )
         }
 
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        // Mic Button
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .background(EmeraldGreen, CircleShape)
-                .clickable { onMicClick() },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.Mic, contentDescription = "Voice", tint = Color.White, modifier = Modifier.size(24.dp))
-        }
         Spacer(modifier = Modifier.width(8.dp))
 
         // Send Button

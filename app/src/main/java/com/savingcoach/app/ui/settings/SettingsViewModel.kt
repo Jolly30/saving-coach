@@ -162,10 +162,7 @@ class SettingsViewModel @Inject constructor(
             }
             
             val isTakenResult = userRepository.isUsernameTaken(newUsername)
-            if (isTakenResult.isFailure) {
-                // Ignore the failure if it's a permission denied error, just try to update
-                // the username directly. If they don't have write access, that will fail too.
-            } else if (isTakenResult.getOrDefault(true)) {
+            if (isTakenResult.isSuccess && isTakenResult.getOrDefault(false)) {
                 _uiState.value = _uiState.value.copy(error = "Username is already taken")
                 return@launch
             }
@@ -312,9 +309,10 @@ class SettingsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(error = null)
     }
 
-    fun signOut() {
+    fun signOut(onComplete: () -> Unit = {}) {
         viewModelScope.launch {
             authRepository.signOut()
+            onComplete()
         }
     }
 
@@ -344,7 +342,10 @@ class SettingsViewModel @Inject constructor(
                         expenses = expenses.filter { it.category in selectedCategories }
                     }
                     
-                    CsvExporter.exportExpensesToCsv(context, expenses)
+                    val sortedExpenses = expenses.sortedWith(
+                        compareBy<com.savingcoach.app.data.model.Expense> { it.date }.thenBy { it.createdAt }
+                    )
+                    CsvExporter.exportExpensesToCsv(context, sortedExpenses)
                 } else if (type == "Savings") {
                     val challengesList = savingChallengeRepository.getAllChallenges(uid).first()
                     val challengesMap = challengesList.associateBy { it.id }
@@ -365,7 +366,10 @@ class SettingsViewModel @Inject constructor(
                         filteredDeposits = filteredDeposits.filter { it.date <= endDateStr }
                     }
                     
-                    CsvExporter.exportSavingsToCsv(context, filteredDeposits, challengesMap)
+                    val sortedDeposits = filteredDeposits.sortedWith(
+                        compareBy<com.savingcoach.app.data.model.SavingsDeposit> { it.date }.thenBy { it.createdAt }
+                    )
+                    CsvExporter.exportSavingsToCsv(context, sortedDeposits, challengesMap)
                 } else {
                     val allHoldings = investmentRepository.getHoldings(uid).first()
                     var filteredHoldings = allHoldings

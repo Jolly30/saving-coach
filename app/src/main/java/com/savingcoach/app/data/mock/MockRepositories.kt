@@ -168,6 +168,14 @@ class MockAuthRepository @Inject constructor() : AuthRepository {
 
     override fun getCurrentUserId(): String? = if (signedIn) "mock_user_1" else null
 
+    override fun getCurrentUserEmail(): String? = if (signedIn) "mock@example.com" else null
+
+    override fun isEmailVerified(): Boolean = true
+
+    override suspend fun sendEmailVerification(): Result<Unit> = Result.success(Unit)
+
+    override suspend fun reloadUser(): Result<Boolean> = Result.success(true)
+
     override suspend fun signInWithGoogle(idToken: String): Result<AuthResult> {
         signedIn = true
         return Result.success(null as AuthResult)

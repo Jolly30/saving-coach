@@ -47,15 +47,7 @@ fun AgeScreen(
                 color = MaterialTheme.colorScheme.primary
             )
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text(
-                text = "This helps us personalize your saving experience.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(32.dp))
             
             OutlinedTextField(
                 value = ageInput,

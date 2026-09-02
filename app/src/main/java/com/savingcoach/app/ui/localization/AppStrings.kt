@@ -162,6 +162,21 @@ interface Strings {
     val aboutAndInfo: String
     val about: String
     val version: String
+    val aboutAppTagline: String
+    val aboutAppDescription: String
+    val aboutFeatures: String
+    val aboutFeatureAi: String
+    val aboutFeatureAiDesc: String
+    val aboutFeatureChallenges: String
+    val aboutFeatureChallengesDesc: String
+    val aboutFeatureAnalytics: String
+    val aboutFeatureAnalyticsDesc: String
+    val aboutFeatureInvestments: String
+    val aboutFeatureInvestmentsDesc: String
+    val aboutPrivacySecurity: String
+    val aboutPrivacySecurityDesc: String
+    val aboutMadeWithLove: String
+    val aboutCopyright: String
     val signOut: String
     val editLanguage: String
     val selectDisplayLanguage: String
@@ -488,6 +503,21 @@ object EnglishStrings : Strings {
     override val aboutAndInfo = "ABOUT & INFO"
     override val about = "About"
     override val version = "Version"
+    override val aboutAppTagline = "Your AI-Powered Personal Finance & Saving Coach"
+    override val aboutAppDescription = "Saving Coach helps you take control of your financial future through intelligent expense tracking, gamified saving challenges, portfolio insights, and conversational AI guidance."
+    override val aboutFeatures = "Key Features"
+    override val aboutFeatureAi = "AI Financial Assistant"
+    override val aboutFeatureAiDesc = "Voice and text chat to log expenses, check budgets, and receive tailored financial insights."
+    override val aboutFeatureChallenges = "Saving Challenges"
+    override val aboutFeatureChallengesDesc = "Build lasting habits with 52-Week challenges, Envelope savings, and flexible goals."
+    override val aboutFeatureAnalytics = "Expense Analytics & Budgeting"
+    override val aboutFeatureAnalyticsDesc = "Visual heatmaps, category breakdowns, monthly thresholds, and CSV report exports."
+    override val aboutFeatureInvestments = "Investment Watchlist"
+    override val aboutFeatureInvestmentsDesc = "Track crypto and stock portfolios with live market updates and risk alerts."
+    override val aboutPrivacySecurity = "Privacy & Cloud Sync"
+    override val aboutPrivacySecurityDesc = "Your financial data is securely backed up and synchronized across your devices with cloud encryption."
+    override val aboutMadeWithLove = "Made with ❤️ for financial freedom"
+    override val aboutCopyright = "© 2026 Saving Coach. All rights reserved."
     override val signOut = "Sign Out"
     override val editLanguage = "Edit Language"
     override val selectDisplayLanguage = "Select display language"
@@ -844,6 +874,21 @@ object BurmeseStrings : Strings {
     override val aboutAndInfo = "အက်ပ်အကြောင်းနှင့် အချက်အလက်"
     override val about = "အက်ပ်အကြောင်း"
     override val version = "ဗားရှင်း"
+    override val aboutAppTagline = "သင့်ရဲ့ AI ငွေကြေးနှင့် စုဆောင်းမှု လက်ထောက်"
+    override val aboutAppDescription = "Saving Coach သည် ဉာဏ်ရည်တု အသုံးစရိတ်မှတ်တမ်း၊ ပျော်ရွှင်ဖွယ် ငွေစုစိန်ခေါ်မှုများနှင့် ရင်းနှီးမြှုပ်နှံမှု အချက်အလက်များဖြင့် သင့်ငွေကြေးစီမံမှုကို အကောင်းဆုံး ကူညီပေးပါသည်။"
+    override val aboutFeatures = "အဓိက လုပ်ဆောင်ချက်များ"
+    override val aboutFeatureAi = "AI ငွေကြေး လက်ထောက်"
+    override val aboutFeatureAiDesc = "အသံနှင့် စာဖြင့် အသုံးစရိတ်မှတ်သားခြင်း၊ ဘတ်ဂျက်စစ်ဆေးခြင်းနှင့် ငွေကြေးအကြံဉာဏ်ရယူခြင်း။"
+    override val aboutFeatureChallenges = "ငွေစု စိန်ခေါ်မှုများ"
+    override val aboutFeatureChallengesDesc = "၅၂ ပတ် စိန်ခေါ်မှု၊ စာအိတ်စုနည်းနှင့် စိတ်ကြိုက် ပန်းတိုင်များဖြင့် ငွေစုအလေ့အထ တည်ဆောက်ခြင်း။"
+    override val aboutFeatureAnalytics = "အသုံးစရိတ် သုံးသပ်ချက်နှင့် ဘတ်ဂျက်"
+    override val aboutFeatureAnalyticsDesc = "အမျိုးအစားအလိုက် ခွဲခြမ်းစိတ်ဖြာမှု၊ လစဉ်ဘတ်ဂျက်နှင့် အသုံးစရိတ် CSV ထုတ်ယူမှု။"
+    override val aboutFeatureInvestments = "ရင်းနှီးမြှုပ်နှံမှု စောင့်ကြည့်ခြင်း"
+    override val aboutFeatureInvestmentsDesc = "Crypto နှင့် စတော့ခ်များကို တိုက်ရိုက်စျေးနှုန်းများနှင့် စွန့်စားရမှုသတိပေးချက်များဖြင့် စောင့်ကြည့်ခြင်း။"
+    override val aboutPrivacySecurity = "လုံခြုံရေးနှင့် လျှို့ဝှက်ချက်"
+    override val aboutPrivacySecurityDesc = "သင့်ငွေကြေးဒေတာများကို Cloud ကုဒ်ဝှက်စနစ်ဖြင့် လုံခြုံစွာ သိမ်းဆည်းထားပါသည်။"
+    override val aboutMadeWithLove = "ငွေကြေးလွတ်လပ်ခွင့်အတွက် ❤️ ဖြင့် ပြုလုပ်ထားပါသည်"
+    override val aboutCopyright = "© 2026 Saving Coach. မူပိုင်ခွင့်များ ရယူထားပြီးဖြစ်သည်။"
     override val signOut = "အကောင့်ထွက်မည်"
     override val editLanguage = "ဘာသာစကား ပြောင်းလဲရန်"
     override val selectDisplayLanguage = "ပြသလိုသော ဘာသာစကား ရွေးချယ်ပါ"

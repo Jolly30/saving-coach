@@ -7,6 +7,24 @@ import org.apache.commons.csv.CSVPrinter
 import java.io.File
 
 object CsvExporter {
+
+    fun formatDateToDayMonthYear(dateStr: String): String {
+        if (dateStr.isBlank()) return ""
+        return try {
+            val parts = dateStr.trim().split(Regex("[-/]"))
+            if (parts.size == 3 && parts[0].length == 4) {
+                val year = parts[0]
+                val month = parts[1].padStart(2, '0')
+                val day = parts[2].padStart(2, '0')
+                "$day/$month/$year"
+            } else {
+                dateStr
+            }
+        } catch (e: Exception) {
+            dateStr
+        }
+    }
+
     fun exportExpensesToCsv(context: Context, expenses: List<Expense>): File {
         val fileName = "expenses_export_${System.currentTimeMillis()}.csv"
         val file = File(context.cacheDir, fileName)
@@ -20,10 +38,15 @@ object CsvExporter {
             
         val printer = CSVPrinter(writer, format)
         
+        // Sort chronologically in increasing order (oldest to newest, e.g. August to September)
+        val sortedExpenses = expenses.sortedWith(
+            compareBy<Expense> { it.date }.thenBy { it.createdAt }
+        )
+
         try {
-            for (expense in expenses) {
+            for (expense in sortedExpenses) {
                 printer.printRecord(
-                    expense.date,
+                    formatDateToDayMonthYear(expense.date),
                     expense.category,
                     expense.merchant.ifBlank { "N/A" },
                     String.format(java.util.Locale.US, "%.2f", expense.amount),
@@ -63,14 +86,19 @@ object CsvExporter {
             
         val printer = org.apache.commons.csv.CSVPrinter(writer, format)
         
+        // Sort chronologically in increasing order (oldest to newest, e.g. August to September)
+        val sortedDeposits = deposits.sortedWith(
+            compareBy<com.savingcoach.app.data.model.SavingsDeposit> { it.date }.thenBy { it.createdAt }
+        )
+
         try {
-            for (deposit in deposits) {
+            for (deposit in sortedDeposits) {
                 val challenge = challenges[deposit.challengeId]
                 if (challenge != null) {
                     val status = getChallengeStatus(challenge)
                     printer.printRecord(
-                        deposit.date,
-                        status,
+                        formatDateToDayMonthYear(deposit.date),
+                        formatDateToDayMonthYear(status),
                         stripEmoji(challenge.title),
                         String.format(java.util.Locale.US, "%.2f", deposit.amount),
                         String.format(java.util.Locale.US, "%.2f", challenge.targetAmount)

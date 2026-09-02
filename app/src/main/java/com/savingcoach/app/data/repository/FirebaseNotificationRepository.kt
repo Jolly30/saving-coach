@@ -25,11 +25,16 @@ class FirebaseNotificationRepository @Inject constructor(
 
     override fun getNotifications(userId: String): Flow<List<NotificationItem>> =
         callbackFlow {
+            if (userId.isBlank()) {
+                trySend(emptyList())
+                close()
+                return@callbackFlow
+            }
             val listener = notificationsCol(userId)
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        close(error)
+                        trySend(emptyList())
                         return@addSnapshotListener
                     }
                     val items = snapshot?.documents?.mapNotNull { doc ->

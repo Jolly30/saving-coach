@@ -17,12 +17,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FieldOfWorkScreen(
     onNavigateNext: () -> Unit,
     viewModel: OnboardingViewModel = hiltViewModel()
 ) {
     var selectedField by remember { mutableStateOf<String?>(null) }
+    var expanded by remember { mutableStateOf(false) }
     val fieldOptions = listOf(
         "Technology / IT",
         "Healthcare",
@@ -34,73 +36,74 @@ fun FieldOfWorkScreen(
         "Other",
         "Rather not answer"
     )
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+
+    Scaffold { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState()),
+                .padding(paddingValues)
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Text(
                 text = "What is your field of work?",
                 style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.Bold
+                color = MaterialTheme.colorScheme.primary
             )
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(32.dp))
             
-            Text(
-                text = "This helps us tailor financial tips to your industry.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Spacer(modifier = Modifier.height(48.dp))
-            
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    fieldOptions.forEachIndexed { index, option ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedField = option }
-                                .padding(horizontal = 16.dp, vertical = 12.dp)
-                        ) {
-                            RadioButton(
-                                selected = (selectedField == option),
-                                onClick = { selectedField = option },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = MaterialTheme.colorScheme.primary,
-                                    unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
-                            Text(
-                                text = option,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(start = 16.dp)
-                            )
-                        }
-                        if (index < fieldOptions.size - 1) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                                thickness = 1.dp
-                            )
-                        }
+                OutlinedTextField(
+                    value = selectedField ?: "",
+                    onValueChange = {},
+                    readOnly = true,
+                    placeholder = { 
+                        Text("Select field of work", color = MaterialTheme.colorScheme.onSurfaceVariant) 
+                    },
+                    trailingIcon = { 
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) 
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+                ) {
+                    fieldOptions.forEach { option ->
+                        val isSelected = selectedField == option
+                        DropdownMenuItem(
+                            text = { 
+                                Text(
+                                    text = option, 
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                ) 
+                            },
+                            onClick = {
+                                selectedField = option
+                                expanded = false
+                            },
+                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                        )
                     }
                 }
             }
@@ -116,14 +119,9 @@ fun FieldOfWorkScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                ),
-                shape = RoundedCornerShape(24.dp),
                 enabled = selectedField != null
             ) {
-                Text("Next", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Medium, fontSize = 16.sp)
+                Text("Next")
             }
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -136,7 +134,7 @@ fun FieldOfWorkScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Skip", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
+                Text("Skip")
             }
         }
     }

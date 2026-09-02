@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -83,6 +84,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var notificationHelper: com.savingcoach.app.core.notification.NotificationHelper
 
+    @Inject
+    lateinit var authRepository: com.savingcoach.app.data.repository.AuthRepository
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -105,7 +109,7 @@ class MainActivity : ComponentActivity() {
             val strings = AppLocale.getStrings(language)
             CompositionLocalProvider(LocalAppStrings provides strings) {
                 SavingCoachTheme(darkTheme = isDark) {
-                    MainScreen(notificationHelper = notificationHelper)
+                    MainScreen(authRepository = authRepository, notificationHelper = notificationHelper)
                 }
             }
         }
@@ -212,11 +216,17 @@ fun Modifier.cradledTopBorder(
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun MainScreen(notificationHelper: com.savingcoach.app.core.notification.NotificationHelper? = null) {
+fun MainScreen(
+    authRepository: com.savingcoach.app.data.repository.AuthRepository? = null,
+    notificationHelper: com.savingcoach.app.core.notification.NotificationHelper? = null
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val strings = AppLocale.current
+
+    var isUserSignedIn by remember { mutableStateOf(authRepository?.isUserSignedIn() == true) }
+    val initialStartDestination = if (isUserSignedIn) Routes.Dashboard.route else "${Routes.Auth.route}?mode=signin"
 
     var currentInAppNotif by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.savingcoach.app.core.notification.InAppNotification?>(null) }
 
@@ -240,6 +250,7 @@ fun MainScreen(notificationHelper: com.savingcoach.app.core.notification.Notific
     val hiddenBarRoutes = remember {
         setOf(
             Routes.Auth.route,
+            Routes.VerifyEmail.route,
             Routes.ForgotPassword.route,
             Routes.Camera.route,
             Routes.OnboardingAge.route,
@@ -255,11 +266,12 @@ fun MainScreen(notificationHelper: com.savingcoach.app.core.notification.Notific
             Routes.ChangePassword.route,
             Routes.ExportData.route,
             Routes.EditCurrency.route,
-            Routes.EditLanguage.route
+            Routes.EditLanguage.route,
+            Routes.About.route
         )
     }
     // Show bottom bar for all app screens except full-screen auth/onboarding/camera flows
-    val showBottomBar = (currentDestination?.route !in hiddenBarRoutes) && !isKeyboardVisible
+    val showBottomBar = (currentDestination?.route !in hiddenBarRoutes && currentDestination?.route?.substringBefore("?") !in hiddenBarRoutes)
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -273,7 +285,9 @@ fun MainScreen(notificationHelper: com.savingcoach.app.core.notification.Notific
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .windowInsetsPadding(NavigationBarDefaults.windowInsets),
+                            .windowInsetsPadding(
+                                WindowInsets.ime.union(NavigationBarDefaults.windowInsets)
+                            ),
                         contentAlignment = Alignment.BottomCenter
                     ) {
                         // Base Bottom Navigation Bar Surface with Cradle Cutout
@@ -377,6 +391,7 @@ fun MainScreen(notificationHelper: com.savingcoach.app.core.notification.Notific
         ) { innerPadding ->
             NavGraph(
                 navController = navController,
+                startDestination = initialStartDestination,
                 modifier = Modifier.padding(innerPadding)
             )
         }
