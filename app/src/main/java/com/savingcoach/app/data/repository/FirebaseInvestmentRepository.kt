@@ -24,10 +24,15 @@ class FirebaseInvestmentRepository @Inject constructor(
         firestore.collection("users").document(userId).collection("investments")
 
     override fun getHoldings(userId: String): Flow<List<UserHolding>> = callbackFlow {
+        if (userId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
         val listener = holdingsCollection(userId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    close(error)
+                    trySend(emptyList())
                     return@addSnapshotListener
                 }
 

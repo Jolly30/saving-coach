@@ -2,6 +2,7 @@ package com.savingcoach.app.navigation
 
 sealed class Routes(val route: String) {
     object Auth : Routes("auth")
+    object VerifyEmail : Routes("verify_email")
     object Dashboard : Routes("dashboard")
     object Expenses : Routes("expenses")
     object Challenges : Routes("challenges")
@@ -28,5 +29,6 @@ sealed class Routes(val route: String) {
     object ExportData : Routes("export_data")
     object EditCurrency : Routes("edit_currency")
     object EditLanguage : Routes("edit_language")
+    object About : Routes("about")
 }
 

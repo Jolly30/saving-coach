@@ -23,24 +23,7 @@ class DailyExpenseReminderWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
-        return try {
-            val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
-            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-
-            val todayExpenses = expenseRepository.getExpensesForDate(userId, today).first()
-
-            if (todayExpenses.isEmpty()) {
-                val message = if (notificationHelper.isBurmeseLanguage) {
-                    "ယနေ့ အသုံးစရိတ်များကို စာရင်းသွင်းရန် မမေ့ပါနှင့်!"
-                } else {
-                    "Don't forget to log your expenses today!"
-                }
-                notificationHelper.showDailyReminder(message)
-            }
-
-            Result.success()
-        } catch (e: Exception) {
-            Result.failure()
-        }
+        // Daily reminders are now handled by AlarmManager via ReminderReceiver
+        return Result.success()
     }
 }

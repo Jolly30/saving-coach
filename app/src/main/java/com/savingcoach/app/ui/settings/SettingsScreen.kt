@@ -46,6 +46,7 @@ fun SettingsScreen(
     onNavigateToExportData: () -> Unit = {},
     onNavigateToEditCurrency: () -> Unit = {},
     onNavigateToEditLanguage: () -> Unit = {},
+    onNavigateToAbout: () -> Unit = {},
     onNavigateToAuth: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -62,8 +63,9 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         showSignOutConfirm = false
-                        viewModel.signOut()
-                        onNavigateToAuth()
+                        viewModel.signOut {
+                            onNavigateToAuth()
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
@@ -226,9 +228,9 @@ fun SettingsScreen(
 
             item {
                 SettingsSection(title = strings.aboutAndInfo) {
-                    SettingsItem(label = strings.about, value = "", onClick = {})
+                    SettingsItem(label = strings.about, value = "", onClick = onNavigateToAbout)
                     SettingsDivider()
-                    SettingsItem(label = strings.version, value = "v1.0.0", showArrow = false, onClick = {})
+                    SettingsItem(label = strings.version, value = "v1.0.0", showArrow = false, onClick = onNavigateToAbout)
                 }
             }
             

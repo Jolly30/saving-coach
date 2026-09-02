@@ -15,11 +15,22 @@ class FirebaseUserRepository @Inject constructor(
 ) : UserRepository {
 
     private val usersCollection = firestore.collection("users")
+    private val usernamesCollection = firestore.collection("usernames")
 
     override suspend fun createUserProfile(user: User): Result<Unit> {
         return try {
             // Document ID is the user's UID
             usersCollection.document(user.uid).set(user).await()
+            val exactUsername = user.username.trim()
+            if (exactUsername.isNotBlank()) {
+                usernamesCollection.document(exactUsername)
+                    .set(mapOf(
+                        "email" to user.email,
+                        "uid" to user.uid,
+                        "username" to exactUsername
+                    ), com.google.firebase.firestore.SetOptions.merge())
+                    .await()
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -30,7 +41,31 @@ class FirebaseUserRepository @Inject constructor(
         return try {
             val document = usersCollection.document(uid).get().await()
             if (document.exists()) {
-                Result.success(document.toObject(User::class.java))
+                val user = document.toObject(User::class.java)
+                val email = user?.email?.ifBlank { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: "" } 
+                    ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
+                val currentUsername = user?.username?.trim() ?: ""
+                
+                if (currentUsername.isNotBlank() && email.isNotBlank()) {
+                    try {
+                        usernamesCollection.document(currentUsername)
+                            .set(mapOf(
+                                "email" to email,
+                                "uid" to uid,
+                                "username" to currentUsername
+                            ), com.google.firebase.firestore.SetOptions.merge())
+                            .await()
+
+                        // Automatically purge any stale/old username documents pointing to this UID
+                        val userAllUsernames = usernamesCollection.whereEqualTo("uid", uid).get().await()
+                        for (doc in userAllUsernames.documents) {
+                            if (doc.id != currentUsername) {
+                                doc.reference.delete().await()
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+                Result.success(user)
             } else {
                 Result.success(null)
             }
@@ -40,44 +75,75 @@ class FirebaseUserRepository @Inject constructor(
     }
 
     override suspend fun getEmailByUsername(username: String): Result<String?> {
+        val exactUsername = username.trim()
         return try {
-            val querySnapshot = usersCollection
-                .whereEqualTo("username", username)
-                .limit(1)
-                .get()
-                .await()
-            
-            if (!querySnapshot.isEmpty) {
-                val user = querySnapshot.documents[0].toObject(User::class.java)
-                Result.success(user?.email)
-            } else {
-                Result.success(null)
+            val doc = usernamesCollection.document(exactUsername).get().await()
+            if (doc.exists()) {
+                val storedUsername = doc.getString("username")
+                // Strict character-by-character case-sensitive comparison
+                if (storedUsername == exactUsername) {
+                    val email = doc.getString("email")
+                    if (!email.isNullOrBlank()) {
+                        return Result.success(email)
+                    }
+                }
             }
+            Result.success(null)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
     override suspend fun isUsernameTaken(username: String): Result<Boolean> {
+        val exactUsername = username.trim()
         return try {
-            val querySnapshot = usersCollection
-                .whereEqualTo("username", username)
-                .limit(1)
-                .get()
-                .await()
-            
-            Result.success(!querySnapshot.isEmpty)
+            val doc = usernamesCollection.document(exactUsername).get().await()
+            if (doc.exists() && doc.getString("username") == exactUsername) {
+                Result.success(true)
+            } else {
+                Result.success(false)
+            }
         } catch (e: Exception) {
-            e.printStackTrace()
-            Result.failure(e)
+            Result.success(false)
         }
     }
 
     override suspend fun updateUsername(uid: String, newUsername: String): Result<Unit> {
+        val exactNew = newUsername.trim()
         return try {
+            val oldDoc = usersCollection.document(uid).get().await()
+            val oldUsername = oldDoc.getString("username")
+            val email = oldDoc.getString("email")?.ifBlank { null }
+                ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
+
+            // Update primary user profile in users collection
             usersCollection.document(uid)
-                .set(mapOf("username" to newUsername), com.google.firebase.firestore.SetOptions.merge())
+                .set(mapOf(
+                    "username" to exactNew,
+                    "email" to email
+                ), com.google.firebase.firestore.SetOptions.merge())
                 .await()
+
+            // Sync to public usernames collection and purge all old ones
+            try {
+                if (exactNew.isNotBlank() && email.isNotBlank()) {
+                    usernamesCollection.document(exactNew)
+                        .set(mapOf(
+                            "email" to email,
+                            "uid" to uid,
+                            "username" to exactNew
+                        ), com.google.firebase.firestore.SetOptions.merge())
+                        .await()
+                }
+
+                val oldEntries = usernamesCollection.whereEqualTo("uid", uid).get().await()
+                for (doc in oldEntries.documents) {
+                    if (doc.id != exactNew) {
+                        doc.reference.delete().await()
+                    }
+                }
+            } catch (_: Exception) {}
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -130,6 +196,16 @@ class FirebaseUserRepository @Inject constructor(
 
     override suspend fun updateEmail(uid: String, newEmail: String): Result<Unit> {
         return try {
+            val doc = usersCollection.document(uid).get().await()
+            val username = doc.getString("username")
+            if (!username.isNullOrBlank()) {
+                try {
+                    usernamesCollection.document(username.lowercase().trim())
+                        .set(mapOf("email" to newEmail), com.google.firebase.firestore.SetOptions.merge())
+                        .await()
+                } catch (_: Exception) {}
+            }
+
             usersCollection.document(uid)
                 .set(mapOf("email" to newEmail), com.google.firebase.firestore.SetOptions.merge())
                 .await()

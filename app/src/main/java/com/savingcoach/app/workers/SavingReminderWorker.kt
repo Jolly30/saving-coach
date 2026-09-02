@@ -20,46 +20,7 @@ class SavingReminderWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
-        return try {
-            val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
-            val challenges = savingChallengeRepository.getActiveChallenges(userId).first()
-            var triggeredAbandoned = false
-            
-            val fiveDaysInMillis = 5L * 24 * 60 * 60 * 1000L
-            val now = System.currentTimeMillis()
-            
-            for (challenge in challenges) {
-                val deposits = savingChallengeRepository.getDeposits(userId, challenge.id).first()
-                val lastActivityTime = if (deposits.isNotEmpty()) {
-                    deposits.first().createdAt
-                } else {
-                    challenge.createdAt
-                }
-                
-                if (now - lastActivityTime >= fiveDaysInMillis) {
-                    notificationHelper.showAbandonedChallenge(challenge.title)
-                    triggeredAbandoned = true
-                    break // Only show one alert at a time to prevent notification spam
-                }
-            }
-            
-            if (!triggeredAbandoned && challenges.isNotEmpty()) {
-                val count = challenges.size
-                val message = if (notificationHelper.isBurmeseLanguage) {
-                    "သင့်တွင် လုပ်ဆောင်နေသော ငွေစုစိန်ခေါ်မှု $count ခု ရှိပါသည်။ ဆက်လက်ကြိုးစားပါ!"
-                } else {
-                    if (count == 1) {
-                        "You have 1 active saving challenge. Keep going!"
-                    } else {
-                        "You have $count active saving challenges. Keep going!"
-                    }
-                }
-                notificationHelper.showDailyReminder(message)
-            }
-
-            Result.success()
-        } catch (e: Exception) {
-            Result.failure()
-        }
+        // Daily saving reminders are now handled by AlarmManager via ReminderReceiver
+        return Result.success()
     }
 }

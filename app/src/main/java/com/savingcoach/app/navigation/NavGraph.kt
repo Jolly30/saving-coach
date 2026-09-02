@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.savingcoach.app.ui.auth.AuthScreen
@@ -29,31 +30,67 @@ import com.savingcoach.app.ui.settings.EditGenderScreen
 import com.savingcoach.app.ui.settings.EditSalaryScreen
 import com.savingcoach.app.ui.settings.EditFieldOfWorkScreen
 import com.savingcoach.app.ui.auth.ForgotPasswordScreen
+import com.savingcoach.app.ui.auth.VerifyEmailScreen
 
 @Composable
 fun NavGraph(
     navController: NavHostController,
+    startDestination: String = "${Routes.Auth.route}?mode=signin",
     modifier: Modifier = Modifier
 ) {
     NavHost(
         navController = navController,
-        startDestination = Routes.Auth.route,
+        startDestination = startDestination,
         modifier = modifier
     ) {
-        composable(Routes.Auth.route) {
+        composable(
+            route = "${Routes.Auth.route}?mode={mode}",
+            arguments = listOf(androidx.navigation.navArgument("mode") {
+                type = androidx.navigation.NavType.StringType
+                defaultValue = "signin"
+                nullable = true
+            })
+        ) { backStackEntry ->
+            val mode = backStackEntry.arguments?.getString("mode") ?: "signin"
             AuthScreen(
+                initialIsSignUp = (mode == "signup"),
                 onSignedIn = {
                     navController.navigate(Routes.Dashboard.route) {
-                        popUpTo(Routes.Auth.route) { inclusive = true }
+                        popUpTo("${Routes.Auth.route}?mode={mode}") { inclusive = true }
                     }
                 },
                 onNeedsOnboarding = {
                     navController.navigate(Routes.OnboardingAge.route) {
-                        popUpTo(Routes.Auth.route) { inclusive = true }
+                        popUpTo("${Routes.Auth.route}?mode={mode}") { inclusive = true }
+                    }
+                },
+                onNeedsEmailVerification = {
+                    navController.navigate(Routes.VerifyEmail.route) {
+                        popUpTo("${Routes.Auth.route}?mode={mode}") { inclusive = true }
                     }
                 },
                 onNavigateToForgotPassword = {
                     navController.navigate(Routes.ForgotPassword.route)
+                }
+            )
+        }
+
+        composable(Routes.VerifyEmail.route) {
+            VerifyEmailScreen(
+                onVerified = {
+                    navController.navigate(Routes.Dashboard.route) {
+                        popUpTo(Routes.VerifyEmail.route) { inclusive = true }
+                    }
+                },
+                onNeedsOnboarding = {
+                    navController.navigate(Routes.OnboardingAge.route) {
+                        popUpTo(Routes.VerifyEmail.route) { inclusive = true }
+                    }
+                },
+                onNavigateToAuth = {
+                    navController.navigate("${Routes.Auth.route}?mode=signup") {
+                        popUpTo(Routes.VerifyEmail.route) { inclusive = true }
+                    }
                 }
             )
         }
@@ -217,9 +254,13 @@ fun NavGraph(
                 onNavigateToEditLanguage = {
                     navController.navigate(Routes.EditLanguage.route)
                 },
+                onNavigateToAbout = {
+                    navController.navigate(Routes.About.route)
+                },
                 onNavigateToAuth = {
-                    navController.navigate(Routes.Auth.route) {
-                        popUpTo(0) { inclusive = true }
+                    navController.navigate("${Routes.Auth.route}?mode=signin") {
+                        popUpTo(0)
+                        launchSingleTop = true
                     }
                 }
             )
@@ -356,6 +397,12 @@ fun NavGraph(
                         popUpTo(Routes.OnboardingSalary.route) { inclusive = true }
                     }
                 }
+            )
+        }
+
+        composable(Routes.About.route) {
+            com.savingcoach.app.ui.settings.AboutScreen(
+                onBackClick = { navController.popBackStack() }
             )
         }
     }

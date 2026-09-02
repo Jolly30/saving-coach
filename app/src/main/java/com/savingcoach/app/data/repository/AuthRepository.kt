@@ -5,6 +5,10 @@ import com.google.firebase.auth.AuthResult
 interface AuthRepository {
     fun isUserSignedIn(): Boolean
     fun getCurrentUserId(): String?
+    fun getCurrentUserEmail(): String?
+    fun isEmailVerified(): Boolean
+    suspend fun sendEmailVerification(): Result<Unit>
+    suspend fun reloadUser(): Result<Boolean>
     suspend fun signInWithGoogle(idToken: String): Result<AuthResult>
     suspend fun signInWithEmail(email: String, password: String): Result<AuthResult>
     suspend fun signInWithEmailOrUsername(input: String, password: String): Result<AuthResult>

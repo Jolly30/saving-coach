@@ -55,10 +55,17 @@ class NotificationHelper @Inject constructor(
         const val BUDGET_CHANNEL_ID = "budget_alerts"
         const val SAVING_CHANNEL_ID = "saving_milestones"
         const val DAILY_REMINDER_CHANNEL_ID = "daily_reminders"
+
+        const val NOTIFICATION_ID_DAILY_EXPENSE = 1001
+        const val NOTIFICATION_ID_DAILY_SAVING = 1002
+        const val NOTIFICATION_ID_INACTIVE = 1003
+        const val NOTIFICATION_ID_ABANDONED_CHALLENGE = 1004
+        const val NOTIFICATION_ID_PORTFOLIO_RISK = 1005
+        const val NOTIFICATION_ID_BUDGET = 1006
     }
 
     // Use AtomicInteger to generate unique notification IDs without overflow
-    private val notificationIdCounter = AtomicInteger(0)
+    private val notificationIdCounter = AtomicInteger(2000)
 
     private val _inAppNotificationFlow = MutableSharedFlow<InAppNotification>(
         replay = 0,
@@ -90,14 +97,17 @@ class NotificationHelper @Inject constructor(
             ).apply {
                 description = "Notifications for budget threshold alerts"
                 enableVibration(true)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
 
             val savingChannel = NotificationChannel(
                 SAVING_CHANNEL_ID,
                 "Saving Milestones",
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Notifications for saving goal achievements"
+                enableVibration(true)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
 
             val reminderChannel = NotificationChannel(
@@ -107,10 +117,11 @@ class NotificationHelper @Inject constructor(
             ).apply {
                 description = "Daily reminders to log expenses and check savings"
                 enableVibration(true)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
 
             val notificationManager = context.getSystemService(NotificationManager::class.java)
-            notificationManager.createNotificationChannels(
+            notificationManager?.createNotificationChannels(
                 listOf(budgetChannel, savingChannel, reminderChannel)
             )
         }
@@ -128,8 +139,10 @@ class NotificationHelper @Inject constructor(
             channelId = BUDGET_CHANNEL_ID,
             title = title,
             message = message,
-            icon = R.drawable.ic_launcher_foreground,
-            type = "BUDGET_BREACH"
+            icon = R.drawable.ic_notification,
+            type = "BUDGET_BREACH",
+            notificationId = NOTIFICATION_ID_BUDGET,
+            allowInAppBanner = true
         )
     }
 
@@ -147,23 +160,45 @@ class NotificationHelper @Inject constructor(
             "You've saved $percentage% of your $challengeName goal"
         }
 
+        val milestoneNotifId = 1100 + (challengeName.hashCode() and 0x7FFF) % 100
         showNotification(
             channelId = SAVING_CHANNEL_ID,
             title = title,
             message = message,
-            icon = R.drawable.ic_launcher_foreground,
-            type = "SAVING_MILESTONE"
+            icon = R.drawable.ic_notification,
+            type = "SAVING_MILESTONE",
+            notificationId = milestoneNotifId,
+            allowInAppBanner = true
         )
     }
 
     fun showDailyReminder(message: String) {
+        showDailyExpenseReminder(message)
+    }
+
+    fun showDailyExpenseReminder(message: String) {
         val title = "Saving Coach"
         showNotification(
             channelId = DAILY_REMINDER_CHANNEL_ID,
             title = title,
             message = message,
-            icon = R.drawable.ic_launcher_foreground,
-            type = "DAILY_REMINDER"
+            icon = R.drawable.ic_notification,
+            type = "DAILY_REMINDER",
+            notificationId = NOTIFICATION_ID_DAILY_EXPENSE,
+            allowInAppBanner = false
+        )
+    }
+
+    fun showDailySavingReminder(message: String) {
+        val title = "Saving Coach"
+        showNotification(
+            channelId = DAILY_REMINDER_CHANNEL_ID,
+            title = title,
+            message = message,
+            icon = R.drawable.ic_notification,
+            type = "DAILY_REMINDER",
+            notificationId = NOTIFICATION_ID_DAILY_SAVING,
+            allowInAppBanner = false
         )
     }
 
@@ -178,8 +213,10 @@ class NotificationHelper @Inject constructor(
             channelId = DAILY_REMINDER_CHANNEL_ID,
             title = title,
             message = message,
-            icon = R.drawable.ic_launcher_foreground,
-            type = "SEVERE_INACTIVITY"
+            icon = R.drawable.ic_notification,
+            type = "SEVERE_INACTIVITY",
+            notificationId = NOTIFICATION_ID_INACTIVE,
+            allowInAppBanner = false
         )
     }
 
@@ -194,8 +231,10 @@ class NotificationHelper @Inject constructor(
             channelId = SAVING_CHANNEL_ID,
             title = title,
             message = message,
-            icon = R.drawable.ic_launcher_foreground,
-            type = "ABANDONED_CHALLENGE"
+            icon = R.drawable.ic_notification,
+            type = "ABANDONED_CHALLENGE",
+            notificationId = NOTIFICATION_ID_ABANDONED_CHALLENGE,
+            allowInAppBanner = false
         )
     }
 
@@ -210,8 +249,10 @@ class NotificationHelper @Inject constructor(
             channelId = DAILY_REMINDER_CHANNEL_ID,
             title = title,
             message = message,
-            icon = R.drawable.ic_launcher_foreground,
-            type = "PORTFOLIO_RISK"
+            icon = R.drawable.ic_notification,
+            type = "PORTFOLIO_RISK",
+            notificationId = NOTIFICATION_ID_PORTFOLIO_RISK,
+            allowInAppBanner = false
         )
     }
 
@@ -219,12 +260,22 @@ class NotificationHelper @Inject constructor(
         return NumberFormat.getCurrencyInstance(Locale.getDefault()).format(amount)
     }
 
-    private fun showNotification(channelId: String, title: String, message: String, icon: Int, type: String) {
+    private fun showNotification(
+        channelId: String,
+        title: String,
+        message: String,
+        icon: Int,
+        type: String,
+        notificationId: Int = notificationIdCounter.incrementAndGet(),
+        allowInAppBanner: Boolean = false
+    ) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
+            context,
+            notificationId,
+            intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -232,41 +283,42 @@ class NotificationHelper @Inject constructor(
             .setSmallIcon(icon)
             .setContentTitle(title)
             .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .build()
 
-        // 1. Emit in-app banner for on-screen display inside the app
-        _inAppNotificationFlow.tryEmit(
-            InAppNotification(
-                title = title,
-                message = message,
-                type = type
-            )
-        )
-
-        // 2. Only trigger OS system notification if the app is in the background
-        // When in the foreground, the on-screen banner handles it so the dark OS heads-up doesn't overlap
-        if (!AppLifecycleTracker.isAppInForeground) {
-            createNotificationChannels()
-            try {
-                val notificationManagerCompat = androidx.core.app.NotificationManagerCompat.from(context)
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                    androidx.core.content.ContextCompat.checkSelfPermission(
-                        context,
-                        android.Manifest.permission.POST_NOTIFICATIONS
-                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                ) {
-                    if (notificationManagerCompat.areNotificationsEnabled()) {
-                        val notificationId = notificationIdCounter.incrementAndGet()
-                        notificationManagerCompat.notify(notificationId, notification)
-                    }
+        // 1. Post to OS notification tray & lockscreen
+        createNotificationChannels()
+        try {
+            val notificationManagerCompat = androidx.core.app.NotificationManagerCompat.from(context)
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                if (notificationManagerCompat.areNotificationsEnabled()) {
+                    notificationManagerCompat.notify(notificationId, notification)
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 2. Only emit in-app banner for real-time user-initiated actions inside foreground app
+        // Reminders and background alerts will never pop up inside the app UI
+        if (allowInAppBanner && AppLifecycleTracker.isAppInForeground) {
+            _inAppNotificationFlow.tryEmit(
+                InAppNotification(
+                    title = title,
+                    message = message,
+                    type = type
+                )
+            )
         }
 
         // 3. Save notification to Firestore history
