@@ -27,7 +27,7 @@ data class ParsedExpense(
     val date: String = "",
     val language: String = "en",
     val isChallenge: Boolean = false,
-    @SerialName("challenge_title")
+    @SerialName("challengeTitle")
     val challengeTitle: String = "",
     val action: String = "log_expense",
     val item: String = "",

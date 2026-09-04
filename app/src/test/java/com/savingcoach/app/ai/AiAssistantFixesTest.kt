@@ -1,310 +1,24 @@
 package com.savingcoach.app.ai
 
-import com.savingcoach.app.data.model.ChatMessage
-import com.savingcoach.app.data.repository.ChatRepository
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
-import javax.inject.Singleton
+import com.savingcoach.app.data.model.ParsedExpense
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import com.savingcoach.app.data.model.ParsedExpense
+import org.junit.Assert.*
+import org.junit.Test
 import java.time.LocalDate
 
-@Singleton
-class AiChatRepository @Inject constructor(
-    private val proxyService: GeminiProxyService,
-    private val firestore: FirebaseFirestore
-) : ChatRepository {
+class AiAssistantFixesTest {
 
-    private val localHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
-    private var hasLoadedFromFirestore = false
-
-    override fun getChatHistory(userId: String): Flow<List<ChatMessage>> {
-        // Load from Firestore once
-        if (!hasLoadedFromFirestore) {
-            hasLoadedFromFirestore = true
-            loadFromFirestore(userId)
-        }
-        return localHistory.map { messages ->
-            messages.filter { it.userId == userId }
-                .sortedBy { it.timestamp }
-        }
-    }
-
-    private fun loadFromFirestore(userId: String) {
-        // Load in background - will update localHistory when complete
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val snapshot = firestore.collection("users")
-                    .document(userId)
-                    .collection("chatMessages")
-                    .orderBy("timestamp")
-                    .get()
-                    .await()
-
-                val messages = snapshot.toObjects(ChatMessage::class.java)
-                localHistory.value = messages
-            } catch (_: Exception) {
-                // Firestore load failed, start with empty history
-            }
-        }
-    }
-
-    override suspend fun saveMessage(userId: String, message: ChatMessage) {
-        // Save to local state
-        localHistory.value = localHistory.value + message
-
-        // Save to Firestore
-        try {
-            firestore.collection("users")
-                .document(userId)
-                .collection("chatMessages")
-                .add(message.copy(userId = userId))
-                .await()
-        } catch (_: Exception) {
-            // Firestore save failed, but local state is updated
-        }
-    }
-
-    override suspend fun updateMessage(userId: String, message: ChatMessage) {
-        // Update local state
-        localHistory.value = localHistory.value.map { if (it.id == message.id) message else it }
-
-        // Update in Firestore
-        try {
-            val querySnapshot = firestore.collection("users")
-                .document(userId)
-                .collection("chatMessages")
-                .whereEqualTo("id", message.id)
-                .get()
-                .await()
-                
-            for (doc in querySnapshot.documents) {
-                doc.reference.set(message).await()
-            }
-        } catch (_: Exception) {
-            // Firestore update failed, but local state is updated
-        }
-    }
-
-    /**
-     * Send a message to the AI and get a response.
-     * Returns the AI's reply as a ChatMessage.
-     */
-    override suspend fun sendToAi(
-        userId: String,
-        userMessage: String,
-        systemPrompt: String?
-    ): Result<ChatMessage> {
-        // Filter out JSON messages, clean historical thinking, and sort chronologically
-        val cleanHistory = localHistory.value
-            .filter { it.userId == userId && !it.content.contains("{") }
-            .map { msg ->
-                if (msg.role == "ai") {
-                    msg.copy(content = cleanThinking(msg.content))
-                } else msg
-            }
-            .filter { it.content.isNotBlank() }
-            .sortedBy { it.timestamp }
-
-        // Token-aware truncation: preserve recent messages within token budget
-        var accumulatedTokens = estimateTokens(userMessage)
-        val recentHistory = cleanHistory.reversed().takeWhile { msg ->
-            val msgTokens = estimateTokens(msg.content)
-            if (accumulatedTokens + msgTokens <= MAX_INPUT_TOKENS) {
-                accumulatedTokens += msgTokens
-                true
-            } else {
-                false
-            }
-        }.reversed()
-
-        val recentMessages = recentHistory + ChatMessage(
-            id = "temp_${System.currentTimeMillis()}",
-            userId = userId,
-            role = "user",
-            content = userMessage,
-            timestamp = System.currentTimeMillis()
-        )
-
-        return proxyService.chat(recentMessages, systemPrompt).map { reply ->
-            var finalReply = reply
-            var parsedExpense: ParsedExpense? = null
-            var msgType = "advice"
-
-            val hasMyanmarText = userMessage.contains(Regex("[\\u1000-\\u109F]"))
-            val detectedLang = if (hasMyanmarText) "my" else "en"
-
-            val expenseRegex = "\\[EXPENSE_DATA\\](.*?)\\[/EXPENSE_DATA\\]".toRegex(RegexOption.DOT_MATCHES_ALL)
-            val match = expenseRegex.find(reply)
-            if (match != null) {
-                val jsonStr = match.groupValues[1].trim()
-                parsedExpense = parseExpenseData(jsonStr, detectedLang)
-                finalReply = reply.replace(match.value, "").trim()
-                if (parsedExpense != null) {
-                    msgType = if (parsedExpense.isChallenge) "challenge" else "expense"
-                }
-            }
-
-            // Client-side fallback: If AI failed to output [EXPENSE_DATA], extract directly from user message
-            if (parsedExpense == null) {
-                parsedExpense = extractFallbackExpenseOrChallenge(userMessage, detectedLang)
-                if (parsedExpense != null) {
-                    msgType = if (parsedExpense.isChallenge) "challenge" else "expense"
-                }
-            }
-
-            finalReply = cleanThinking(finalReply)
-
-            // Language consistency: If user typed Burmese, reject English-only replies/thinking
-            val hasBurmeseInReply = finalReply.any { it.code in 0x1000..0x109F }
-            if (detectedLang == "my" && !hasBurmeseInReply) {
-                finalReply = ""
-            }
-
-            // If the model output consisted entirely of internal thinking, provide a clean acknowledgment
-            if (finalReply.isBlank()) {
-                finalReply = when {
-                    parsedExpense != null && parsedExpense.isChallenge -> {
-                        val title = parsedExpense.challengeTitle.ifBlank { "saving challenge" }
-                        if (detectedLang == "my") {
-                            "$title အတွက် ငွေစုရန် မှတ်သားထားပါတယ်။ အောက်ပါ Card တွင် အတည်ပြုပေးပါ။"
-                        } else {
-                            "I've prepared your deposit for $title. Please confirm below."
-                        }
-                    }
-                    parsedExpense != null -> {
-                        val cat = parsedExpense.category.ifBlank { "Expense" }
-                        val amtStr = if (parsedExpense.amount > 0) " ${parsedExpense.amount.toLong()} ${parsedExpense.currency}" else ""
-                        if (detectedLang == "my") {
-                            "$cat အတွက်$amtStr မှတ်သားထားပါတယ်။ အောက်ပါ Card တွင် အတည်ပြုပေးပါ။"
-                        } else {
-                            "I've noted your expense for $cat$amtStr. Please confirm below."
-                        }
-                    }
-                    else -> {
-                        if (detectedLang == "my") {
-                            "နားလည်ပါပြီ။ ဘာများ ကူညီပေးရမလဲ။"
-                        } else {
-                            "I'm here to help with your finances. What would you like to know?"
-                        }
-                    }
-                }
-            }
-
-            ChatMessage(
-                id = "ai_${System.currentTimeMillis()}",
-                userId = userId,
-                role = "ai",
-                content = finalReply,
-                timestamp = System.currentTimeMillis(),
-                type = msgType,
-                parsedExpense = parsedExpense
-            )
-        }
-    }
-
-    private fun parseExpenseData(rawJson: String, detectedLang: String): ParsedExpense? {
-        return try {
-            val cleanJson = rawJson
-                .replace(Regex("^```[a-zA-Z]*\\s*"), "")
-                .replace(Regex("\\s*```$"), "")
-                .trim()
-            val jsonElement = Json { ignoreUnknownKeys = true }.parseToJsonElement(cleanJson)
-            if (jsonElement !is JsonObject) return null
-
-            fun getString(vararg keys: String): String {
-                for (key in keys) {
-                    val el = jsonElement[key]
-                    if (el != null) {
-                        val str = (el as? JsonPrimitive)?.content?.trim()
-                        if (!str.isNullOrBlank()) return str
-                    }
-                }
-                return ""
-            }
-
-            fun getDouble(vararg keys: String): Double {
-                for (key in keys) {
-                    val el = jsonElement[key]
-                    if (el != null) {
-                        val prim = el as? JsonPrimitive
-                        val num = prim?.content?.toDoubleOrNull()
-                        if (num != null) return num
-                    }
-                }
-                return 0.0
-            }
-
-            fun getBoolean(vararg keys: String): Boolean {
-                for (key in keys) {
-                    val el = jsonElement[key]
-                    if (el != null) {
-                        val prim = el as? JsonPrimitive
-                        val b = prim?.content?.toBooleanStrictOrNull()
-                        if (b != null) return b
-                    }
-                }
-                return false
-            }
-
-            val isChallenge = getBoolean("isChallenge", "is_challenge") ||
-                    getString("action") in listOf("prompt_challenge_confirmation", "mark_challenge_saving")
-
-            var challengeTitle = getString("challengeTitle", "challenge_title", "challenge_name", "challengeName", "challenge", "title", "name")
-            val merchant = getString("merchant", "vendor", "place", "shop")
-            val category = getString("category", "type").ifBlank { "Other" }
-            val amount = getDouble("amount", "cost", "price", "value")
-            var date = getString("date", "datetime")
-            val action = getString("action").ifBlank { if (isChallenge) "prompt_challenge_confirmation" else "log_expense" }
-            val item = getString("item", "description")
-            val currency = getString("currency").ifBlank { "MMK" }
-
-            // Sanitize date: if "YYYY-MM-DD", empty, or placeholder, use today's date
-            if (date.isBlank() || date.contains("YYYY", ignoreCase = true) || date.length < 8) {
-                date = java.time.LocalDate.now().toString()
-            }
-
-            // Fallback for challengeTitle if isChallenge is true but challengeTitle is still blank
-            if (isChallenge && challengeTitle.isBlank()) {
-                challengeTitle = merchant
-            }
-
-            ParsedExpense(
-                merchant = merchant,
-                amount = amount,
-                category = category,
-                date = date,
-                language = detectedLang,
-                isChallenge = isChallenge,
-                challengeTitle = challengeTitle,
-                action = action,
-                item = item,
-                currency = currency
-            )
-        } catch (e: Exception) {
-            null
-        }
-    }
-
+    // Mirror of the private cleanThinking method in AiChatRepository
     private fun cleanThinking(text: String): String {
         if (text.isBlank()) return ""
 
-        // 1. Remove XML/markdown thought tags
         val cleaned = text.replace(Regex("(?s)<think>.*?</think>"), "")
             .replace(Regex("(?s)\\[think\\].*?\\[/think\\]"), "")
             .replace(Regex("(?s)```thought.*?```"), "")
             .trim()
 
-        // 2. Check for explicit response headers (e.g. "Response:", "Draft response:", "Draft - Mental Refinement:")
         val explicitResponseMatch = Regex("(?i)(?:\\d+\\.\\s*)?\\*{0,2}(?:Draft\\s*[-–]\\s*Mental Refinement|Mental Refinement|Draft response|Conversational response|Final response|Response|Answer)\\*{0,2}:\\*{0,2}\\s*(?:\\*\\([^\\)]*\\)\\*\\s*)?[\"“]?([\\s\\S]+?)[\"”]?$").find(cleaned)
         if (explicitResponseMatch != null && explicitResponseMatch.groupValues[1].isNotBlank()) {
             val extracted = explicitResponseMatch.groupValues[1].trim().trim('"', '“', '”')
@@ -320,20 +34,14 @@ class AiChatRepository @Inject constructor(
             }
         }
 
-        // 3. Aggressive thinking detection - catch ALL internal monologue patterns
         val thinkingPatterns = listOf(
-            // Date deduction reasoning
             Regex("(?i)If there are \\d+ days left"),
             Regex("(?i)because \\d+-\\d+=\\d+"),
             Regex("(?i)days have passed,? so today is"),
             Regex("(?i)today is (?:January|February|March|April|May|June|July|August|September|October|November|December) \\d+"),
-
-            // User intent statements
             Regex("(?i)The user (?:is |said |wants |asked |is asking |mentioned |wrote |typed |logging |just said )"),
             Regex("(?i)The user is logging an expense"),
             Regex("(?i)This is (?:an?|another) (?:expense|challenge|income|transaction|saving) (?:logging )?request"),
-
-            // Input analysis and processing steps
             Regex("(?i)(?:Analyze|Analyzing) (?:User|the) Input"),
             Regex("(?i)(?:User|The user) (?:says|said|wants|asked|is asking|mentioned|wrote|typed|logging|just said)"),
             Regex("(?i)(?:This is an?|Another) (?:instruction|request|expense|challenge)"),
@@ -342,8 +50,6 @@ class AiChatRepository @Inject constructor(
             Regex("(?i)Determine Response Language"),
             Regex("(?i)Formulate Extraction"),
             Regex("(?i)Possible response:"),
-
-            // Model field extraction reasoning patterns (from new screenshot)
             Regex("(?i)The amount is \\d+"),
             Regex("(?i)category would be"),
             Regex("(?i)merchant is (?:not )?specified"),
@@ -352,13 +58,9 @@ class AiChatRepository @Inject constructor(
             Regex("(?i)from context: \\d{4}-\\d{2}-\\d{2}"),
             Regex("(?i)So this is .+ for \\d+ MMK total"),
             Regex("(?i)\\(since it's .+\\)"),
-
-            // Processing/intent statements
             Regex("(?i)(?:Actually,? wait|Actually,? I |Actually,? looking|Actually,? the|Wait,? but|Let me |I need to |I should |I'll |I will )"),
             Regex("(?i)(?:Let me format|Let me parse|Let me analyze|Let me check|Let me think|Let me work|Let me go)"),
             Regex("(?i)(?:I need to (?:output|extract|follow|determine|process|handle|write|check|format))"),
-
-            // Rules/challenge detection
             Regex("(?i)(?:Wait,? but the rules|The rules (?:also )?say|According to (?:the )?rules)"),
             Regex("(?i)The rules say:?"),
             Regex("(?i)Wait,? let me re-read"),
@@ -381,18 +83,12 @@ class AiChatRepository @Inject constructor(
             Regex("(?i)(?:Challenge Title:|challengeTitle:)"),
             Regex("(?i)(?:Non-existent|non existent|does not exist)"),
             Regex("(?i)(?:match from active challenges|match the challenge)"),
-
-            // Looking at context
             Regex("(?i)(?:Looking at the|According to (?:the )?(?:hidden|context|rules|EXPENSE|CHALLENGE))"),
             Regex("(?i)(?:Based on the (?:hidden|context|rules))"),
             Regex("(?i)(?:Following the (?:EXPENSE|CHALLENGE) rules)"),
-
-            // Thinking starters
             Regex("(?i)(?:Here'?s a thinking process|Here'?s (?:what|how))"),
             Regex("(?i)(?:So (?:date|amount|category))"),
             Regex("(?i)(?:Let'?s (?:parse|analyze|think|check))"),
-
-            // Structure/output thinking
             Regex("(?i)(?:The structure should be|The structure is)"),
             Regex("(?i)(?:For this request|For this user)"),
             Regex("(?i)(?:amount:.*category:|category:.*merchant:)"),
@@ -405,8 +101,6 @@ class AiChatRepository @Inject constructor(
             Regex("(?i)(?:JSON structure|JSON block|JSON data)"),
             Regex("(?i)(?:•\\s*(?:amount|category|merchant|date|currency|acknowledge|mention|keep):?)"),
             Regex("(?i)(?:\\d+\\.\\s*(?:amount|category|merchant|date))"),
-
-            // Analysis thinking
             Regex("(?i)(?:Actually,? looking (?:more |at the |closely))"),
             Regex("(?i)(?:Actually,? I think)"),
             Regex("(?i)(?:Actually,? this (?:could|might|seems))"),
@@ -490,21 +184,304 @@ class AiChatRepository @Inject constructor(
                 }
             }
 
-            // Filter out very short fragments that are likely thinking remnants
             val filteredFacing = userFacing.filter { it.length > 10 || it.any { c -> c.isDigit() } }
-
             return filteredFacing.joinToString("\n\n").trim()
         }
 
         return cleaned
     }
 
+    // Mirror of parseExpenseData helper
+    private fun parseExpenseData(rawJson: String, detectedLang: String = "en"): ParsedExpense? {
+        return try {
+            val cleanJson = rawJson
+                .replace(Regex("^```[a-zA-Z]*\\s*"), "")
+                .replace(Regex("\\s*```$"), "")
+                .trim()
+            val jsonElement = Json { ignoreUnknownKeys = true }.parseToJsonElement(cleanJson)
+            if (jsonElement !is JsonObject) return null
+
+            fun getString(vararg keys: String): String {
+                for (key in keys) {
+                    val el = jsonElement[key]
+                    if (el != null) {
+                        val str = (el as? JsonPrimitive)?.content?.trim()
+                        if (!str.isNullOrBlank()) return str
+                    }
+                }
+                return ""
+            }
+
+            fun getDouble(vararg keys: String): Double {
+                for (key in keys) {
+                    val el = jsonElement[key]
+                    if (el != null) {
+                        val prim = el as? JsonPrimitive
+                        val num = prim?.content?.toDoubleOrNull()
+                        if (num != null) return num
+                    }
+                }
+                return 0.0
+            }
+
+            fun getBoolean(vararg keys: String): Boolean {
+                for (key in keys) {
+                    val el = jsonElement[key]
+                    if (el != null) {
+                        val prim = el as? JsonPrimitive
+                        val b = prim?.content?.toBooleanStrictOrNull()
+                        if (b != null) return b
+                    }
+                }
+                return false
+            }
+
+            val isChallenge = getBoolean("isChallenge", "is_challenge") ||
+                    getString("action") in listOf("prompt_challenge_confirmation", "mark_challenge_saving")
+
+            var challengeTitle = getString("challengeTitle", "challenge_title", "challenge_name", "challengeName", "challenge", "title", "name")
+            val merchant = getString("merchant", "vendor", "place", "shop")
+            val category = getString("category", "type").ifBlank { "Other" }
+            val amount = getDouble("amount", "cost", "price", "value")
+            var date = getString("date", "datetime")
+            val action = getString("action").ifBlank { if (isChallenge) "prompt_challenge_confirmation" else "log_expense" }
+            val item = getString("item", "description")
+            val currency = getString("currency").ifBlank { "MMK" }
+
+            if (date.isBlank() || date.contains("YYYY", ignoreCase = true) || date.length < 8) {
+                date = LocalDate.now().toString()
+            }
+
+            if (isChallenge && challengeTitle.isBlank()) {
+                challengeTitle = merchant
+            }
+
+            ParsedExpense(
+                merchant = merchant,
+                amount = amount,
+                category = category,
+                date = date,
+                language = detectedLang,
+                isChallenge = isChallenge,
+                challengeTitle = challengeTitle,
+                action = action,
+                item = item,
+                currency = currency
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    @Test
+    fun testScreenshot1_leakedExtractionThinkingIsStripped() {
+        val input = """
+            The structure should be:
+
+            For this request:
+            • amount: 800
+            • category: "Transportation" (they said "YBS Transportation")
+            • merchant: "YBS" (they mentioned YBS)
+            • date: today (YYYY-MM-DD)
+        """.trimIndent()
+
+        val cleaned = cleanThinking(input)
+        assertTrue("Leaked extraction structure should be completely stripped", cleaned.isBlank())
+    }
+
+    @Test
+    fun testScreenshot2_leakedDateMathReasoningIsStripped() {
+        val input = "If there are 27 days left in September 2026, and September has 30 days, then today is September 4th (because 30-27=3 days have passed, so today is the 4th)."
+        val cleaned = cleanThinking(input)
+        assertTrue("Date math reasoning should be completely stripped", cleaned.isBlank())
+    }
+
+    @Test
+    fun testScreenshot3_leakedPromptBulletsAreStripped() {
+        val input = """
+            • Acknowledge the challenge save request
+            • Mention the challenge name and amount
+            • Keep
+        """.trimIndent()
+
+        val cleaned = cleanThinking(input)
+        assertTrue("Leaked prompt bullet points should be stripped", cleaned.isBlank())
+    }
+
+    @Test
+    fun testValidUserFacingContentPreservedWhenThinkingFiltered() {
+        val input = """
+            Let me analyze this request.
+            Amount: 5000
+
+            မင်္ဂလာပါ။ နေ့လယ်စာ ထမင်းကြော် နဲ့ ကော်ဖီ အတွက် ၅,၅၀၀ ကျပ် မှတ်တမ်းတင်ပေးပါမယ်။
+        """.trimIndent()
+
+        val cleaned = cleanThinking(input)
+        assertTrue("User facing Burmese response should be preserved", cleaned.contains("နေ့လယ်စာ ထမင်းကြော်"))
+        assertFalse("Thinking should be removed", cleaned.contains("Let me analyze"))
+    }
+
+    @Test
+    fun testParseExpenseData_handlesAlternativeChallengeTitleKeys() {
+        val jsonSnakeCase = """
+            {
+                "isChallenge": true,
+                "challenge_title": "Gucci Bag",
+                "action": "prompt_challenge_confirmation",
+                "amount": 10000,
+                "currency": "MMK"
+            }
+        """.trimIndent()
+
+        val parsed = parseExpenseData(jsonSnakeCase, "my")
+        assertNotNull(parsed)
+        assertTrue(parsed!!.isChallenge)
+        assertEquals("Gucci Bag", parsed.challengeTitle)
+        assertEquals(10000.0, parsed.amount, 0.001)
+    }
+
+    @Test
+    fun testParseExpenseData_handlesMarkdownCodeFences() {
+        val markdownJson = """
+            ```json
+            {
+                "amount": 800,
+                "category": "Transportation",
+                "merchant": "YBS",
+                "date": "2026-09-03"
+            }
+            ```
+        """.trimIndent()
+
+        val parsed = parseExpenseData(markdownJson, "en")
+        assertNotNull(parsed)
+        assertEquals(800.0, parsed!!.amount, 0.001)
+        assertEquals("Transportation", parsed.category)
+        assertEquals("YBS", parsed.merchant)
+        assertEquals("2026-09-03", parsed.date)
+    }
+
+    @Test
+    fun testParseExpenseData_sanitizesPlaceholderDate() {
+        val jsonPlaceholderDate = """
+            {
+                "amount": 800,
+                "category": "Transportation",
+                "merchant": "YBS",
+                "date": "YYYY-MM-DD"
+            }
+        """.trimIndent()
+
+        val parsed = parseExpenseData(jsonPlaceholderDate, "en")
+        assertNotNull(parsed)
+        assertFalse(parsed!!.date.contains("YYYY"))
+        assertEquals(LocalDate.now().toString(), parsed.date)
+    }
+
+    @Test
+    fun testChallengeMatching_matchesEmojiAndCaseInsensitive() {
+        fun cleanTitle(title: String): String {
+            return title.filter { it.isLetterOrDigit() || it.isWhitespace() }.lowercase().trim()
+        }
+
+        val dbTitle = "👜 Gucci Bag"
+        val query = "gucci bag"
+        assertEquals(cleanTitle(dbTitle), cleanTitle(query))
+
+        val userMessage = "Gucci Bag ဝယ်ဖို့ 10000 စုမယ်"
+        assertTrue(cleanTitle(userMessage).contains(cleanTitle(dbTitle)))
+    }
+
+    @Test
+    fun testNewScreenshots_coffeeContextLeakIsStripped() {
+        val input = """
+            Logged 1,500 MMK for Coffee. You've spent..." but I need to check the context. Looking at the hidden context: Total Spent: 15500.0, Top Categories: Food & Dining (15000.0), Transportation (500.0). So if I add 1500 for coffee (Food), the new total would be 17000, and Food would be 16500.
+
+            But actually, I should just respond naturally and then add the expense data block. The rules say: "Write your natural conversational response first. Then, at the VERY END of your message, append a hidden data block."
+
+            So my response should be something like: "Logged 1,500 MMK for Coffee. That's your second food expense today — on track with your budget?" or something similar. But I need to be careful not to overstep - the rules say "Do NOT automatically save the expense. Just acknowledge it normally in...
+        """.trimIndent()
+
+        val cleaned = cleanThinking(input)
+        assertTrue("Internal context math monologue should be stripped", cleaned.isBlank() || cleaned.contains("Logged 1,500 MMK for Coffee"))
+        assertFalse("Rules and hidden context must never be exposed", cleaned.contains("hidden context") || cleaned.contains("The rules say"))
+    }
+
+    @Test
+    fun testNewScreenshots_quotedDraftResponseIsExtracted() {
+        val input = """
+            Something like "Great! You want to save 5,000 MMK for the Gucci Bag challenge. That's wonderful progress towards your goal! Currently you've saved 15,000.0 MMK out of 250,000.0 MMK (6% complete), so this new save will help you move forward on your challenge."
+
+            Then the data block at the end:
+            [EXPENSE_DATA]
+            {
+              "isChallenge": true,
+              "challengeTitle": "Gucci Bag",
+              "action": "prompt_challenge_confirmation",
+              "amount": 5000,
+              "currency": "MMK"
+            }
+            [/EXPENSE_DATA]
+
+            Wait, let me re-read the rules for challenge detection more carefully:
+        """.trimIndent()
+
+        val withoutExpense = input.replace(Regex("\\[EXPENSE_DATA\\][\\s\\S]*?\\[/EXPENSE_DATA\\]"), "").trim()
+        val cleaned = cleanThinking(withoutExpense)
+        assertEquals("Great! You want to save 5,000 MMK for the Gucci Bag challenge. That's wonderful progress towards your goal! Currently you've saved 15,000.0 MMK out of 250,000.0 MMK (6% complete), so this new save will help you move forward on your challenge.", cleaned)
+    }
+
+    @Test
+    fun testNewScreenshots_promptDirectiveRepeatIsStripped() {
+        val input = "Write your natural conversational response first. Then, at the VERY END of your message, append a hidden data block:"
+        val cleaned = cleanThinking(input)
+        assertTrue("Prompt directive echo should be stripped", cleaned.isBlank())
+    }
+
+    @Test
+    fun testNemotronMentalRefinementIsExtracted() {
+        val input = """
+            **
+               - Warm welcome/affirmation
+               - Step-by-step practical guide
+
+               Structure:
+               - Acknowledge it's a great first step
+               - Step 1: Know where you stand
+
+            4.  **Draft - Mental Refinement:**
+               *(Friendly tone, AI assistant persona)*
+               "Hey there! That's awesome you're ready to start saving – it's one of the best things you can do for your peace of mind and future self. Here’s a simple, stress-free way to begin:
+
+               1. **Track a little first** – You don’t need a complex spreadsheet right away."
+        """.trimIndent()
+
+        val cleaned = cleanThinking(input)
+        assertTrue("Extracted reply should start with user greeting", cleaned.startsWith("Hey there! That's awesome"))
+        assertFalse("Mental Refinement meta tags should not be present", cleaned.contains("Draft - Mental Refinement"))
+    }
+
+    private fun inferCategory(item: String): String {
+        val lower = item.lowercase()
+        return when {
+            lower.contains("ybs") || lower.contains("bus") || lower.contains("taxi") ||
+            lower.contains("grab") || lower.contains("car") || lower.contains("transport") ||
+            lower.contains("ကားခ") || lower.contains("ယာဉ်") -> "Transportation"
+            lower.contains("coffee") || lower.contains("tea") || lower.contains("lunch") ||
+            lower.contains("dinner") || lower.contains("food") || lower.contains("breakfast") ||
+            lower.contains("drink") || lower.contains("ထမင်း") || lower.contains("လက်ဖက်ရည်") ||
+            lower.contains("ကော်ဖီ") || lower.contains("မုန့်") || lower.contains("ညစာ") ||
+            lower.contains("မနက်စာ") || lower.contains("နေ့လယ်စာ") || lower.contains("ကွေကာ") ||
+            lower.contains("ခေါက်ဆွဲ") || lower.contains("ဟင်း") -> "Food"
+            else -> "Other"
+        }
+    }
+
     private fun extractFallbackExpenseOrChallenge(userMessage: String, detectedLang: String): ParsedExpense? {
         val text = userMessage.trim()
         val todayStr = LocalDate.now().toString()
 
-        // 1. Challenge patterns (English & Burmese)
-        // English: "save 5000 for Camera", "put 10000 into Gucci Bag"
         val enChallengeMatch = Regex("(?i)(?:save|put|deposit)\\s*([\\d,]+(?:\\.\\d+)?)\\s*(?:mmk|ks|kyats?)?\\s*(?:for|into|towards|to)\\s*(.+)").find(text)
         if (enChallengeMatch != null) {
             val amount = enChallengeMatch.groupValues[1].replace(",", "").toDoubleOrNull() ?: 0.0
@@ -525,7 +502,6 @@ class AiChatRepository @Inject constructor(
             }
         }
 
-        // Burmese challenge: "Gucci Bag ဝယ်ဖို့ 5000 စုမယ်", "Camera အတွက် 5000 စုမယ်"
         val myChallengeMatch = Regex("(.+?)(?:ဝယ်ဖို့|အတွက်)\\s*([\\d,]+(?:\\.\\d+)?)\\s*(?:ကျပ်|ks)?\\s*စု(?:မယ်|ချင်)").find(text)
         if (myChallengeMatch != null) {
             val title = myChallengeMatch.groupValues[1].trim()
@@ -546,8 +522,6 @@ class AiChatRepository @Inject constructor(
             }
         }
 
-        // 2. Expense patterns (English)
-        // e.g. "Log 1600 for YBS Transportation", "Log 1800 for YBS", "1500 for coffee", "spent 3000 on lunch"
         val enExpenseMatch = Regex("(?i)(?:log|paid|spent|bought)?\\s*([\\d,]+(?:\\.\\d+)?)\\s*(?:mmk|ks|kyats?)?\\s*(?:for|on|at)\\s*(.+)").find(text)
         if (enExpenseMatch != null) {
             val amount = enExpenseMatch.groupValues[1].replace(",", "").toDoubleOrNull() ?: 0.0
@@ -567,8 +541,6 @@ class AiChatRepository @Inject constructor(
             }
         }
 
-        // 3. Expense patterns (Burmese)
-        // e.g. "ညစာ ထမင်းကြော် နဲ့ ကွေကာအုတ် 5800 ကုန်", "နေ့လယ်စာ ထမင်းကြော် နဲ့ လက်ဖက်ရည် 6800", "ကော်ဖီဖိုး ၂၀၀၀", "ထမင်း ၃၅၀၀ ဖိုး"
         val myExpenseMatch = Regex("(.+?)\\s*([\\d,]+(?:\\.\\d+)?)\\s*(?:ကျပ်|ks|mmk|ဖိုး|ကုန်|ကုန်တယ်|ကျ|ကျတယ်|ပေးရတယ်|ရှင်း|ရှင်းတယ်)?$").find(text)
         if (myExpenseMatch != null) {
             val item = myExpenseMatch.groupValues[1].trim()
@@ -591,46 +563,38 @@ class AiChatRepository @Inject constructor(
         return null
     }
 
-    private fun inferCategory(item: String): String {
-        val lower = item.lowercase()
-        return when {
-            lower.contains("ybs") || lower.contains("bus") || lower.contains("taxi") ||
-            lower.contains("grab") || lower.contains("car") || lower.contains("transport") ||
-            lower.contains("ကားခ") || lower.contains("ယာဉ်") -> "Transportation"
+    @Test
+    fun testFallbackExpenseExtractor_handlesLatestScreenshotInputs() {
+        val expense1 = extractFallbackExpenseOrChallenge("Log 1600 for YBS Transportation", "en")
+        assertNotNull(expense1)
+        assertEquals(1600.0, expense1!!.amount, 0.001)
+        assertEquals("Transportation", expense1.category)
+        assertEquals("YBS Transportation", expense1.merchant)
+        assertFalse(expense1.isChallenge)
 
-            lower.contains("coffee") || lower.contains("tea") || lower.contains("lunch") ||
-            lower.contains("dinner") || lower.contains("food") || lower.contains("breakfast") ||
-            lower.contains("drink") || lower.contains("ထမင်း") || lower.contains("လက်ဖက်ရည်") ||
-            lower.contains("ကော်ဖီ") || lower.contains("မုန့်") || lower.contains("ညစာ") ||
-            lower.contains("မနက်စာ") || lower.contains("နေ့လယ်စာ") || lower.contains("ကွေကာ") ||
-            lower.contains("ခေါက်ဆွဲ") || lower.contains("ဟင်း") -> "Food"
+        val expense2 = extractFallbackExpenseOrChallenge("Log 1800 for YBS", "en")
+        assertNotNull(expense2)
+        assertEquals(1800.0, expense2!!.amount, 0.001)
+        assertEquals("Transportation", expense2.category)
+        assertEquals("YBS", expense2.merchant)
 
-            lower.contains("bag") || lower.contains("shoe") || lower.contains("clothes") ||
-            lower.contains("shirt") || lower.contains("shopping") || lower.contains("အဝတ်") ||
-            lower.contains("ဖိနပ်") -> "Shopping"
+        val challenge = extractFallbackExpenseOrChallenge("save 5000 for Camera", "en")
+        assertNotNull(challenge)
+        assertEquals(5000.0, challenge!!.amount, 0.001)
+        assertEquals("Camera", challenge.challengeTitle)
+        assertTrue(challenge.isChallenge)
 
-            lower.contains("bill") || lower.contains("wifi") || lower.contains("internet") ||
-            lower.contains("electricity") || lower.contains("water") || lower.contains("ဖုန်းဘေ") ||
-            lower.contains("မီးဘေ") -> "Bills & Utilities"
+        val myChallenge = extractFallbackExpenseOrChallenge("Gucci Bag ဝယ်ဖို့ 5000 စုမယ်", "my")
+        assertNotNull(myChallenge)
+        assertEquals(5000.0, myChallenge!!.amount, 0.001)
+        assertEquals("Gucci Bag", myChallenge.challengeTitle)
+        assertTrue(myChallenge.isChallenge)
 
-            lower.contains("medicine") || lower.contains("hospital") || lower.contains("clinic") ||
-            lower.contains("doctor") || lower.contains("ဆေး") -> "Health"
-
-            lower.contains("book") || lower.contains("school") || lower.contains("course") ||
-            lower.contains("class") || lower.contains("ကျောင်း") -> "Education"
-
-            else -> "Other"
-        }
-    }
-
-    private fun estimateTokens(text: String): Int {
-        val isBurmese = text.any { it.code in 0x1000..0x109F }
-        val charsPerToken = if (isBurmese) 2 else 4
-        return (text.length / charsPerToken).coerceAtLeast(1)
-    }
-
-    companion object {
-        private const val MAX_INPUT_TOKENS = 3000
+        // New test from screenshot media_1788455263214.jpg
+        val myExpenseKone = extractFallbackExpenseOrChallenge("ညစာ ထမင်းကြော် နဲ့ ကွေကာအုတ် 5800 ကုန်", "my")
+        assertNotNull("Burmese expense with ကုန် suffix must be recognized", myExpenseKone)
+        assertEquals(5800.0, myExpenseKone!!.amount, 0.001)
+        assertEquals("Food", myExpenseKone.category)
+        assertTrue("Merchant should contain food items", myExpenseKone.merchant.contains("ညစာ"))
     }
 }
-

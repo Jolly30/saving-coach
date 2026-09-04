@@ -17,5 +17,6 @@ interface UserRepository {
     fun getUserProfileFlow(uid: String): kotlinx.coroutines.flow.Flow<User?>
     suspend fun updateCurrencyPreference(uid: String, currency: String): Result<Unit>
     suspend fun updateLanguagePreference(uid: String, language: String): Result<Unit>
+    suspend fun deleteUserProfile(uid: String): Result<Unit>
 }
 

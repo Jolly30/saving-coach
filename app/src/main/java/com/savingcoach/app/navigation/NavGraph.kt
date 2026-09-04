@@ -105,9 +105,20 @@ fun NavGraph(
             DashboardScreen(
                 onNavigateToChallenges = { challengeId ->
                     if (challengeId != null) {
-                        navController.navigate("${Routes.Challenges.route}?challengeId=$challengeId")
+                        navController.navigate("${Routes.Challenges.route}?challengeId=$challengeId") {
+                            popUpTo(Routes.Dashboard.route) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                        }
                     } else {
-                        navController.navigate(Routes.Challenges.route)
+                        navController.navigate(Routes.Challenges.route) {
+                            popUpTo(Routes.Dashboard.route) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 },
                 onNavigateToCalendarHistory = {
@@ -254,6 +265,9 @@ fun NavGraph(
                 onNavigateToEditLanguage = {
                     navController.navigate(Routes.EditLanguage.route)
                 },
+                onNavigateToEditAiKeys = {
+                    navController.navigate(Routes.EditAiKeys.route)
+                },
                 onNavigateToAbout = {
                     navController.navigate(Routes.About.route)
                 },
@@ -263,6 +277,14 @@ fun NavGraph(
                         launchSingleTop = true
                     }
                 }
+            )
+        }
+
+        composable(Routes.EditAiKeys.route) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) { navController.getBackStackEntry(Routes.Settings.route) }
+            com.savingcoach.app.ui.settings.EditAiKeysScreen(
+                viewModel = hiltViewModel(parentEntry),
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

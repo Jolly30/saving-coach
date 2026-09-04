@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.savingcoach.app.data.repository.AiPreferences
+
 data class SettingsUiState(
     val username: String = "Loading...",
     val email: String = "Loading...",
@@ -36,6 +38,8 @@ data class SettingsUiState(
     val currencyPreference: String = "MMK",
     val language: AppLanguage = AppLanguage.EN,
     val themeMode: AppThemeMode = AppThemeMode.LIGHT,
+    val userGeminiKey: String = "",
+    val userOpenRouterKey: String = "",
     val isLoading: Boolean = true,
     val error: String? = null,
     val isExporting: Boolean = false,
@@ -55,7 +59,8 @@ class SettingsViewModel @Inject constructor(
     private val marketApiService: MarketApiService,
     private val exchangeRateRepository: ExchangeRateRepository,
     private val themePreferences: ThemePreferences,
-    private val languagePreferences: LanguagePreferences
+    private val languagePreferences: LanguagePreferences,
+    private val aiPreferences: AiPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -65,6 +70,28 @@ class SettingsViewModel @Inject constructor(
         loadUserProfile()
         observeThemeMode()
         observeLanguage()
+        observeAiKeys()
+    }
+
+    private fun observeAiKeys() {
+        viewModelScope.launch {
+            aiPreferences.geminiApiKey.collect { key ->
+                _uiState.update { it.copy(userGeminiKey = key) }
+            }
+        }
+        viewModelScope.launch {
+            aiPreferences.openRouterApiKey.collect { key ->
+                _uiState.update { it.copy(userOpenRouterKey = key) }
+            }
+        }
+    }
+
+    fun saveAiKeys(geminiKey: String, openRouterKey: String) {
+        aiPreferences.saveKeys(geminiKey, openRouterKey)
+    }
+
+    fun clearAiKeys() {
+        aiPreferences.clearKeys()
     }
 
     private fun observeThemeMode() {

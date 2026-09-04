@@ -208,6 +208,11 @@ class MockAuthRepository @Inject constructor() : AuthRepository {
         return Result.success(Unit)
     }
 
+    override suspend fun deleteCurrentUser(): Result<Unit> {
+        signedIn = false
+        return Result.success(Unit)
+    }
+
     override suspend fun signOut() {
         signedIn = false
     }

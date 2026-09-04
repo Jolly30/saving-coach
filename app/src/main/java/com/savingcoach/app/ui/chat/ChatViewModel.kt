@@ -164,11 +164,31 @@ class ChatViewModel @Inject constructor(
                             }
                             val isChallenge = parsed.isChallenge || parsed.action == "prompt_challenge_confirmation" || parsed.action == "mark_challenge_saving"
                             if (isChallenge) {
-                                val challengeTitle = parsed.challengeTitle.ifBlank { parsed.merchant }
-                                val cleanQuery = cleanTitleForComparison(challengeTitle)
-                                val targetChallenge = activeChalls.firstOrNull { 
-                                    cleanTitleForComparison(it.title) == cleanQuery
+                                var challengeTitle = parsed.challengeTitle.ifBlank { parsed.merchant }
+                                var cleanQuery = cleanTitleForComparison(challengeTitle)
+                                var targetChallenge = if (cleanQuery.isNotBlank()) {
+                                    activeChalls.firstOrNull { cleanTitleForComparison(it.title) == cleanQuery }
+                                } else null
+
+                                // Fallback: If not matched by title, match against active challenges mentioned in user content or AI content
+                                if (targetChallenge == null && activeChalls.isNotEmpty()) {
+                                    val cleanUserContent = cleanTitleForComparison(content)
+                                    val cleanAiContent = cleanTitleForComparison(aiMessage.content)
+                                    targetChallenge = activeChalls.firstOrNull { chall ->
+                                        val cleanDb = cleanTitleForComparison(chall.title)
+                                        cleanDb.isNotBlank() && (cleanUserContent.contains(cleanDb) || cleanAiContent.contains(cleanDb))
+                                    }
+                                    if (targetChallenge != null) {
+                                        challengeTitle = targetChallenge.title
+                                        cleanQuery = cleanTitleForComparison(challengeTitle)
+                                        val updatedParsed = parsed.copy(
+                                            challengeTitle = targetChallenge.title,
+                                            merchant = targetChallenge.title
+                                        )
+                                        finalMessage = finalMessage.copy(parsedExpense = updatedParsed)
+                                    }
                                 }
+
                                 if (targetChallenge != null) {
                                     if (hasDepositedToday(targetChallenge.id)) {
                                         val warningText = if (parsed.language == "my") {

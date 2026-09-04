@@ -105,7 +105,7 @@ fun AboutScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
-                            painter = painterResource(id = R.drawable.ic_piggy_hero),
+                            painter = painterResource(id = R.drawable.ic_app_logo),
                             contentDescription = "Saving Coach Logo",
                             modifier = Modifier.size(68.dp)
                         )

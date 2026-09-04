@@ -222,18 +222,41 @@ fun ChatWindowContent(
         }
     }
 
-    val isImeVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
-    LaunchedEffect(messages.size, isTyping, isImeVisible) {
-        if (messages.isNotEmpty() || isTyping) {
-            kotlinx.coroutines.delay(200)
+    var hasScrolledToInitial by remember { mutableStateOf(false) }
+
+    LaunchedEffect(messages.size, isTyping) {
+        if (messages.isNotEmpty()) {
             val lastUserIndex = messages.indexOfLast { it.role == "user" }
             val targetIndex = if (lastUserIndex != -1) lastUserIndex else (messages.size - 1)
             if (targetIndex >= 0) {
-                try {
-                    listState.animateScrollToItem(targetIndex)
-                } catch (e: Exception) {
-                    // Ignore index exceptions
+                if (!hasScrolledToInitial) {
+                    hasScrolledToInitial = true
+                    // On initial load, jump instantly to the latest turn so old messages never flash
+                    kotlinx.coroutines.delay(50)
+                    try {
+                        listState.scrollToItem(targetIndex, 0)
+                    } catch (_: Exception) {}
+                } else {
+                    // Smoothly animate latest turn to the top
+                    kotlinx.coroutines.delay(80)
+                    try {
+                        listState.animateScrollToItem(targetIndex, 0)
+                    } catch (_: Exception) {}
                 }
+            }
+        }
+    }
+
+    val isImeVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
+    LaunchedEffect(isImeVisible) {
+        if (isImeVisible && messages.isNotEmpty()) {
+            val lastUserIndex = messages.indexOfLast { it.role == "user" }
+            val targetIndex = if (lastUserIndex != -1) lastUserIndex else (messages.size - 1)
+            if (targetIndex >= 0) {
+                kotlinx.coroutines.delay(100)
+                try {
+                    listState.animateScrollToItem(targetIndex, 0)
+                } catch (_: Exception) {}
             }
         }
     }
@@ -427,11 +450,23 @@ fun ChatWindowContent(
                         TypingIndicator()
                     }
                 }
+                if (messages.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.fillParentMaxHeight(0.85f))
+                    }
+                }
             }
 
-            // Scroll to Bottom Button
+            // Scroll to Bottom Button - only show when scrolled up reading older history
             val showScrollToBottom by remember {
-                derivedStateOf { listState.canScrollForward }
+                derivedStateOf {
+                    val lastUser = messages.indexOfLast { it.role == "user" }
+                    if (lastUser != -1) {
+                        listState.firstVisibleItemIndex < lastUser
+                    } else {
+                        listState.canScrollForward
+                    }
+                }
             }
 
             Box(
@@ -447,9 +482,10 @@ fun ChatWindowContent(
                     FloatingActionButton(
                         onClick = {
                             coroutineScope.launch {
-                                val targetIndex = messages.size + if (isTyping) 1 else 0
+                                val lastUser = messages.indexOfLast { it.role == "user" }
+                                val targetIndex = if (lastUser != -1) lastUser else (messages.size - 1)
                                 if (targetIndex >= 0) {
-                                    listState.animateScrollToItem(targetIndex)
+                                    listState.animateScrollToItem(targetIndex, 0)
                                 }
                             }
                         },
@@ -1145,15 +1181,32 @@ fun MessageItem(
                             Text(text = cardTitle, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = EmeraldGreen)
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline)
 
-                            val exists = if (isChallenge) {
+                            val resolvedChallenge = if (isChallenge) {
                                 val challengeTitle = parsed.challengeTitle.ifBlank { parsed.merchant }
                                 val cleanQuery = challengeTitle.filter { it.isLetterOrDigit() || it.isWhitespace() }.lowercase().trim()
-                                activeChallenges.any {
-                                    val cleanDb = it.title.filter { c -> c.isLetterOrDigit() || c.isWhitespace() }.lowercase().trim()
-                                    cleanDb == cleanQuery
+                                if (cleanQuery.isNotBlank()) {
+                                    activeChallenges.firstOrNull {
+                                        val cleanDb = it.title.filter { c -> c.isLetterOrDigit() || c.isWhitespace() }.lowercase().trim()
+                                        cleanDb == cleanQuery
+                                    }
+                                } else {
+                                    // Fallback: match from AI message content
+                                    val cleanMsgContent = message.content.filter { it.isLetterOrDigit() || it.isWhitespace() }.lowercase()
+                                    activeChallenges.firstOrNull {
+                                        val cleanDb = it.title.filter { c -> c.isLetterOrDigit() || c.isWhitespace() }.lowercase().trim()
+                                        cleanDb.isNotBlank() && cleanMsgContent.contains(cleanDb)
+                                    }
                                 }
+                            } else null
+
+                            val effectiveParsed = if (isChallenge && resolvedChallenge != null && parsed.challengeTitle.isBlank()) {
+                                parsed.copy(challengeTitle = resolvedChallenge.title, merchant = resolvedChallenge.title)
+                            } else parsed
+
+                            val exists = if (isChallenge) {
+                                resolvedChallenge != null
                             } else {
-                                val categoryName = parsed.category
+                                val categoryName = effectiveParsed.category
                                 val cleanQuery = categoryName.filter { it.isLetterOrDigit() || it.isWhitespace() }.lowercase().trim()
                                 categories.any {
                                     val cleanDb = it.name.filter { c -> c.isLetterOrDigit() || c.isWhitespace() }.lowercase().trim()
@@ -1161,37 +1214,30 @@ fun MessageItem(
                                 }
                             }
 
-                            val matchedChallengeForAmount = if (isChallenge) {
-                                val challengeTitle = parsed.challengeTitle.ifBlank { parsed.merchant }
-                                val cleanQuery = challengeTitle.filter { it.isLetterOrDigit() || it.isWhitespace() }.lowercase().trim()
-                                activeChallenges.firstOrNull {
-                                    val cleanDb = it.title.filter { c -> c.isLetterOrDigit() || c.isWhitespace() }.lowercase().trim()
-                                    cleanDb == cleanQuery
-                                }
-                            } else null
+                            val matchedChallengeForAmount = resolvedChallenge
 
                             val shouldHideAmount = isChallenge && (
-                                parsed.amount == 0.0 ||
+                                effectiveParsed.amount == 0.0 ||
                                 matchedChallengeForAmount?.template == com.savingcoach.app.data.model.ChallengeTemplate.NO_SPEND ||
                                 matchedChallengeForAmount?.template == com.savingcoach.app.data.model.ChallengeTemplate.ENVELOPE
                             )
 
                             if (!shouldHideAmount) {
-                                Text("$lblAmount: ${parsed.amount} ${parsed.currency}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                Text("$lblAmount: ${effectiveParsed.amount} ${effectiveParsed.currency}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             }
                             
                             val merchantVal = if (isChallenge) {
-                                val title = parsed.challengeTitle.ifBlank { parsed.merchant }
+                                val title = resolvedChallenge?.title ?: effectiveParsed.challengeTitle.ifBlank { effectiveParsed.merchant }
                                 val suffix = if (exists || isCardSaved) "" else (if (isMy) " (မရှိသေးပါ)" else " (Non-existent)")
                                 "$title$suffix"
                             } else {
-                                parsed.item.ifEmpty { parsed.merchant.ifEmpty { "—" } }
+                                effectiveParsed.item.ifEmpty { effectiveParsed.merchant.ifEmpty { "—" } }
                             }
                             Text("$lblMerchant: $merchantVal", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             
-                            if (!isChallenge && (parsed.action != "prompt_user_category_choice" || isCardSaved)) {
+                            if (!isChallenge && (effectiveParsed.action != "prompt_user_category_choice" || isCardSaved)) {
                                 val suffix = if (exists || isCardSaved) "" else (if (isMy) " (မရှိသေးပါ)" else " (Non-existent)")
-                                val catText = "${parsed.category}$suffix"
+                                val catText = "${effectiveParsed.category}$suffix"
                                 Text("$lblCategory: $catText", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             if (parsed.date.isNotBlank()) {
@@ -1307,14 +1353,14 @@ fun MessageItem(
                                         }
                                     }
                                     "prompt_challenge_confirmation" -> {
-                                        val challengeTitle = parsed.challengeTitle.ifBlank { parsed.merchant }
+                                        val challengeTitle = effectiveParsed.challengeTitle.ifBlank { effectiveParsed.merchant }
                                         val cleanTitle = challengeTitle.filter { it.isLetterOrDigit() || it.isWhitespace() }.lowercase().trim()
                                         val matchedChallenge = activeChallenges.firstOrNull {
                                             val cleanDb = it.title.filter { c -> c.isLetterOrDigit() || c.isWhitespace() }.lowercase().trim()
                                             cleanDb == cleanTitle
                                         }
                                         val isFlexiWithNoAmount = matchedChallenge?.template == com.savingcoach.app.data.model.ChallengeTemplate.FLEXI &&
-                                            parsed.amount == 0.0
+                                            effectiveParsed.amount == 0.0
 
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -1325,7 +1371,7 @@ fun MessageItem(
                                                     if (isFlexiWithNoAmount) {
                                                         showAmountInputDialog = true
                                                     } else {
-                                                        onConfirmChallenge(parsed)
+                                                        onConfirmChallenge(effectiveParsed)
                                                     }
                                                 },
                                                 enabled = exists,
@@ -1346,9 +1392,18 @@ fun MessageItem(
                                                     fontSize = 12.sp
                                                 )
                                             }
+                                            OutlinedButton(
+                                                onClick = { showSwitchChallengeDialog = true },
+                                                modifier = Modifier.weight(1.1f),
+                                                border = BorderStroke(1.dp, EmeraldGreen),
+                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = EmeraldGreen),
+                                                contentPadding = PaddingValues(vertical = 4.dp)
+                                            ) {
+                                                Text(if (isMy) "စုဘူးပြောင်း" else "Switch", fontSize = 12.sp, maxLines = 1)
+                                            }
                                             Button(
                                                 onClick = { onCancelAction(index) },
-                                                modifier = Modifier.weight(1f),
+                                                modifier = Modifier.weight(0.9f),
                                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2)),
                                                 contentPadding = PaddingValues(vertical = 4.dp)
                                             ) {
@@ -1358,7 +1413,7 @@ fun MessageItem(
                                     }
                                     else -> {
                                         if (isChallenge) {
-                                            val challengeTitle = parsed.challengeTitle.ifBlank { parsed.merchant }
+                                            val challengeTitle = effectiveParsed.challengeTitle.ifBlank { effectiveParsed.merchant }
                                             val cleanTitle = challengeTitle.filter { it.isLetterOrDigit() || it.isWhitespace() }.lowercase().trim()
                                             val matchedChallenge = activeChallenges.firstOrNull {
                                                 val cleanDb = it.title.filter { c -> c.isLetterOrDigit() || c.isWhitespace() }.lowercase().trim()
@@ -1366,18 +1421,18 @@ fun MessageItem(
                                             }
                                             val isFlexiWithNoAmount = isChallenge &&
                                                 matchedChallenge?.template == com.savingcoach.app.data.model.ChallengeTemplate.FLEXI &&
-                                                parsed.amount == 0.0
+                                                effectiveParsed.amount == 0.0
 
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                                             ) {
                                                 Button(
                                                     onClick = {
                                                         if (isFlexiWithNoAmount) {
                                                             showAmountInputDialog = true
                                                         } else {
-                                                            onConfirmChallenge(parsed)
+                                                            onConfirmChallenge(effectiveParsed)
                                                         }
                                                     },
                                                     enabled = exists,
@@ -1398,9 +1453,18 @@ fun MessageItem(
                                                         fontSize = 12.sp
                                                     )
                                                 }
+                                                OutlinedButton(
+                                                    onClick = { showSwitchChallengeDialog = true },
+                                                    modifier = Modifier.weight(1.1f),
+                                                    border = BorderStroke(1.dp, EmeraldGreen),
+                                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = EmeraldGreen),
+                                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                                ) {
+                                                    Text(if (isMy) "စုဘူးပြောင်း" else "Switch", fontSize = 12.sp, maxLines = 1)
+                                                }
                                                 Button(
                                                     onClick = { onCancelAction(index) },
-                                                    modifier = Modifier.weight(1f),
+                                                    modifier = Modifier.weight(0.9f),
                                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2)),
                                                     contentPadding = PaddingValues(vertical = 4.dp)
                                                 ) {
