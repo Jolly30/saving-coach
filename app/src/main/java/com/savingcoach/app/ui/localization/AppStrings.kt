@@ -154,6 +154,20 @@ interface Strings {
     val currency: String
     val language: String
     val notifications: String
+    val aiAssistantKeysTitle: String
+    val aiAssistantKeysDesc: String
+    val geminiApiKeyLabel: String
+    val openRouterApiKeyLabel: String
+    val geminiKeyHint: String
+    val openRouterKeyHint: String
+    val customKeyConfigured: String
+    val defaultSystemKey: String
+    val saveKeys: String
+    val clearKeys: String
+    val keysSavedSuccess: String
+    val keysClearedSuccess: String
+    val googleAiStudioHint: String
+    val openRouterHint: String
     val deleteNotificationTitle: String
     val deleteNotificationConfirmMsg: String
     val selectAllNotifications: String
@@ -495,6 +509,20 @@ object EnglishStrings : Strings {
     override val currency = "Currency"
     override val language = "Language"
     override val notifications = "Notifications"
+    override val aiAssistantKeysTitle = "AI Assistant API Keys"
+    override val aiAssistantKeysDesc = "Add your own API key to bypass shared rate limits. If your key quota is reached, it will automatically fall back to the system key."
+    override val geminiApiKeyLabel = "Gemini API Key"
+    override val openRouterApiKeyLabel = "OpenRouter API Key"
+    override val geminiKeyHint = "AIzaSy..."
+    override val openRouterKeyHint = "sk-or-v1-..."
+    override val customKeyConfigured = "Custom key configured"
+    override val defaultSystemKey = "Default (System Key)"
+    override val saveKeys = "Save Keys"
+    override val clearKeys = "Clear Keys"
+    override val keysSavedSuccess = "API keys saved successfully"
+    override val keysClearedSuccess = "API keys cleared"
+    override val googleAiStudioHint = "Free from Google AI Studio (aistudio.google.com)"
+    override val openRouterHint = "Free & paid models at openrouter.ai/keys"
     override val deleteNotificationTitle = "Delete Notification"
     override val deleteNotificationConfirmMsg = "Are you sure you want to delete this notification?"
     override val selectAllNotifications = "Select all notifications"
@@ -866,6 +894,20 @@ object BurmeseStrings : Strings {
     override val currency = "ငွေကြေး"
     override val language = "ဘာသာစကား"
     override val notifications = "အသိပေးချက်များ"
+    override val aiAssistantKeysTitle = "လက်ထောက် AI သော့များ"
+    override val aiAssistantKeysDesc = "မျှဝေထားသော ကန့်သတ်ချက်များကို ကျော်လွှားရန် သင့်ကိုယ်ပိုင် API သော့ကို ထည့်သွင်းပါ။ သင့်သော့ ကန့်သတ်ချက်ပြည့်ပါက စနစ်သော့သို့ အလိုအလျောက် ပြောင်းလဲပါမည်။"
+    override val geminiApiKeyLabel = "Gemini API သော့ (Google AI Studio)"
+    override val openRouterApiKeyLabel = "OpenRouter API သော့"
+    override val geminiKeyHint = "AIzaSy..."
+    override val openRouterKeyHint = "sk-or-v1-..."
+    override val customKeyConfigured = "ကိုယ်ပိုင်သော့ ထည့်ထားသည်"
+    override val defaultSystemKey = "စနစ်သော့ (မူလ)"
+    override val saveKeys = "သော့များ သိမ်းမည်"
+    override val clearKeys = "သော့များ ရှင်းမည်"
+    override val keysSavedSuccess = "API သော့များကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ"
+    override val keysClearedSuccess = "API သော့များကို ရှင်းလင်းပြီးပါပြီ"
+    override val googleAiStudioHint = "Google AI Studio (aistudio.google.com) မှ အခမဲ့ ရယူနိုင်ပါသည်"
+    override val openRouterHint = "openrouter.ai/keys မှ ရယူနိုင်ပါသည်"
     override val deleteNotificationTitle = "အသိပေးချက် ဖျက်ရန်"
     override val deleteNotificationConfirmMsg = "ဤအသိပေးချက်ကို ဖျက်ရန် သေချာပါသလား?"
     override val selectAllNotifications = "အသိပေးချက် အားလုံးကို ရွေးရန်"

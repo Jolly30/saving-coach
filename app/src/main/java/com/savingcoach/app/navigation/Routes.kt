@@ -29,6 +29,7 @@ sealed class Routes(val route: String) {
     object ExportData : Routes("export_data")
     object EditCurrency : Routes("edit_currency")
     object EditLanguage : Routes("edit_language")
+    object EditAiKeys : Routes("edit_ai_keys")
     object About : Routes("about")
 }
 

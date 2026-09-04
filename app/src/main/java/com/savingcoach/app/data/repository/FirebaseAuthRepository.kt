@@ -110,4 +110,13 @@ class FirebaseAuthRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    override suspend fun deleteCurrentUser(): Result<Unit> {
+        return try {
+            firebaseAuth.currentUser?.delete()?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

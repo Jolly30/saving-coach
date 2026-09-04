@@ -46,6 +46,7 @@ fun SettingsScreen(
     onNavigateToExportData: () -> Unit = {},
     onNavigateToEditCurrency: () -> Unit = {},
     onNavigateToEditLanguage: () -> Unit = {},
+    onNavigateToEditAiKeys: () -> Unit = {},
     onNavigateToAbout: () -> Unit = {},
     onNavigateToAuth: () -> Unit = {}
 ) {
@@ -221,6 +222,17 @@ fun SettingsScreen(
                         else -> "English"
                     }
                     SettingsItem(label = strings.language, value = displayLanguage, onClick = onNavigateToEditLanguage)
+                    SettingsDivider()
+                    val displayAiKeyStatus = if (uiState.userGeminiKey.isNotBlank() || uiState.userOpenRouterKey.isNotBlank()) {
+                        strings.customKeyConfigured
+                    } else {
+                        strings.defaultSystemKey
+                    }
+                    SettingsItem(
+                        label = strings.aiAssistantKeysTitle,
+                        value = displayAiKeyStatus,
+                        onClick = onNavigateToEditAiKeys
+                    )
                     SettingsDivider()
                     SettingsSwitchItem(label = strings.notifications, initialValue = true, onCheckedChange = {})
                 }

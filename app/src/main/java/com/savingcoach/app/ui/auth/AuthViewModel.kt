@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
 import javax.inject.Inject
@@ -24,6 +26,7 @@ sealed interface AuthNavigationEvent {
 
 data class AuthUiState(
     val isLoading: Boolean = false,
+    val isGoogleLoading: Boolean = false,
     val isSignedIn: Boolean = false,
     val needsOnboarding: Boolean = false,
     val needsEmailVerification: Boolean = false,
@@ -140,28 +143,90 @@ class AuthViewModel @Inject constructor(
                     onSuccess = {
                         val uid = authRepository.getCurrentUserId()
                         if (uid != null) {
-                            userRepository.createUserProfile(
-                                com.savingcoach.app.data.model.User(
-                                    uid = uid,
-                                    email = emailInput,
-                                    username = finalUsername,
-                                    onboardingCompleted = false
+                            viewModelScope.launch {
+                                userRepository.createUserProfile(
+                                    com.savingcoach.app.data.model.User(
+                                        uid = uid,
+                                        email = emailInput,
+                                        username = finalUsername,
+                                        onboardingCompleted = false
+                                    )
                                 )
-                            )
+                            }
                         }
-                        // Send email verification immediately
-                        authRepository.sendEmailVerification()
+                        viewModelScope.launch {
+                            authRepository.sendEmailVerification()
+                        }
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             needsEmailVerification = true,
                             verificationEmail = emailInput,
                             error = null
                         )
-                        viewModelScope.launch {
-                            _navigationEvents.emit(AuthNavigationEvent.NavigateToVerifyEmail)
-                        }
+                        _navigationEvents.emit(AuthNavigationEvent.NavigateToVerifyEmail)
                     },
                     onFailure = { exception ->
+                        val isCollision = exception is com.google.firebase.auth.FirebaseAuthUserCollisionException ||
+                                exception.message?.contains("already in use", ignoreCase = true) == true
+
+                        if (isCollision) {
+                            // Check if the existing account with this email is unverified
+                            val signInResult = authRepository.signInWithEmail(emailInput, passwordInput)
+                            if (signInResult.isSuccess && !authRepository.isEmailVerified()) {
+                                // Account exists with this password but was never verified.
+                                // Clean up the stale unverified account and recreate it cleanly.
+                                val oldUid = authRepository.getCurrentUserId()
+                                if (oldUid != null) {
+                                    try {
+                                        userRepository.deleteUserProfile(oldUid)
+                                    } catch (_: Exception) {}
+                                }
+                                try {
+                                    authRepository.deleteCurrentUser()
+                                } catch (_: Exception) {}
+
+                                val retryResult = authRepository.signUpWithEmail(emailInput, passwordInput, finalUsername)
+                                retryResult.fold(
+                                    onSuccess = {
+                                        val newUid = authRepository.getCurrentUserId()
+                                        if (newUid != null) {
+                                            viewModelScope.launch {
+                                                userRepository.createUserProfile(
+                                                    com.savingcoach.app.data.model.User(
+                                                        uid = newUid,
+                                                        email = emailInput,
+                                                        username = finalUsername,
+                                                        onboardingCompleted = false
+                                                    )
+                                                )
+                                            }
+                                        }
+                                        viewModelScope.launch {
+                                            authRepository.sendEmailVerification()
+                                        }
+                                        _uiState.value = _uiState.value.copy(
+                                            isLoading = false,
+                                            needsEmailVerification = true,
+                                            verificationEmail = emailInput,
+                                            error = null
+                                        )
+                                        _navigationEvents.emit(AuthNavigationEvent.NavigateToVerifyEmail)
+                                    },
+                                    onFailure = { retryException ->
+                                        _uiState.value = _uiState.value.copy(
+                                            isLoading = false,
+                                            error = retryException.message ?: "Registration failed"
+                                        )
+                                    }
+                                )
+                                return@launch
+                            } else {
+                                if (signInResult.isSuccess) {
+                                    authRepository.signOut()
+                                }
+                            }
+                        }
+
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             error = exception.message ?: "Registration failed"
@@ -194,26 +259,22 @@ class AuthViewModel @Inject constructor(
                                 verificationEmail = authRepository.getCurrentUserEmail() ?: emailToSignIn,
                                 error = null
                             )
-                            viewModelScope.launch {
-                                _navigationEvents.emit(AuthNavigationEvent.NavigateToVerifyEmail)
-                            }
+                            _navigationEvents.emit(AuthNavigationEvent.NavigateToVerifyEmail)
                         } else {
-                            _uiState.value = _uiState.value.copy(isLoading = false, error = null)
                             val uid = authRepository.getCurrentUserId()
                             if (uid != null) {
-                                viewModelScope.launch {
-                                    val userResult = userRepository.getUserProfile(uid)
-                                    val user = userResult.getOrNull()
-                                    if (user?.onboardingCompleted == false) {
-                                        _navigationEvents.emit(AuthNavigationEvent.NavigateToOnboarding)
-                                    } else {
-                                        _navigationEvents.emit(AuthNavigationEvent.NavigateToDashboard)
-                                    }
+                                val user = withTimeoutOrNull(1500) {
+                                    userRepository.getUserProfile(uid).getOrNull()
                                 }
-                            } else {
-                                viewModelScope.launch {
+                                _uiState.value = _uiState.value.copy(isLoading = false, error = null)
+                                if (user?.onboardingCompleted == false) {
+                                    _navigationEvents.emit(AuthNavigationEvent.NavigateToOnboarding)
+                                } else {
                                     _navigationEvents.emit(AuthNavigationEvent.NavigateToDashboard)
                                 }
+                            } else {
+                                _uiState.value = _uiState.value.copy(isLoading = false, error = null)
+                                _navigationEvents.emit(AuthNavigationEvent.NavigateToDashboard)
                             }
                         }
                     },
@@ -292,7 +353,20 @@ class AuthViewModel @Inject constructor(
 
     fun prepareForChangeEmail(onComplete: () -> Unit = {}) {
         viewModelScope.launch {
-            authRepository.signOut()
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            val isVerified = authRepository.isEmailVerified()
+            val uid = authRepository.getCurrentUserId()
+            if (!isVerified && uid != null) {
+                // If the email is not verified yet, delete the unverified user so they can sign up with it again
+                try {
+                    userRepository.deleteUserProfile(uid)
+                } catch (_: Exception) {}
+                try {
+                    authRepository.deleteCurrentUser()
+                } catch (_: Exception) {}
+            } else {
+                authRepository.signOut()
+            }
             _uiState.value = AuthUiState(
                 isLoading = false,
                 isSignedIn = false,
@@ -320,29 +394,48 @@ class AuthViewModel @Inject constructor(
 
     fun onGoogleIdTokenReceived(idToken: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(isLoading = true, isGoogleLoading = true, error = null)
 
             val result = authRepository.signInWithGoogle(idToken)
 
             result.fold(
                 onSuccess = {
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = null)
                     val uid = authRepository.getCurrentUserId()
                     if (uid != null) {
-                        val userResult = userRepository.getUserProfile(uid)
-                        val user = userResult.getOrNull()
-                        if (user?.onboardingCompleted == false) {
+                        val user = withTimeoutOrNull(1500) {
+                            userRepository.getUserProfile(uid).getOrNull()
+                        }
+                        if (user == null) {
+                            val email = authRepository.getCurrentUserEmail() ?: ""
+                            val defaultUsername = "user_${UUID.randomUUID().toString().substring(0, 8)}"
+                            viewModelScope.launch {
+                                userRepository.createUserProfile(
+                                    com.savingcoach.app.data.model.User(
+                                        uid = uid,
+                                        email = email,
+                                        username = defaultUsername,
+                                        onboardingCompleted = false
+                                    )
+                                )
+                            }
+                            _uiState.value = _uiState.value.copy(isLoading = false, isGoogleLoading = false, error = null)
+                            _navigationEvents.emit(AuthNavigationEvent.NavigateToOnboarding)
+                        } else if (!user.onboardingCompleted) {
+                            _uiState.value = _uiState.value.copy(isLoading = false, isGoogleLoading = false, error = null)
                             _navigationEvents.emit(AuthNavigationEvent.NavigateToOnboarding)
                         } else {
+                            _uiState.value = _uiState.value.copy(isLoading = false, isGoogleLoading = false, error = null)
                             _navigationEvents.emit(AuthNavigationEvent.NavigateToDashboard)
                         }
                     } else {
+                        _uiState.value = _uiState.value.copy(isLoading = false, isGoogleLoading = false, error = null)
                         _navigationEvents.emit(AuthNavigationEvent.NavigateToDashboard)
                     }
                 },
                 onFailure = { exception ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        isGoogleLoading = false,
                         error = exception.message ?: "Google sign-in failed"
                     )
                 }
@@ -351,7 +444,11 @@ class AuthViewModel @Inject constructor(
     }
 
     fun onGoogleSignInError(message: String) {
-        _uiState.value = _uiState.value.copy(error = message)
+        _uiState.value = _uiState.value.copy(isLoading = false, isGoogleLoading = false, error = message)
+    }
+
+    fun setGoogleLoading(loading: Boolean) {
+        _uiState.value = _uiState.value.copy(isGoogleLoading = loading)
     }
 
     fun sendPasswordResetEmail(email: String, onSuccess: () -> Unit) {

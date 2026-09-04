@@ -19,18 +19,21 @@ class FirebaseUserRepository @Inject constructor(
 
     override suspend fun createUserProfile(user: User): Result<Unit> {
         return try {
-            // Document ID is the user's UID
-            usersCollection.document(user.uid).set(user).await()
+            val batch = firestore.batch()
+            batch.set(usersCollection.document(user.uid), user)
             val exactUsername = user.username.trim()
             if (exactUsername.isNotBlank()) {
-                usernamesCollection.document(exactUsername)
-                    .set(mapOf(
+                batch.set(
+                    usernamesCollection.document(exactUsername),
+                    mapOf(
                         "email" to user.email,
                         "uid" to user.uid,
                         "username" to exactUsername
-                    ), com.google.firebase.firestore.SetOptions.merge())
-                    .await()
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
             }
+            batch.commit().await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -42,29 +45,6 @@ class FirebaseUserRepository @Inject constructor(
             val document = usersCollection.document(uid).get().await()
             if (document.exists()) {
                 val user = document.toObject(User::class.java)
-                val email = user?.email?.ifBlank { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: "" } 
-                    ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
-                val currentUsername = user?.username?.trim() ?: ""
-                
-                if (currentUsername.isNotBlank() && email.isNotBlank()) {
-                    try {
-                        usernamesCollection.document(currentUsername)
-                            .set(mapOf(
-                                "email" to email,
-                                "uid" to uid,
-                                "username" to currentUsername
-                            ), com.google.firebase.firestore.SetOptions.merge())
-                            .await()
-
-                        // Automatically purge any stale/old username documents pointing to this UID
-                        val userAllUsernames = usernamesCollection.whereEqualTo("uid", uid).get().await()
-                        for (doc in userAllUsernames.documents) {
-                            if (doc.id != currentUsername) {
-                                doc.reference.delete().await()
-                            }
-                        }
-                    } catch (_: Exception) {}
-                }
                 Result.success(user)
             } else {
                 Result.success(null)
@@ -262,6 +242,28 @@ class FirebaseUserRepository @Inject constructor(
             usersCollection.document(uid)
                 .set(mapOf("languagePreference" to language), com.google.firebase.firestore.SetOptions.merge())
                 .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun deleteUserProfile(uid: String): Result<Unit> {
+        return try {
+            val oldDoc = usersCollection.document(uid).get().await()
+            val username = oldDoc.getString("username")?.trim()
+            if (!username.isNullOrBlank()) {
+                try {
+                    usernamesCollection.document(username).delete().await()
+                } catch (_: Exception) {}
+            }
+            try {
+                val oldEntries = usernamesCollection.whereEqualTo("uid", uid).get().await()
+                for (doc in oldEntries.documents) {
+                    doc.reference.delete().await()
+                }
+            } catch (_: Exception) {}
+            usersCollection.document(uid).delete().await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

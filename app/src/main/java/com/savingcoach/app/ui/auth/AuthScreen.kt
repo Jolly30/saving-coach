@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -42,23 +43,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.credentials.CredentialManager
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
-
-fun Context.getActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.getActivity()
-    else -> null
-}
 
 @Composable
 fun AuthScreen(
@@ -76,8 +65,44 @@ fun AuthScreen(
 
     val webClientId = "42108385419-is8ctsvtkob8uedf0pgtdlcn5lolg8gu.apps.googleusercontent.com"
 
-    val credentialManager = remember { CredentialManager.create(context) }
     var passwordVisible by remember { mutableStateOf(false) }
+
+    val googleSignInLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { activityResult ->
+        if (activityResult.resultCode == Activity.RESULT_OK) {
+            val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(activityResult.data)
+            try {
+                val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+                val idToken = account?.idToken
+                if (!idToken.isNullOrBlank()) {
+                    viewModel.onGoogleIdTokenReceived(idToken)
+                } else {
+                    viewModel.onGoogleSignInError("Failed to obtain Google ID Token.")
+                }
+            } catch (e: com.google.android.gms.common.api.ApiException) {
+                viewModel.onGoogleSignInError("Google sign-in error: ${e.statusCode} ${e.message}")
+            }
+        } else {
+            viewModel.setGoogleLoading(false)
+        }
+    }
+
+    fun launchLegacyGoogleSignIn() {
+        try {
+            val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+                com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+            )
+                .requestIdToken(webClientId)
+                .requestEmail()
+                .build()
+            val client = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
+            client.signOut() // Clear cached account so user always gets account picker
+            googleSignInLauncher.launch(client.signInIntent)
+        } catch (e: Exception) {
+            viewModel.onGoogleSignInError(e.message ?: "Google sign-in failed")
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.syncAuthState()
@@ -244,48 +269,23 @@ fun AuthScreen(
             // Google Sign-In button
             OutlinedButton(
                 onClick = {
-                    scope.launch {
-                        try {
-                            val request = GetCredentialRequest.Builder()
-                                .addCredentialOption(
-                                    GetGoogleIdOption.Builder()
-                                        .setFilterByAuthorizedAccounts(false)
-                                        .setServerClientId(webClientId)
-                                        .setAutoSelectEnabled(true)
-                                        .build()
-                                )
-                                .build()
-
-                            val activity = context.getActivity()
-                            if (activity == null) {
-                                viewModel.onGoogleSignInError("Error: Could not find Activity context.")
-                                return@launch
-                            }
-
-                            val result = credentialManager.getCredential(
-                                request = request,
-                                context = activity,
-                            )
-
-                            val credential = result.credential
-                            if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                                val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                                viewModel.onGoogleIdTokenReceived(googleCredential.idToken)
-                            }
-                        } catch (e: GetCredentialCancellationException) {
-                            // User cancelled or MIUI instantly killed it
-                            viewModel.onGoogleSignInError("Sign-in cancelled or blocked by phone settings")
-                        } catch (e: Exception) {
-                            viewModel.onGoogleSignInError(e.message ?: "Google sign-in failed")
-                        }
-                    }
+                    viewModel.setGoogleLoading(true)
+                    launchLegacyGoogleSignIn()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
-                enabled = !uiState.isLoading
+                enabled = !uiState.isLoading && !uiState.isGoogleLoading
             ) {
-                Text("Continue with Google")
+                if (uiState.isGoogleLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Text("Continue with Google")
+                }
             }
         }
 

@@ -13,10 +13,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import com.savingcoach.app.data.repository.AiPreferences
+
 @Serializable
 data class ChatRequest(
     val messages: List<MessageDto>,
-    val systemPrompt: String? = null
+    val systemPrompt: String? = null,
+    val userGeminiKey: String? = null,
+    val userOpenRouterKey: String? = null
 )
 
 @Serializable
@@ -38,12 +42,13 @@ data class ErrorResponse(
 @Singleton
 class GeminiProxyService @Inject constructor(
     private val client: OkHttpClient,
-    private val proxyUrl: String
+    private val proxyUrl: String,
+    private val aiPreferences: AiPreferences
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
-    suspend fun chat(messages: List<ChatMessage>): Result<String> {
+    suspend fun chat(messages: List<ChatMessage>, systemPrompt: String? = null): Result<String> {
         return withContext(Dispatchers.IO) {
             try {
                 val requestMessages = messages.map { msg ->
@@ -53,8 +58,17 @@ class GeminiProxyService @Inject constructor(
                     )
                 }
 
-                val body = Json.encodeToString(ChatRequest(messages = requestMessages))
-                    .toRequestBody(mediaType)
+                val geminiKey = aiPreferences.getGeminiApiKey().ifBlank { null }
+                val openRouterKey = aiPreferences.getOpenRouterApiKey().ifBlank { null }
+
+                val body = Json.encodeToString(
+                    ChatRequest(
+                        messages = requestMessages,
+                        systemPrompt = systemPrompt,
+                        userGeminiKey = geminiKey,
+                        userOpenRouterKey = openRouterKey
+                    )
+                ).toRequestBody(mediaType)
 
                 val request = Request.Builder()
                     .url("$proxyUrl/api/chat")
@@ -80,7 +94,14 @@ class GeminiProxyService @Inject constructor(
                 val chatResponse = json.decodeFromString<ChatResponse>(responseBody)
                 Result.success(chatResponse.reply)
             } catch (e: Exception) {
-                Result.failure(e)
+                val errorMsg = when {
+                    e is java.net.ConnectException || e is java.net.SocketTimeoutException || e is java.net.UnknownHostException ->
+                        "Unable to connect to AI server. Please check your internet connection or turn on a VPN."
+                    e.message?.contains("Failed to connect", ignoreCase = true) == true ->
+                        "Unable to connect to AI server. Please check your internet connection or turn on a VPN."
+                    else -> e.message ?: "Network error occurred."
+                }
+                Result.failure(Exception(errorMsg, e))
             }
         }
     }

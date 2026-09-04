@@ -267,6 +267,7 @@ fun MainScreen(
             Routes.ExportData.route,
             Routes.EditCurrency.route,
             Routes.EditLanguage.route,
+            Routes.EditAiKeys.route,
             Routes.About.route
         )
     }
@@ -323,12 +324,21 @@ fun MainScreen(
                                                 .weight(1f)
                                                 .clip(RoundedCornerShape(12.dp))
                                                 .clickable {
-                                                    navController.navigate(item.route) {
-                                                        popUpTo(navController.graph.findStartDestination().id) {
-                                                            saveState = true
+                                                    if (item.route == Routes.Dashboard.route) {
+                                                        navController.navigate(Routes.Dashboard.route) {
+                                                            popUpTo(Routes.Dashboard.route) {
+                                                                inclusive = false
+                                                            }
+                                                            launchSingleTop = true
                                                         }
-                                                        launchSingleTop = true
-                                                        restoreState = true
+                                                    } else {
+                                                        navController.navigate(item.route) {
+                                                            popUpTo(Routes.Dashboard.route) {
+                                                                saveState = true
+                                                            }
+                                                            launchSingleTop = true
+                                                            restoreState = true
+                                                        }
                                                     }
                                                 }
                                                 .padding(vertical = 4.dp),
@@ -369,7 +379,7 @@ fun MainScreen(
                                     indication = null
                                 ) {
                                     navController.navigate(Routes.Challenges.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
+                                        popUpTo(Routes.Dashboard.route) {
                                             saveState = true
                                         }
                                         launchSingleTop = true
@@ -402,9 +412,21 @@ fun MainScreen(
             onDismiss = { currentInAppNotif = null },
             onClick = { notif ->
                 when (notif.type) {
-                    "BUDGET_BREACH" -> navController.navigate(Routes.Expenses.route)
-                    "SAVING_MILESTONE", "ABANDONED_CHALLENGE" -> navController.navigate(Routes.Challenges.route)
-                    "PORTFOLIO_RISK" -> navController.navigate(Routes.Investment.route)
+                    "BUDGET_BREACH" -> navController.navigate(Routes.Expenses.route) {
+                        popUpTo(Routes.Dashboard.route) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                    "SAVING_MILESTONE", "ABANDONED_CHALLENGE" -> navController.navigate(Routes.Challenges.route) {
+                        popUpTo(Routes.Dashboard.route) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                    "PORTFOLIO_RISK" -> navController.navigate(Routes.Investment.route) {
+                        popUpTo(Routes.Dashboard.route) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
                     else -> navController.navigate(Routes.Notifications.route)
                 }
             },
