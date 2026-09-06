@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.savingcoach.app.ai.AiFinanceAssistant
 import com.savingcoach.app.ai.SpeechRecognizerManager
 import com.savingcoach.app.data.model.ChatMessage
+import com.savingcoach.app.data.model.ParsedExpense
 import com.savingcoach.app.data.model.Expense
 import com.savingcoach.app.data.repository.AuthRepository
 import com.savingcoach.app.data.repository.ChatRepository
@@ -49,7 +50,7 @@ class ChatViewModel @Inject constructor(
     private val _activeChallenges = MutableStateFlow<List<SavingChallenge>>(emptyList())
     val activeChallenges: StateFlow<List<SavingChallenge>> = _activeChallenges.asStateFlow()
 
-    private val _categories = MutableStateFlow<List<ExpenseCategoryEntity>>(emptyList())
+    private val _categories = MutableStateFlow<List<ExpenseCategoryEntity>>(CategoryResolver.DEFAULT_ENTITIES)
     val categories: StateFlow<List<ExpenseCategoryEntity>> = _categories.asStateFlow()
 
     private val _inputText = MutableStateFlow("")
@@ -59,7 +60,12 @@ class ChatViewModel @Inject constructor(
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
 
     private fun cleanTitleForComparison(title: String): String {
-        return title.filter { it.isLetterOrDigit() || it.isWhitespace() }.lowercase().trim()
+        return title.filter {
+            it.isLetterOrDigit() ||
+            it.isWhitespace() ||
+            Character.getType(it) == Character.NON_SPACING_MARK.toInt() ||
+            Character.getType(it) == Character.COMBINING_SPACING_MARK.toInt()
+        }.lowercase().trim()
     }
 
     private val _error = MutableStateFlow<String?>(null)
@@ -106,11 +112,14 @@ class ChatViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val yearMonthStr = java.time.YearMonth.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"))
-            categoryRepository.getCategories(userId, yearMonthStr)
-                .catch { emit(emptyList()) }
-                .collect { cats ->
-                    _categories.value = cats
-                }
+            kotlinx.coroutines.flow.combine(
+                categoryRepository.getCategories(userId, yearMonthStr).catch { emit(emptyList()) },
+                categoryRepository.getDeletedCategoryNames(userId, yearMonthStr).catch { emit(emptySet()) }
+            ) { savedCats, deletedNames ->
+                mergeCategories(savedCats, deletedNames)
+            }.collect { merged ->
+                _categories.value = merged
+            }
         }
         viewModelScope.launch {
             speechRecognizerManager.error.collect { err ->
@@ -156,117 +165,192 @@ class ChatViewModel @Inject constructor(
                 aiFinanceAssistant.getFinanceAdvice(userId, content)
                     .onSuccess { aiMessage ->
                         var finalMessage = aiMessage
-                        val parsed = aiMessage.parsedExpense
-                        if (parsed != null) {
+                        val rawExpensesList: List<ParsedExpense> = aiMessage.parsedExpenses
+                            ?.takeIf { it.isNotEmpty() }
+                            ?: listOfNotNull(aiMessage.parsedExpense)
+
+                        if (rawExpensesList.isNotEmpty()) {
                             android.util.Log.d("ChatViewModel", "Active challenges count: ${activeChalls.size}")
                             activeChalls.forEach { 
                                 android.util.Log.d("ChatViewModel", "Challenge: ${it.title}, ID: ${it.id}, lastDepositDate: ${it.lastDepositDate}, completedSteps: ${it.completedDaysCount}, isActive: ${it.isActive}, isCompleted: ${it.isCompleted}")
                             }
-                            val isChallenge = parsed.isChallenge || parsed.action == "prompt_challenge_confirmation" || parsed.action == "mark_challenge_saving"
-                            if (isChallenge) {
-                                var challengeTitle = parsed.challengeTitle.ifBlank { parsed.merchant }
-                                var cleanQuery = cleanTitleForComparison(challengeTitle)
-                                var targetChallenge = if (cleanQuery.isNotBlank()) {
-                                    activeChalls.firstOrNull { cleanTitleForComparison(it.title) == cleanQuery }
-                                } else null
 
-                                // Fallback: If not matched by title, match against active challenges mentioned in user content or AI content
-                                if (targetChallenge == null && activeChalls.isNotEmpty()) {
-                                    val cleanUserContent = cleanTitleForComparison(content)
-                                    val cleanAiContent = cleanTitleForComparison(aiMessage.content)
-                                    targetChallenge = activeChalls.firstOrNull { chall ->
-                                        val cleanDb = cleanTitleForComparison(chall.title)
-                                        cleanDb.isNotBlank() && (cleanUserContent.contains(cleanDb) || cleanAiContent.contains(cleanDb))
-                                    }
-                                    if (targetChallenge != null) {
-                                        challengeTitle = targetChallenge.title
-                                        cleanQuery = cleanTitleForComparison(challengeTitle)
-                                        val updatedParsed = parsed.copy(
-                                            challengeTitle = targetChallenge.title,
-                                            merchant = targetChallenge.title
-                                        )
-                                        finalMessage = finalMessage.copy(parsedExpense = updatedParsed)
-                                    }
-                                }
+                            val activeCats = _categories.value
+                            val cleanUserContent = cleanTitleForComparison(content)
+                            val cleanAiContent = cleanTitleForComparison(aiMessage.content)
 
-                                if (targetChallenge != null) {
-                                    if (hasDepositedToday(targetChallenge.id)) {
-                                        val warningText = if (parsed.language == "my") {
-                                            "ယနေ့အတွက် '${targetChallenge.title}' တွင် စုဆောင်းမှု ပြုလုပ်ပြီးပါပြီ။ မနက်ဖြန်မှ ထပ်မံစုဆောင်းပါ။"
-                                        } else {
-                                            "You have already logged a contribution to '${targetChallenge.title}' today! Please try to save tomorrow."
-                                        }
-                                        val warningMessage = aiMessage.copy(
-                                            content = warningText,
-                                            parsedExpense = null,
-                                            parsedExpenses = null
-                                        )
-                                        chatRepository.saveMessage(userId, warningMessage)
-                                        return@onSuccess
-                                    }
+                            val processedExpenses = mutableListOf<ParsedExpense>()
+                            val alreadySavedChallenges = mutableListOf<SavingChallenge>()
+                            val detectedLang = rawExpensesList.firstOrNull()?.language ?: if (content.contains(Regex("[\\u1000-\\u109F]"))) "my" else "en"
 
-                                    // Handle FLEXI template - requires user to input amount
-                                    if (targetChallenge.template == com.savingcoach.app.data.model.ChallengeTemplate.FLEXI) {
-                                        if (parsed.amount == 0.0) {
-                                            // Ask user for amount and do not show the card yet
-                                            val askAmountText = if (parsed.language == "my") {
-                                                "ဘယ်လောက် စုမလဲ? ငွေပမာဏ ထည့်ပေးပါ။"
-                                            } else {
-                                                "How much would you like to save? Please enter the amount."
-                                            }
-                                            val askAmountMessage = aiMessage.copy(
-                                                content = askAmountText,
-                                                parsedExpense = null,
-                                                parsedExpenses = null
+                            for (exp in rawExpensesList) {
+                                val isChallenge = exp.isChallenge || exp.action == "prompt_challenge_confirmation" || exp.action == "mark_challenge_saving"
+                                if (isChallenge) {
+                                    val challengeTitle = exp.challengeTitle.ifBlank { exp.merchant }
+                                    val cleanQuery = cleanTitleForComparison(challengeTitle)
+                                    var targetChallenge = if (cleanQuery.isNotBlank()) {
+                                        activeChalls.firstOrNull { cleanTitleForComparison(it.title) == cleanQuery }
+                                    } else null
+
+                                    // Fallback match against active challenges mentioned in user content, AI content, or challengeTitle
+                                    if (targetChallenge == null && activeChalls.isNotEmpty()) {
+                                        targetChallenge = activeChalls.firstOrNull { chall ->
+                                            val cleanDb = cleanTitleForComparison(chall.title)
+                                            cleanDb.isNotBlank() && (
+                                                cleanQuery.contains(cleanDb) ||
+                                                cleanDb.contains(cleanQuery) ||
+                                                cleanUserContent.contains(cleanDb) ||
+                                                cleanAiContent.contains(cleanDb)
                                             )
-                                            chatRepository.saveMessage(userId, askAmountMessage)
-                                            return@onSuccess
                                         }
-                                        // If amount is provided, proceed with saving (will be handled in confirmChallengeSaving)
                                     }
 
-                                    // For CONSTANT, NO_SPEND, ENVELOPE templates - ignore user's amount and calculate automatically
-                                    if (targetChallenge.template == com.savingcoach.app.data.model.ChallengeTemplate.ENVELOPE) {
-                                        // Always calculate surprise amount for ENVELOPE (ignore user's amount)
-                                        val surpriseAmount = calculateEnvelopeSurpriseAmount(targetChallenge)
-
-                                        val updatedParsed = parsed.copy(amount = surpriseAmount)
-                                        val cleanContent = if (parsed.language == "my") {
-                                            "ကျေးဇူးပြု၍ '${targetChallenge.title}' တွင် စုဆောင်းရန် အတည်ပြုပေးပါ။"
+                                    if (targetChallenge != null) {
+                                        if (hasDepositedToday(targetChallenge.id)) {
+                                            alreadySavedChallenges.add(targetChallenge)
                                         } else {
-                                            "Please confirm the deposit to your '${targetChallenge.title}'."
-                                        }
-                                        finalMessage = aiMessage.copy(
-                                            content = cleanContent,
-                                            parsedExpense = updatedParsed,
-                                            parsedExpenses = aiMessage.parsedExpenses?.map {
-                                                if (it.challengeTitle.isNotBlank() && cleanTitleForComparison(it.challengeTitle) == cleanQuery) {
-                                                    it.copy(amount = surpriseAmount)
-                                                } else it
+                                            val updatedAmount = when (targetChallenge.template) {
+                                                com.savingcoach.app.data.model.ChallengeTemplate.ENVELOPE -> {
+                                                    calculateEnvelopeSurpriseAmount(targetChallenge)
+                                                }
+                                                com.savingcoach.app.data.model.ChallengeTemplate.CONSTANT,
+                                                com.savingcoach.app.data.model.ChallengeTemplate.NO_SPEND -> {
+                                                    calculateConstantAmount(targetChallenge)
+                                                }
+                                                com.savingcoach.app.data.model.ChallengeTemplate.FLEXI -> {
+                                                    exp.amount
+                                                }
                                             }
-                                        )
-                                    } else if (targetChallenge.template == com.savingcoach.app.data.model.ChallengeTemplate.CONSTANT ||
-                                        targetChallenge.template == com.savingcoach.app.data.model.ChallengeTemplate.NO_SPEND) {
-                                        // Always calculate constant amount (ignore user's amount)
-                                        val constantAmount = calculateConstantAmount(targetChallenge)
+                                            val updatedExp = exp.copy(
+                                                challengeTitle = targetChallenge.title,
+                                                merchant = targetChallenge.title,
+                                                amount = updatedAmount
+                                            )
+                                            processedExpenses.add(updatedExp)
+                                        }
+                                    } else {
+                                        processedExpenses.add(exp)
+                                    }
+                                } else {
+                                    // Expense
+                                    val resolvedCat = CategoryResolver.resolve(exp.category, activeCats)
+                                    val finalCat = resolvedCat?.name ?: exp.category
+                                    val fallbackItem = if (exp.item.isBlank()) {
+                                        if (exp.merchant.isNotBlank()) exp.merchant else extractItemFromContent(content)
+                                    } else exp.item
+                                    processedExpenses.add(exp.copy(category = finalCat, item = fallbackItem))
+                                }
+                            }
 
-                                        val updatedParsed = parsed.copy(amount = constantAmount)
-                                        val cleanContent = if (parsed.language == "my") {
-                                            "ကျေးဇူးပြု၍ '${targetChallenge.title}' တွင် စုဆောင်းရန် အတည်ပြုပေးပါ။"
-                                        } else {
-                                            "Please confirm the deposit to your '${targetChallenge.title}'."
-                                        }
-                                        finalMessage = aiMessage.copy(
-                                            content = cleanContent,
-                                            parsedExpense = updatedParsed,
-                                            parsedExpenses = aiMessage.parsedExpenses?.map {
-                                                if (it.challengeTitle.isNotBlank() && cleanTitleForComparison(it.challengeTitle) == cleanQuery) {
-                                                    it.copy(amount = constantAmount)
-                                                } else it
-                                            }
-                                        )
+                            if (alreadySavedChallenges.isNotEmpty() && processedExpenses.isEmpty()) {
+                                // ALL requested challenges were already deposited today!
+                                val warningText = if (detectedLang == "my") {
+                                    if (alreadySavedChallenges.size == 1) {
+                                        "ယနေ့အတွက် '${alreadySavedChallenges.first().title}' တွင် စုဆောင်းမှု ပြုလုပ်ပြီးပါပြီ။ မနက်ဖြန်မှ ထပ်မံစုဆောင်းပါ။"
+                                    } else {
+                                        val names = alreadySavedChallenges.joinToString(" နှင့် ") { chall -> "'${chall.title}'" }
+                                        "ယနေ့အတွက် $names တွင် စုဆောင်းမှု ပြုလုပ်ပြီးပါပြီ။ မနက်ဖြန်မှ ထပ်မံစုဆောင်းပါ။"
+                                    }
+                                } else {
+                                    if (alreadySavedChallenges.size == 1) {
+                                        "You have already logged a contribution to '${alreadySavedChallenges.first().title}' today! Please try to save tomorrow."
+                                    } else {
+                                        val names = alreadySavedChallenges.joinToString(" and ") { chall -> "'${chall.title}'" }
+                                        "You have already logged contributions to $names today! Please try to save tomorrow."
                                     }
                                 }
+                                val warningMessage = aiMessage.copy(
+                                    content = warningText,
+                                    parsedExpense = null,
+                                    parsedExpenses = null
+                                )
+                                chatRepository.saveMessage(userId, warningMessage)
+                                return@onSuccess
+                            }
+
+                            if (alreadySavedChallenges.isNotEmpty() && processedExpenses.isNotEmpty()) {
+                                // SOME challenges were already deposited, but others are eligible or expenses exist!
+                                val alreadySavedPart = if (detectedLang == "my") {
+                                    val names = alreadySavedChallenges.joinToString(" နှင့် ") { chall -> "'${chall.title}'" }
+                                    "ယနေ့အတွက် $names တွင် စုဆောင်းမှု ပြုလုပ်ပြီးပါပြီ။"
+                                } else {
+                                    val names = alreadySavedChallenges.joinToString(" and ") { chall -> "'${chall.title}'" }
+                                    "You have already logged a contribution to $names today."
+                                }
+
+                                val readyPart = if (detectedLang == "my") {
+                                    val allChallenges = processedExpenses.all { it.isChallenge }
+                                    val allExpenses = processedExpenses.all { !it.isChallenge }
+                                    if (allChallenges) {
+                                        val names = processedExpenses.joinToString(" နှင့် ") { exp: ParsedExpense -> "'${exp.challengeTitle.ifBlank { exp.item }}'" }
+                                        "$names အတွက် ငွေစုရန် ပြင်ဆင်ထားပါတယ်။ အောက်ပါ Card ${if (processedExpenses.size > 1) "များ" else ""}တွင် အတည်ပြုပေးပါ။"
+                                    } else if (allExpenses) {
+                                        val names = processedExpenses.joinToString(", ") { exp: ParsedExpense ->
+                                            val n = exp.item.ifBlank { CategoryResolver.toBurmeseName(exp.category) }
+                                            val a = if (exp.amount > 0) " (${exp.amount.toLong()} ကျပ်)" else ""
+                                            "$n$a"
+                                        }
+                                        "$names အတွက် မှတ်သားထားပါတယ်။ အောက်ပါ Card ${if (processedExpenses.size > 1) "များ" else ""}တွင် အတည်ပြုပေးပါ။"
+                                    } else {
+                                        val items = processedExpenses.joinToString(", ") { exp: ParsedExpense ->
+                                            if (exp.isChallenge) {
+                                                exp.challengeTitle.ifBlank { exp.item }
+                                            } else {
+                                                val n = exp.item.ifBlank { CategoryResolver.toBurmeseName(exp.category) }
+                                                val a = if (exp.amount > 0) " (${exp.amount.toLong()} ကျပ်)" else ""
+                                                "$n$a"
+                                            }
+                                        }
+                                        "$items အတွက် ပြင်ဆင်ထားပါတယ်။ အောက်ပါ Card များတွင် အတည်ပြုပေးပါ။"
+                                    }
+                                } else {
+                                    val allChallenges = processedExpenses.all { it.isChallenge }
+                                    val allExpenses = processedExpenses.all { !it.isChallenge }
+                                    if (allChallenges) {
+                                        val names = processedExpenses.joinToString(" and ") { exp: ParsedExpense -> "'${exp.challengeTitle.ifBlank { exp.item }}'" }
+                                        "I've prepared your deposit for $names. Please confirm below."
+                                    } else if (allExpenses) {
+                                        val names = processedExpenses.joinToString(", ") { exp: ParsedExpense ->
+                                            val n = exp.item.ifBlank { exp.category }
+                                            val a = if (exp.amount > 0) " (${exp.amount.toLong()} ${exp.currency})" else ""
+                                            "$n$a"
+                                        }
+                                        "I've noted your expense for $names. Please confirm below."
+                                    } else {
+                                        "Please confirm the deposit and expense below."
+                                    }
+                                }
+
+                                finalMessage = aiMessage.copy(
+                                    content = "$alreadySavedPart $readyPart",
+                                    parsedExpense = processedExpenses.firstOrNull(),
+                                    parsedExpenses = if (processedExpenses.size > 1) processedExpenses else (if (aiMessage.parsedExpenses != null) processedExpenses else null)
+                                )
+                            } else {
+                                // No challenges were already deposited today.
+                                val firstExp = processedExpenses.firstOrNull()
+                                if (processedExpenses.size == 1 && firstExp != null && firstExp.isChallenge) {
+                                    val targetChallenge = activeChalls.firstOrNull { cleanTitleForComparison(it.title) == cleanTitleForComparison(firstExp.challengeTitle) }
+                                    if (targetChallenge?.template == com.savingcoach.app.data.model.ChallengeTemplate.FLEXI && firstExp.amount == 0.0) {
+                                        val askAmountText = if (detectedLang == "my") {
+                                            "ကျေးဇူးပြု၍ '${targetChallenge.title}' တွင် စုဆောင်းရန် ငွေပမာဏ ထည့်သွင်းပြီး အတည်ပြုပေးပါ။"
+                                        } else {
+                                            "Please enter the amount and confirm the deposit to your '${targetChallenge.title}'."
+                                        }
+                                        finalMessage = finalMessage.copy(content = askAmountText)
+                                    } else if (finalMessage.content.isBlank()) {
+                                        val cleanContent = if (detectedLang == "my") {
+                                            "ကျေးဇူးပြု၍ '${firstExp.challengeTitle}' တွင် စုဆောင်းရန် အတည်ပြုပေးပါ။"
+                                        } else {
+                                            "Please confirm the deposit to your '${firstExp.challengeTitle}'."
+                                        }
+                                        finalMessage = finalMessage.copy(content = cleanContent)
+                                    }
+                                }
+                                finalMessage = finalMessage.copy(
+                                    parsedExpense = processedExpenses.firstOrNull(),
+                                    parsedExpenses = if (processedExpenses.size > 1) processedExpenses else (if (aiMessage.parsedExpenses != null) processedExpenses else null)
+                                )
                             }
                         }
 
@@ -288,12 +372,57 @@ class ChatViewModel @Inject constructor(
         activeJobs[userId] = job
     }
 
+    private fun mergeCategories(
+        saved: List<ExpenseCategoryEntity>,
+        deletedNames: Set<String>
+    ): List<ExpenseCategoryEntity> {
+        val defaults = CategoryResolver.DEFAULT_ENTITIES
+        if (saved.isEmpty()) {
+            return defaults.filterNot { deletedNames.contains(it.name.lowercase()) }
+        }
+
+        val savedMap = saved.associateBy { it.name.lowercase() }
+        val result = mutableListOf<ExpenseCategoryEntity>()
+
+        for (default in defaults) {
+            if (deletedNames.contains(default.name.lowercase())) continue
+            val savedEntity = savedMap[default.name.lowercase()]
+            if (savedEntity != null) {
+                result.add(default.copy(target = savedEntity.target, emoji = savedEntity.emoji))
+            } else {
+                result.add(default)
+            }
+        }
+
+        for (savedEntity in saved) {
+            if (defaults.none { it.name.equals(savedEntity.name, ignoreCase = true) }) {
+                result.add(savedEntity)
+            }
+        }
+
+        return if (result.isNotEmpty()) result else defaults
+    }
+
+    private fun extractItemFromContent(content: String): String {
+        val text = content.trim()
+        val myMatch = Regex("(.+?)\\s*([\\d,]+(?:\\.\\d+)?)\\s*(?:ကျပ်|ks|mmk|ဖိုး|ကုန်|ကုန်တယ်|ကျ|ကျတယ်|ပေးရတယ်|ရှင်း|ရှင်းတယ်)?$").find(text)
+        if (myMatch != null) {
+            val item = myMatch.groupValues[1].trim()
+            if (item.isNotBlank() && !item.contains("စု")) return item
+        }
+        val enMatch = Regex("(?i)(?:log|paid|spent|bought)?\\s*([\\d,]+(?:\\.\\d+)?)\\s*(?:mmk|ks|kyats?)?\\s*(?:for|on|at)\\s*(.+)").find(text)
+        if (enMatch != null) {
+            val item = enMatch.groupValues[2].trim()
+            if (item.isNotBlank()) return item
+        }
+        return ""
+    }
+
     private suspend fun ensureCategoryExists(categoryName: String) {
         if (categoryName.isBlank()) return
         val currentCategories = _categories.value
-        val cleanQuery = cleanTitleForComparison(categoryName)
-        val exists = currentCategories.any { cleanTitleForComparison(it.name) == cleanQuery }
-        if (!exists) {
+        val resolved = CategoryResolver.resolve(categoryName, currentCategories)
+        if (resolved == null) {
             throw Exception("Category '$categoryName' does not exist. Please switch to an existing category.")
         }
     }
@@ -349,14 +478,15 @@ class ChatViewModel @Inject constructor(
                 saveExpenseWithCategoryAtIndex(message, index, parsed.category)
             }
             "prompt_challenge_confirmation", "mark_challenge_saving" -> {
-                confirmChallengeSaving(message)
+                confirmChallengeSaving(message, index)
             }
             else -> {
                 val currencyCode = parsed.currency.ifBlank { "MMK" }
-                val expenseCategory = parsed.category.ifBlank { "Other" }
+                val resolvedCat = CategoryResolver.resolve(parsed.category, _categories.value)
+                val expenseCategory = resolvedCat?.name ?: parsed.category.ifBlank { "Other" }
                 val expenseMerchant = parsed.item.ifBlank { parsed.merchant }
                 if (parsed.isChallenge) {
-                    confirmChallengeSaving(message)
+                    confirmChallengeSaving(message, index)
                 } else {
                     if (message.savedExpenseIndices.contains(index) || (index == 0 && message.expenseSaved)) return
                     val savingKey = "${message.id}_$index"
@@ -440,11 +570,13 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 ensureCategoryExists(chosenCategory)
+                val resolvedCat = CategoryResolver.resolve(chosenCategory, _categories.value)
+                val finalCategory = resolvedCat?.name ?: chosenCategory.ifBlank { "Other" }
                 val expense = Expense(
                     amount = parsed.amount,
-                    category = chosenCategory.ifBlank { "Other" },
+                    category = finalCategory,
                     merchant = parsed.item.ifBlank { parsed.merchant },
-                    description = "Added via AI Chat (Category: $chosenCategory)",
+                    description = "Added via AI Chat (Category: $finalCategory)",
                     date = parsed.date.ifBlank { java.time.LocalDate.now().toString() },
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis(),
@@ -560,11 +692,15 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun confirmChallengeSaving(message: ChatMessage, overrideAmount: Double? = null) {
-        val parsed = message.parsedExpense ?: return
-        if (message.expenseSaved || _savingExpenseMessageIds.value.contains(message.id)) return
+    fun confirmChallengeSaving(message: ChatMessage, index: Int = 0, overrideAmount: Double? = null) {
+        val expenses = message.parsedExpenses ?: listOfNotNull(message.parsedExpense)
+        if (index < 0 || index >= expenses.size) return
+        val parsed = expenses[index]
+        if (message.savedExpenseIndices.contains(index) || (index == 0 && message.expenseSaved)) return
 
-        _savingExpenseMessageIds.value = _savingExpenseMessageIds.value + message.id
+        val savingKey = "${message.id}_$index"
+        if (_savingExpenseMessageIds.value.contains(savingKey)) return
+        _savingExpenseMessageIds.value = _savingExpenseMessageIds.value + savingKey
 
         viewModelScope.launch {
             try {
@@ -624,24 +760,36 @@ class ChatViewModel @Inject constructor(
 
                 challengeRepository.addDeposit(userId, targetChallenge.id, deposit)
 
+                val updatedIndices = message.savedExpenseIndices + index
+                val totalCount = message.parsedExpenses?.size ?: 1
+                val allSaved = updatedIndices.size >= totalCount
+                val updatedParsedExpenses = message.parsedExpenses?.mapIndexed { idx, p ->
+                    if (idx == index) p.copy(challengeTitle = targetChallenge.title, amount = depositAmount) else p
+                }
                 val updatedMessage = message.copy(
-                    expenseSaved = true,
-                    parsedExpense = parsed.copy(challengeTitle = targetChallenge.title, amount = depositAmount)
+                    savedExpenseIndices = updatedIndices,
+                    expenseSaved = allSaved,
+                    parsedExpense = if (index == 0) parsed.copy(challengeTitle = targetChallenge.title, amount = depositAmount) else message.parsedExpense,
+                    parsedExpenses = updatedParsedExpenses
                 )
                 chatRepository.updateMessage(userId, updatedMessage)
             } catch (e: Exception) {
                 _error.value = "Failed to confirm challenge saving: ${e.message}"
             } finally {
-                _savingExpenseMessageIds.value = _savingExpenseMessageIds.value - message.id
+                _savingExpenseMessageIds.value = _savingExpenseMessageIds.value - savingKey
             }
         }
     }
 
-    fun switchChallengeSaving(message: ChatMessage, newChallengeTitle: String, overrideAmount: Double? = null) {
-        val parsed = message.parsedExpense ?: return
-        if (message.expenseSaved || _savingExpenseMessageIds.value.contains(message.id)) return
+    fun switchChallengeSaving(message: ChatMessage, newChallengeTitle: String, overrideAmount: Double? = null, index: Int = 0) {
+        val expenses = message.parsedExpenses ?: listOfNotNull(message.parsedExpense)
+        if (index < 0 || index >= expenses.size) return
+        val parsed = expenses[index]
+        if (message.savedExpenseIndices.contains(index) || (index == 0 && message.expenseSaved)) return
 
-        _savingExpenseMessageIds.value = _savingExpenseMessageIds.value + message.id
+        val savingKey = "${message.id}_$index"
+        if (_savingExpenseMessageIds.value.contains(savingKey)) return
+        _savingExpenseMessageIds.value = _savingExpenseMessageIds.value + savingKey
 
         viewModelScope.launch {
             try {
@@ -704,9 +852,17 @@ class ChatViewModel @Inject constructor(
 
                     challengeRepository.addDeposit(userId, targetChallenge.id, deposit)
 
+                    val updatedIndices = message.savedExpenseIndices + index
+                    val totalCount = message.parsedExpenses?.size ?: 1
+                    val allSaved = updatedIndices.size >= totalCount
+                    val updatedParsedExpenses = message.parsedExpenses?.mapIndexed { idx, p ->
+                        if (idx == index) p.copy(challengeTitle = targetChallenge.title, amount = depositAmount) else p
+                    }
                     val updatedMessage = message.copy(
-                        expenseSaved = true,
-                        parsedExpense = parsed.copy(challengeTitle = targetChallenge.title, amount = depositAmount)
+                        savedExpenseIndices = updatedIndices,
+                        expenseSaved = allSaved,
+                        parsedExpense = if (index == 0) parsed.copy(challengeTitle = targetChallenge.title, amount = depositAmount) else message.parsedExpense,
+                        parsedExpenses = updatedParsedExpenses
                     )
                     chatRepository.updateMessage(userId, updatedMessage)
                 } else {
@@ -715,7 +871,7 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 _error.value = "Failed to switch challenge: ${e.message}"
             } finally {
-                _savingExpenseMessageIds.value = _savingExpenseMessageIds.value - message.id
+                _savingExpenseMessageIds.value = _savingExpenseMessageIds.value - savingKey
             }
         }
     }

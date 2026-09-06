@@ -7,8 +7,13 @@
 // OPTIONAL: If Cloudflare dashboard variables are not binding, you can paste your Gemini API key here:
 const HARDCODED_GEMINI_KEY = "";
 
-const SYSTEM_PROMPT = `You are Saving Coach, a friendly personal finance AI assistant.
-You help users track expenses, set budgets, and achieve savings goals.
+const SYSTEM_PROMPT = `You are an empathetic, proactive personal financial coach named Saving Coach.
+When summarizing financial data:
+1. Do not merely list raw figures; interpret what they mean for the user's daily life.
+2. Calculate and highlight a "Daily Safe-to-Spend" amount based on remaining days.
+3. Call out the single biggest spending leak with zero judgment.
+4. Provide exactly ONE practical, low-effort step the user can take this week.
+5. Keep the tone encouraging, concise, and focused on behavioral change.
 When a user describes a purchase, extract the merchant, amount, category, and date.
 Respond in the same language the user writes in.`;
 
@@ -138,7 +143,14 @@ async function handleChat(request, env) {
 }
 
 async function callGemini(messages, prompt, isBurmese, apiKey) {
-  const geminiModels = ["gemini-2.0-flash", "gemini-1.5-flash"];
+  const geminiModels = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-3.6-flash",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+  ];
   let lastErr = null;
 
   for (const geminiModel of geminiModels) {
@@ -158,7 +170,7 @@ async function callGemini(messages, prompt, isBurmese, apiKey) {
             contents,
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: isBurmese ? 1000 : 800,
+              maxOutputTokens: 2500,
             },
             safetySettings: [
               { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
@@ -190,11 +202,14 @@ async function callGemini(messages, prompt, isBurmese, apiKey) {
 }
 
 async function callOpenRouter(messages, prompt, apiKey) {
+  const isBurmese = messages.some(m => /[က-႟]/.test(m.content));
   const models = [
+    "deepseek/deepseek-chat",
+    "google/gemini-2.5-flash",
+    "meta-llama/llama-3.3-70b-instruct",
+    "qwen/qwen-2.5-72b-instruct",
+    "mistralai/mistral-small-24b-instruct-2501",
     "google/gemini-2.0-flash-exp:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "mistralai/mistral-small-24b-instruct-2501:free",
-    "qwen/qwen-2.5-72b-instruct:free",
     "nvidia/nemotron-3.5-lightning:free",
   ];
 
@@ -211,7 +226,7 @@ async function callOpenRouter(messages, prompt, apiKey) {
           })),
         ],
         temperature: 0.7,
-        max_tokens: 1500,
+        max_tokens: 2500,
       };
 
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -229,6 +244,13 @@ async function callOpenRouter(messages, prompt, apiKey) {
 
       let reply = data.choices?.[0]?.message?.content || "No response.";
       reply = cleanThinking(reply);
+      if (isBurmese) {
+        const hasCorruptedScripts = /[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u0E00-\u0E7F]/.test(reply);
+        const hasHybridTokens = /[က-႟]+-[a-zA-Z]+|[a-zA-Z]+-[က-႟]+/.test(reply);
+        if (hasCorruptedScripts || hasHybridTokens) {
+          throw new Error(`Model ${model} produced corrupted multilingual Burmese`);
+        }
+      }
       return { reply, model };
     } catch (err) {
       lastErr = err;
@@ -246,8 +268,14 @@ function cleanThinking(text) {
              .replace(/```thought[\s\S]*?```/gi, "")
              .trim();
 
-  // Check for explicit response headers (e.g. Draft - Mental Refinement, Response, Final response, Possible response)
-  const match = text.match(/(?:\d+\.\s*)?\*{0,2}(?:Possible response|Draft\s*[-–]\s*Mental Refinement|Mental Refinement|Draft response|Conversational response|Final response|Response|Answer)\*{0,2}:\*{0,2}\s*(?:\*\([^\)]*\)\*\s*)?["“]?([\s\S]+?)["”]?$/i);
+  // Reject foreign corrupted scripts (Korean/Hangul) or hybrid BPE tokens
+  if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/.test(text) || /[က-႟]+-[a-zA-Z]+|[a-zA-Z]+-[က-႟]+/.test(text)) {
+    const expenseDataMatch = text.match(/\[EXPENSE_DATA\][\s\S]*?\[\/EXPENSE_DATA\]/);
+    return expenseDataMatch ? "\n\n" + expenseDataMatch[0] : "";
+  }
+
+  // Check for explicit response headers (e.g. Draft - Mental Refinement, Response, Final response)
+  const match = text.match(/(?:\d+\.\s*)?\*{0,2}(?:Draft\s*[-–]\s*Mental Refinement|Mental Refinement|Draft response|Conversational response|Final response|Response|Answer)\*{0,2}:\*{0,2}\s*(?:\*\([^\)]*\)\*\s*)?["“]?([\s\S]+?)["”]?$/i);
   if (match && match[1].trim()) {
     const extracted = match[1].trim().replace(/^["“]|["”]$/g, "").trim();
     if (extracted.length > 10) return extracted;
@@ -264,24 +292,6 @@ function cleanThinking(text) {
 
   // Aggressive thinking detection patterns
   const thinkingPatterns = [
-    // Input analysis and processing steps
-    /(?:Analyze|Analyzing) (?:User|the) Input/i,
-    /(?:User|The user) (?:says|said|wants|asked|is asking|mentioned|wrote|typed|logging|just said)/i,
-    /(?:This is an?|Another) (?:instruction|request|expense|challenge)/i,
-    /The format expected is/i,
-    /Identify Required Fields/i,
-    /Determine Response Language/i,
-    /Formulate Extraction/i,
-    /Possible response:/i,
-    /The amount is \d+/i,
-    /category would be/i,
-    /merchant is (?:not )?specified/i,
-    /date is today's date from context/i,
-    /date from context:?/i,
-    /from context: \d{4}-\d{2}-\d{2}/i,
-    /So this is .+ for \d+ MMK total/i,
-    /\(since it's .+\)/i,
-
     // Date deduction reasoning
     /If there are \d+ days left/i,
     /because \d+-\d+=\d+/i,
@@ -289,19 +299,19 @@ function cleanThinking(text) {
     /today is (?:January|February|March|April|May|June|July|August|September|October|November|December) \d+/i,
 
     // User intent statements
+    /The user (?:is |said |wants |asked |is asking |mentioned |wrote |typed |logging |just said )/i,
     /The user is logging an expense/i,
     /This is (?:an?|another) (?:expense|challenge|income|transaction|saving) (?:logging )?request/i,
 
     // Processing/intent statements
-    /(?:Actually,? wait|Actually,? I |Actually,? looking|Actually,? the|Wait,? but|Let me |I need to |I should |I'll |I will )/i,
-    /(?:Let me format|Let me parse|Let me analyze|Let me check|Let me think|Let me work|Let me go)/i,
-    /(?:I need to (?:output|extract|follow|determine|process|handle|write|check|format))/i,
+    /(?:Actually,? wait|Actually,? looking closely|Actually,? let me|Wait,? but (?:the rules|I need))/i,
+    /(?:Let me (?:format|parse|analyze|extract|check the rules|think about))/i,
+    /(?:I need to (?:output|extract|follow the rules|determine the category|format the JSON))/i,
 
     // Rules/challenge detection
     /(?:Wait,? but the rules|The rules (?:also )?say|According to (?:the )?rules)/i,
     /The rules say:?/i,
     /Wait,? let me re-read/i,
-    /Wait,? let me (?:check|think|look|analyze)/i,
     /Then (?:at the end|the data block)/i,
     /Also,? the strict prohibition:?/i,
     /Write your natural conversational response first/i,
@@ -316,41 +326,37 @@ function cleanThinking(text) {
     /Exchange Rate \(USD → MMK\)/i,
     /Something like\s*["“]/i,
     /(?:Challenge action values|CHALLENGE DETECTION|EXPENSE DETECTION)/i,
-    /(?:If amount is not specified|If the user)/i,
     /(?:Challenge Title:|challengeTitle:)/i,
-    /(?:Non-existent|non existent|does not exist)/i,
-    /(?:match from active challenges|match the challenge)/i,
 
     // Looking at context
-    /(?:Looking at the|According to (?:the )?(?:hidden|context|rules|EXPENSE|CHALLENGE))/i,
-    /(?:Based on the (?:hidden|context|rules))/i,
+    /(?:Looking at the (?:hidden context|rules|prompt|instruction))/i,
+    /(?:Based on the (?:hidden context|rules|prompt|instruction))/i,
     /(?:Following the (?:EXPENSE|CHALLENGE) rules)/i,
-
-    // Thinking starters
-    /(?:Here'?s a thinking process|Here'?s (?:what|how))/i,
-    /(?:So (?:date|amount|category))/i,
-    /(?:Let'?s (?:parse|analyze|think|check))/i,
 
     // Structure/output thinking
     /(?:The structure should be|The structure is)/i,
     /(?:For this request|For this user)/i,
-    /(?:amount:.*category:|category:.*merchant:)/i,
-    /(?:Acknowled(?:ge|ing) the)/i,
-    /(?:Mention the|Keep (?:it|the|a|short))/i,
-    /(?:You (?:should|would|need to) (?:acknowledge|mention|include|output))/i,
-    /(?:The user (?:said|wants|is asking|mentioned|wrote))/i,
-    /(?:I should (?:acknowledge|mention|include|output|write))/i,
-    /(?:Step \d|Phase \d|First,|Second,|Third,)/i,
     /(?:JSON structure|JSON block|JSON data)/i,
     /(?:•\s*(?:amount|category|merchant|date|currency|acknowledge|mention|keep):?)/i,
     /(?:\d+\.\s*(?:amount|category|merchant|date))/i,
 
+    // Prompt regurgitation & multi-challenge / mixed thinking
+    /So for this case.*/i,
+    /with (?:two|three|multiple|several|\d+) (?:challenges|expenses).*/i,
+    /For the (?:expense|challenge) part.*/i,
+    /And for (?:mixed|multiple).*/i,
+    /"?Example for (?:Mixed|Multiple|Challenge|Expense).*/i,
+    /^User:\s*"?/i,
+    /^Assistant:\s*"?/i,
+    /I need:\s*$/i,
+    /would be .* category/i,
+
     // Analysis thinking
-    /(?:Actually,? looking (?:more |at the |closely))/i,
-    /(?:Actually,? I think)/i,
-    /(?:Actually,? this (?:could|might|seems))/i,
     /(?:Active Challenges \(\d+\)):/i,
-    /(?:•\s*\w+:.*MMK.*complete)/i
+    /(?:•\s*\w+:.*MMK.*complete)/i,
+
+    // Leaked prompt directives
+    /(?:What remaining funds and days left mean|Specific daily spending guardrail|Remaining Budget\s*\/|Address the single biggest spending category)/i
   ];
 
   const isThinking = thinkingPatterns.some(p => p.test(text));
@@ -365,12 +371,14 @@ function cleanThinking(text) {
 
     for (const p of paragraphs) {
       const lines = p.split("\n").map(l => l.trim()).filter(Boolean);
-      const isAllBullets = lines.length > 0 && lines.every(l => /^[•*-]/.test(l));
+      const hasExtractionBullets = lines.some(l => /^[•*\\-\u2022\u2023\u25E6\u2043\u2219]?\s*(?:amount|category|item|merchant|date|currency)\s*:/i.test(l));
+      const hasPromptDirectiveBullets = lines.some(l => /^[•*\\-\u2022\u2023\u25E6\u2043\u2219]?\s*(?:Acknowledge the|Mention the|Keep it|Do NOT automatically)\b/i.test(l));
 
-      const isParagraphThinking = isAllBullets ||
+      const isParagraphThinking = hasExtractionBullets ||
+                         hasPromptDirectiveBullets ||
                          thinkingPatterns.some(pt => pt.test(p)) ||
-                         /^[•*-]/.test(p) ||
-                         /^(?:amount|category|merchant|date|currency):/i.test(p) ||
+                         /^For\s+["“]/i.test(p) ||
+                         /^\d+\.\s*["“].+?["”]/i.test(p) ||
                          /EXPENSE DETECTION|CHALLENGE DETECTION/i.test(p) ||
                          /The rules say/i.test(p) ||
                          /Wait, let me/i.test(p) ||
@@ -380,43 +388,38 @@ function cleanThinking(text) {
                          /strict prohibition/i.test(p) ||
                          /Write your natural conversational/i.test(p) ||
                          /Looking at the hidden context/i.test(p) ||
-                         /So if I add/i.test(p) ||
-                         /So my response should be/i.test(p) ||
                          /careful not to overstep/i.test(p) ||
                          /Do NOT automatically save/i.test(p) ||
                          /NEVER mix/i.test(p) ||
-                         /^(?:Something like|Wait,|Also,)/i.test(p) ||
+                         /Breaking it down/i.test(p) ||
+                         /Breaking down/i.test(p) ||
+                         /mentioning two expenses/i.test(p) ||
+                         (/mentioning/i.test(p) && /expenses/i.test(p)) ||
+                         /^\s*["“].+?["”]\s*=\s*["”].+?["”]/m.test(p) ||
+                         /^\s*[•*-]\s*["“].+?["”]\s*=/m.test(p) ||
+                         /The user'?s message:?/i.test(p) ||
+                         /\d+\.\s*.+? for \d+ MMK/i.test(p) ||
+                         /^(?:Something like|Wait,)/i.test(p) ||
                          /Analyze User Input|Identify Required Fields|Determine Response Language|Formulate Extraction|Possible response/i.test(p) ||
                          /The format expected is|This is an instruction/i.test(p) ||
-                         /^(?:1|2|3|4|5)\.\s*\*\*/i.test(p) ||
-                         /days left in|days have passed/i.test(p) ||
-                         /^let'?s/i.test(p) ||
-                         /^so date/i.test(p) ||
-                         /^I need to/i.test(p) ||
-                         /^First/i.test(p) ||
-                         /^Second/i.test(p) ||
-                         /^Third/i.test(p) ||
+                         /^\d+\.\s*\*\*Draft\s*[-–]\s*Mental Refinement:\*\*/i.test(p) ||
                          /hidden context/i.test(p) ||
                          /JSON block/i.test(p) ||
                          /json structure/i.test(p) ||
                          /prompt_challenge_confirmation/i.test(p) ||
                          /mark_challenge_saving/i.test(p) ||
-                         /non-existent/i.test(p) ||
-                         /Challenge Title:/i.test(p) ||
-                         /challengeTitle:/i.test(p) ||
-                         /match from active/i.test(p) ||
-                         /does not exist/i.test(p) ||
-                         /The structure should be/i.test(p) ||
-                         /For this request/i.test(p) ||
-                         /Acknowled(?:ge|ing) the/i.test(p) ||
-                         /Mention the/i.test(p) ||
-                         /Step \d|Phase \d/i.test(p) ||
-                         /JSON structure|JSON data/i.test(p) ||
-                         /Active Challenges \(\d+\)/i.test(p) ||
+                         /Active Challenges \(/i.test(p) ||
                          /•\s*\w+:.*MMK.*complete/i.test(p) ||
-                         /Actually,? looking (?:more |at the |closely)/i.test(p) ||
-                         /Actually,? I think/i.test(p) ||
-                         /Actually,? this (?:could|might|seems)/i.test(p);
+                         /So for this case/i.test(p) ||
+                         /two challenges/i.test(p) ||
+                         /multiple challenges/i.test(p) ||
+                         /For the expense part/i.test(p) ||
+                         /For the challenge part/i.test(p) ||
+                         /mixed expense/i.test(p) ||
+                         /Example for/i.test(p) ||
+                         /^User:/i.test(p) ||
+                         /^Assistant:/i.test(p) ||
+                         /^\s*[[{}\]]\s*$/.test(p);
       if (!isParagraphThinking) {
         userFacing.push(p);
       }
@@ -425,17 +428,32 @@ function cleanThinking(text) {
     // Filter out very short fragments that are likely thinking remnants
     const filteredFacing = userFacing.filter(p => p.length > 10 || /\d/.test(p));
 
+    const isBurmese = /[က-႟]/.test(text);
     if (filteredFacing.length > 0) {
-      return filteredFacing.join("\n\n") + expenseData;
+      let combined = filteredFacing.join("\n\n").trim();
+      combined = combined.replace(/(?:\r?\n)+#{1,6}\s+[^\n]+$/g, "").trim();
+      const substantive = combined.split("\n").filter(l => l.trim() && !l.trim().startsWith("#"));
+      if (substantive.length === 0) {
+        const fallbackAck = isBurmese ? "မှတ်သားထားပါတယ်။ အောက်ပါ Card တွင် အတည်ပြုပေးပါ။" : "I've noted this. Please confirm below.";
+        return expenseData ? fallbackAck + expenseData : "";
+      }
+      return combined + expenseData;
     } else {
       if (expenseData) {
-        return "I've noted this. Please confirm below." + expenseData;
+        const fallbackAck = isBurmese ? "မှတ်သားထားပါတယ်။ အောက်ပါ Card တွင် အတည်ပြုပေးပါ။" : "I've noted this. Please confirm below.";
+        return fallbackAck + expenseData;
       }
       return "";
     }
   }
 
-  return text;
+  let result = text.trim();
+  result = result.replace(/(?:\r?\n)+#{1,6}\s+[^\n]+$/g, "").trim();
+  const substantive = result.split("\n").filter(l => l.trim() && !l.trim().startsWith("#"));
+  if (substantive.length === 0) {
+    return "";
+  }
+  return result;
 }
 
 // ─────────────────────────────────────────────

@@ -13,10 +13,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -196,36 +201,47 @@ class MarketApiService @Inject constructor(
                     .post(requestBody)
                     .build()
 
-                val response = client.newCall(request).execute()
-                if (!response.isSuccessful) {
-                    // Return cached data if available, even if stale
-                    return@withContext if (cachedResults.isNotEmpty()) {
-                        Result.success(cachedResults)
-                    } else {
-                        Result.failure(Exception("CoinGecko price fetch failed: ${response.code}"))
+                val response = try { client.newCall(request).execute() } catch (_: Exception) { null }
+                if (response != null && response.isSuccessful) {
+                    val responseBody = response.body?.string()
+                    if (!responseBody.isNullOrBlank()) {
+                        try {
+                            val priceMap = json.decodeFromString<Map<String, Map<String, Double>>>(responseBody)
+                            priceMap.forEach { (id, priceData) ->
+                                val coinGeckoPrice = CoinGeckoPrice.fromMap(priceData)
+                                val cached = CachedPrice(
+                                    livePrice = coinGeckoPrice.usd,
+                                    change24h = coinGeckoPrice.usd_24h_change
+                                )
+                                priceCache[id] = cached
+                                cachedResults[id] = cached
+                            }
+                            if (cachedResults.isNotEmpty()) {
+                                return@withContext Result.success(cachedResults)
+                            }
+                        } catch (_: Exception) {
+                            // Non-JSON or error format from proxy
+                        }
                     }
                 }
 
-                val responseBody = response.body?.string() ?: return@withContext Result.failure(
-                    Exception("Empty response from CoinGecko proxy")
-                )
-
-                // Parse the dynamic JSON response as Map<String, Map<String, Double>>
-                val priceMap = json.decodeFromString<Map<String, Map<String, Double>>>(responseBody)
-
-                // Convert to our data model and cache
-                priceMap.forEach { (id, priceData) ->
-                    val coinGeckoPrice = CoinGeckoPrice.fromMap(priceData)
-                    val cached = CachedPrice(
-                        livePrice = coinGeckoPrice.usd,
-                        change24h = coinGeckoPrice.usd_24h_change
-                    )
-                    priceCache[id] = cached
-                    cachedResults[id] = cached
+                // Fallback to direct CoinGecko API
+                val directResult = fetchDirectCoinGeckoPrices(uncachedIds)
+                if (directResult.isSuccess) {
+                    cachedResults.putAll(directResult.getOrThrow())
+                    return@withContext Result.success(cachedResults)
                 }
 
-                Result.success(cachedResults)
+                if (cachedResults.isNotEmpty()) {
+                    Result.success(cachedResults)
+                } else {
+                    Result.failure(Exception("CoinGecko price fetch failed"))
+                }
             } catch (e: Exception) {
+                val directResult = fetchDirectCoinGeckoPrices(coinIds)
+                if (directResult.isSuccess) {
+                    return@withContext directResult
+                }
                 // Return any cached data on failure
                 val fallbackResults = coinIds.mapNotNull { id ->
                     priceCache[id]?.let { id to it }
@@ -239,8 +255,44 @@ class MarketApiService @Inject constructor(
         }
     }
 
+    private suspend fun fetchDirectCoinGeckoPrices(ids: List<String>): Result<Map<String, CachedPrice>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                if (ids.isEmpty()) return@withContext Result.success(emptyMap())
+                val idsParam = ids.joinToString(",")
+                val url = "https://api.coingecko.com/api/v3/simple/price?ids=$idsParam&vs_currencies=usd&include_24hr_change=true"
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Mozilla/5.0 (Android; Mobile; rv:125.0) Gecko/125.0 Firefox/125.0")
+                    .header("Accept", "application/json")
+                    .get()
+                    .build()
+
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("Direct CoinGecko failed: ${response.code}"))
+                }
+                val body = response.body?.string() ?: return@withContext Result.failure(Exception("Empty body"))
+                val priceMap = json.decodeFromString<Map<String, Map<String, Double>>>(body)
+                val results = mutableMapOf<String, CachedPrice>()
+                priceMap.forEach { (id, priceData) ->
+                    val coinGeckoPrice = CoinGeckoPrice.fromMap(priceData)
+                    val cached = CachedPrice(
+                        livePrice = coinGeckoPrice.usd,
+                        change24h = coinGeckoPrice.usd_24h_change
+                    )
+                    priceCache[id] = cached
+                    results[id] = cached
+                }
+                Result.success(results)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
     // ─────────────────────────────────────────────
-    // FINNHUB (Stocks & ETFs) - via proxy
+    // FINNHUB (Stocks & ETFs) - via proxy with Yahoo Finance fallback
     // ─────────────────────────────────────────────
 
     /**
@@ -310,6 +362,7 @@ class MarketApiService @Inject constructor(
     /**
      * Fetch current quote for a single stock/ETF.
      * Returns price, change, and percent change.
+     * Robust failover: Finnhub proxy -> Yahoo Finance chart API.
      */
     suspend fun getStockQuote(symbol: String): Result<CachedPrice> {
         return withContext(Dispatchers.IO) {
@@ -331,35 +384,105 @@ class MarketApiService @Inject constructor(
                     .post(requestBody)
                     .build()
 
-                val response = client.newCall(request).execute()
-                if (!response.isSuccessful) {
-                    // Return stale cache if available
-                    return@withContext if (cached != null) {
-                        Result.success(cached)
-                    } else {
-                        Result.failure(Exception("Finnhub quote failed: ${response.code}"))
+                val response = try { client.newCall(request).execute() } catch (_: Exception) { null }
+                if (response != null && response.isSuccessful) {
+                    val responseBody = response.body?.string()
+                    if (!responseBody.isNullOrBlank()) {
+                        try {
+                            val quote = json.decodeFromString<FinnhubQuoteResponse>(responseBody)
+                            val livePrice = if (quote.c > 0.0) quote.c else quote.pc
+                            if (livePrice > 0.0) {
+                                val result = CachedPrice(
+                                    livePrice = livePrice,
+                                    change24h = quote.dp ?: 0.0
+                                )
+                                priceCache[symbol] = result
+                                return@withContext Result.success(result)
+                            }
+                        } catch (_: Exception) {
+                            // Non-JSON or 429 HTML response from proxy
+                        }
                     }
                 }
 
-                val responseBody = response.body?.string() ?: return@withContext Result.failure(
-                    Exception("Empty response from Finnhub proxy")
-                )
+                // Fallback to Yahoo Finance quote
+                val yahooQuote = fetchYahooFinanceQuote(symbol)
+                if (yahooQuote.isSuccess) {
+                    return@withContext yahooQuote
+                }
 
-                val quote = json.decodeFromString<FinnhubQuoteResponse>(responseBody)
-                val livePrice = if (quote.c > 0.0) quote.c else quote.pc
-                val result = CachedPrice(
-                    livePrice = livePrice,
-                    change24h = quote.dp ?: 0.0
-                )
-                priceCache[symbol] = result
-                Result.success(result)
+                // Return stale cache if available
+                if (cached != null) {
+                    Result.success(cached)
+                } else {
+                    Result.failure(Exception("Could not fetch quote for $symbol"))
+                }
             } catch (e: Exception) {
+                val yahooQuote = fetchYahooFinanceQuote(symbol)
+                if (yahooQuote.isSuccess) {
+                    return@withContext yahooQuote
+                }
                 val cached = priceCache[symbol]
                 if (cached != null) {
                     Result.success(cached)
                 } else {
                     Result.failure(e)
                 }
+            }
+        }
+    }
+
+    suspend fun fetchYahooFinanceQuote(symbol: String): Result<CachedPrice> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val clean = symbol.trim().uppercase(Locale.US)
+                val yahooSymbol = when (clean) {
+                    "BTC", "BITCOIN" -> "BTC-USD"
+                    "ETH", "ETHEREUM" -> "ETH-USD"
+                    "SOL", "SOLANA" -> "SOL-USD"
+                    "GOLD" -> "GC=F"
+                    else -> clean
+                }
+
+                val url = "https://query1.finance.yahoo.com/v8/finance/chart/$yahooSymbol?interval=1d&range=1d"
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Mozilla/5.0 (Android; Mobile; rv:125.0) Gecko/125.0 Firefox/125.0")
+                    .header("Accept", "application/json")
+                    .get()
+                    .build()
+
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("Yahoo Finance failed: ${response.code}"))
+                }
+
+                val responseBody = response.body?.string() ?: return@withContext Result.failure(Exception("Empty body"))
+                val jsonElement = json.parseToJsonElement(responseBody)
+                val chartObj = jsonElement.jsonObject["chart"]?.jsonObject
+                val resultArr = chartObj?.get("result")?.jsonArray
+                val metaObj = resultArr?.firstOrNull()?.jsonObject?.get("meta")?.jsonObject
+                    ?: return@withContext Result.failure(Exception("No meta object in Yahoo Finance response"))
+
+                val regularPrice = metaObj["regularMarketPrice"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+                val previousClose = metaObj["previousClose"]?.jsonPrimitive?.doubleOrNull
+                    ?: metaObj["chartPreviousClose"]?.jsonPrimitive?.doubleOrNull
+                    ?: regularPrice
+
+                if (regularPrice <= 0.0) {
+                    return@withContext Result.failure(Exception("Invalid price from Yahoo Finance: $regularPrice"))
+                }
+
+                val change24h = if (previousClose > 0.0) {
+                    ((regularPrice - previousClose) / previousClose) * 100.0
+                } else 0.0
+
+                val cached = CachedPrice(livePrice = regularPrice, change24h = change24h)
+                priceCache[symbol] = cached
+                priceCache[clean] = cached
+                Result.success(cached)
+            } catch (e: Exception) {
+                Result.failure(e)
             }
         }
     }
@@ -390,7 +513,8 @@ class MarketApiService @Inject constructor(
     // ─────────────────────────────────────────────
 
     /**
-     * Fetch general market news from Finnhub.
+     * Fetch general market and crypto news.
+     * Tries Finnhub proxy first, and gracefully falls back to live CoinTelegraph (crypto) and Yahoo Finance (markets) RSS feeds.
      */
     suspend fun getMarketNews(): Result<List<FinnhubNewsResponse>> {
         return withContext(Dispatchers.IO) {
@@ -407,22 +531,102 @@ class MarketApiService @Inject constructor(
                     .build()
 
                 val response = client.newCall(request).execute()
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(
-                        Exception("Finnhub news failed: ${response.code}")
-                    )
+                if (response.isSuccessful) {
+                    val responseBody = response.body?.string() ?: ""
+                    if (responseBody.trim().startsWith("[")) {
+                        val news = json.decodeFromString<List<FinnhubNewsResponse>>(responseBody)
+                        if (news.isNotEmpty()) {
+                            return@withContext Result.success(news.take(20))
+                        }
+                    }
                 }
-
-                val responseBody = response.body?.string() ?: return@withContext Result.failure(
-                    Exception("Empty response from Finnhub proxy")
-                )
-
-                val news = json.decodeFromString<List<FinnhubNewsResponse>>(responseBody)
-                Result.success(news.take(20)) // Limit to 20 items
+                // Fallback to live RSS feeds if proxy failed, returned non-array, or returned empty
+                fetchRssMarketNews()
             } catch (e: Exception) {
-                Result.failure(e)
+                fetchRssMarketNews()
             }
         }
+    }
+
+    /**
+     * Fallback to fetch live crypto and financial market news from CoinTelegraph and Yahoo Finance RSS.
+     */
+    private fun fetchRssMarketNews(): Result<List<FinnhubNewsResponse>> {
+        val newsList = mutableListOf<FinnhubNewsResponse>()
+        val now = System.currentTimeMillis() / 1000
+
+        // 1. CoinTelegraph for Crypto News
+        try {
+            val cryptoReq = Request.Builder()
+                .url("https://cointelegraph.com/rss")
+                .header("User-Agent", "Mozilla/5.0")
+                .get()
+                .build()
+            val res = client.newCall(cryptoReq).execute()
+            if (res.isSuccessful) {
+                val xml = res.body?.string() ?: ""
+                val items = parseRssItems(xml, "CoinTelegraph", "crypto", now)
+                newsList.addAll(items.take(8))
+            }
+        } catch (_: Exception) {}
+
+        // 2. Yahoo Finance for General Financial News
+        try {
+            val stockReq = Request.Builder()
+                .url("https://finance.yahoo.com/news/rssindex")
+                .header("User-Agent", "Mozilla/5.0")
+                .get()
+                .build()
+            val res = client.newCall(stockReq).execute()
+            if (res.isSuccessful) {
+                val xml = res.body?.string() ?: ""
+                val items = parseRssItems(xml, "Yahoo Finance", "general", now)
+                newsList.addAll(items.take(8))
+            }
+        } catch (_: Exception) {}
+
+        return if (newsList.isNotEmpty()) {
+            Result.success(newsList)
+        } else {
+            Result.failure(Exception("All news feeds unavailable"))
+        }
+    }
+
+    private fun parseRssItems(xml: String, sourceName: String, category: String, timestamp: Long): List<FinnhubNewsResponse> {
+        val result = mutableListOf<FinnhubNewsResponse>()
+        val itemRegex = Regex("<item>(.*?)</item>", RegexOption.DOT_MATCHES_ALL)
+        val titleRegex = Regex("<title>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?</title>", RegexOption.DOT_MATCHES_ALL)
+        val descRegex = Regex("<description>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?</description>", RegexOption.DOT_MATCHES_ALL)
+        val linkRegex = Regex("<link>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?</link>", RegexOption.DOT_MATCHES_ALL)
+
+        val itemMatches = itemRegex.findAll(xml)
+        for (match in itemMatches) {
+            val itemContent = match.groupValues[1]
+            val titleMatch = titleRegex.find(itemContent)
+            val descMatch = descRegex.find(itemContent)
+            val linkMatch = linkRegex.find(itemContent)
+
+            val rawTitle = titleMatch?.groupValues?.get(1)?.trim() ?: ""
+            val rawDesc = descMatch?.groupValues?.get(1)?.replace(Regex("<.*?>"), "")?.trim() ?: ""
+            val link = linkMatch?.groupValues?.get(1)?.trim() ?: ""
+
+            if (rawTitle.isNotBlank()) {
+                val cleanTitle = rawTitle.replace("&amp;", "&").replace("&quot;", "\"").replace("&#39;", "'")
+                val cleanDesc = rawDesc.replace("&amp;", "&").replace("&quot;", "\"").replace("&#39;", "'").take(250)
+                result.add(
+                    FinnhubNewsResponse(
+                        id = (cleanTitle.hashCode().toLong() and 0x7fffffffL),
+                        category = category,
+                        datetime = timestamp,
+                        headline = cleanTitle,
+                        source = sourceName,
+                        summary = cleanDesc,
+                        url = link
+                    )
+                )
+            }
+        }
+        return result
     }
 
     /**
