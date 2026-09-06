@@ -48,6 +48,7 @@ import com.savingcoach.app.data.model.ChatMessage
 import com.savingcoach.app.data.model.SavingChallenge
 import com.savingcoach.app.data.model.ExpenseCategoryEntity
 import com.savingcoach.app.data.model.ParsedExpense
+import com.savingcoach.app.ai.AiChatRepository
 import androidx.compose.material.icons.filled.CheckCircle
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -203,6 +204,7 @@ fun ChatWindowContent(
     var showEnvelopeAnim by remember { mutableStateOf(false) }
     var envelopeAnimAmount by remember { mutableStateOf(0.0) }
     var envelopeAnimMessage by remember { mutableStateOf<ChatMessage?>(null) }
+    var envelopeAnimIndex by remember { mutableStateOf(0) }
     var envelopeAnimSwitchTarget by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
@@ -355,7 +357,7 @@ fun ChatWindowContent(
                         onSaveExpenseWithCategoryAtIndex = { idx, cat -> viewModel.saveExpenseWithCategoryAtIndex(message, idx, cat) },
                         onUpdateExpenseCategoryAtIndex = { idx, cat -> viewModel.updateExpenseCategoryAtIndex(message, idx, cat) },
                         savingExpenseMessageIds = savingExpenseMessageIds,
-                        onConfirmChallenge = { parsed ->
+                        onConfirmChallenge = { cardIdx, parsed ->
                              val title = parsed.challengeTitle.ifBlank { parsed.merchant }
                              val cleanTitle = title.filter { it.isLetterOrDigit() || it.isWhitespace() }.lowercase().trim()
                              val targetChallenge = activeChallenges.firstOrNull {
@@ -363,7 +365,7 @@ fun ChatWindowContent(
                                  cleanDb == cleanTitle
                              }
                              val isEnvelope = targetChallenge?.template == com.savingcoach.app.data.model.ChallengeTemplate.ENVELOPE
-                             if (isEnvelope && targetChallenge != null) {
+                             if (targetChallenge != null && isEnvelope) {
                                  val parts = targetChallenge.lastDepositDate.split("|")
                                  val completedSteps = if (parts.size > 1) (parts[1].toIntOrNull() ?: 0) else 0
                                  val duration = if (parts.size > 2) parts[2] else "30"
@@ -394,16 +396,21 @@ fun ChatWindowContent(
                                  }
                                  envelopeAnimAmount = surpriseAmount
                                  envelopeAnimMessage = message
+                                 envelopeAnimIndex = cardIdx
                                  envelopeAnimSwitchTarget = null
                                  showEnvelopeAnim = true
                              } else {
-                                 viewModel.confirmChallengeSaving(message)
+                                 viewModel.confirmChallengeSaving(
+                                     message,
+                                     index = cardIdx,
+                                     overrideAmount = if (parsed.amount > 0) parsed.amount else null
+                                 )
                              }
                         },
                         onSwitchChallenge = { parsed, target ->
                             val targetChallenge = activeChallenges.firstOrNull { it.title.equals(target, ignoreCase = true) }
                             val isEnvelope = targetChallenge?.template == com.savingcoach.app.data.model.ChallengeTemplate.ENVELOPE
-                            if (isEnvelope && targetChallenge != null) {
+                            if (targetChallenge != null && isEnvelope) {
                                 val parts = targetChallenge.lastDepositDate.split("|")
                                 val completedSteps = if (parts.size > 1) (parts[1].toIntOrNull() ?: 0) else 0
                                 val duration = if (parts.size > 2) parts[2] else "30"
@@ -522,7 +529,7 @@ fun ChatWindowContent(
                         if (target != null) {
                             viewModel.switchChallengeSaving(msg, target, envelopeAnimAmount)
                         } else {
-                            viewModel.confirmChallengeSaving(msg, envelopeAnimAmount)
+                            viewModel.confirmChallengeSaving(msg, index = envelopeAnimIndex, overrideAmount = envelopeAnimAmount)
                         }
                     }
                     showEnvelopeAnim = false
@@ -960,13 +967,14 @@ fun SwitchCategoryDialog(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                if (categories.isEmpty()) {
+                val displayCategories = if (categories.isNotEmpty()) categories else CategoryResolver.DEFAULT_ENTITIES
+                if (displayCategories.isEmpty()) {
                     Text("No categories found.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
                 } else {
                     LazyColumn(
                         modifier = Modifier.heightIn(max = 240.dp)
                     ) {
-                        items(categories) { category ->
+                        items(displayCategories) { category ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1030,7 +1038,7 @@ fun MessageItem(
     onSaveExpenseAtIndex: (Int) -> Unit = { _ -> },
     onSaveExpenseWithCategoryAtIndex: (Int, String) -> Unit = { _, _ -> },
     onUpdateExpenseCategoryAtIndex: (Int, String) -> Unit = { _, _ -> },
-    onConfirmChallenge: (ParsedExpense) -> Unit = { _ -> },
+    onConfirmChallenge: (Int, ParsedExpense) -> Unit = { _, _ -> },
     onSwitchChallenge: (ParsedExpense, String) -> Unit = { _, _ -> },
     onCancelAction: (Int) -> Unit = {},
     activeChallenges: List<SavingChallenge> = emptyList(),
@@ -1072,7 +1080,54 @@ fun MessageItem(
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 32.dp, top = 6.dp, bottom = 6.dp)
         ) {
-            val parsedText = parseMarkdown(message.content.trim())
+            val parsedList = if (message.parsedExpenses != null && message.parsedExpenses.isNotEmpty()) {
+                message.parsedExpenses
+            } else if (message.parsedExpense != null) {
+                val exp = message.parsedExpense
+                val rawCandidate = if (exp.item.isNotBlank()) exp.item else exp.merchant
+                val multiExtract = if (rawCandidate.isNotBlank() && (rawCandidate.contains(" and ", ignoreCase = true) || rawCandidate.contains("နဲ့") || rawCandidate.contains("နှင့်"))) {
+                    val combinedQuery = "${exp.amount.toLong()} for $rawCandidate"
+                    AiChatRepository.extractFallbackExpenses(combinedQuery, exp.language)
+                } else emptyList()
+
+                if (multiExtract.size > 1) {
+                    multiExtract
+                } else {
+                    listOf(exp)
+                }
+            } else {
+                emptyList()
+            }
+
+            val cleanedRaw = AiChatRepository.cleanThinking(message.content.trim())
+            val effectiveContent = if (cleanedRaw.isNotBlank()) {
+                cleanedRaw
+            } else {
+                if (parsedList.size > 1) {
+                    if (message.parsedExpense?.language == "my" || parsedList.firstOrNull()?.language == "my") {
+                        val items = parsedList.joinToString(", ") { it.item.ifBlank { CategoryResolver.toBurmeseName(it.category) } }
+                        "$items အတွက် မှတ်သားထားပါတယ်။ အောက်ပါ Card များတွင် အတည်ပြုပေးပါ။"
+                    } else {
+                        val items = parsedList.joinToString(", ") { "${it.item.ifBlank { it.category }} (${it.amount.toLong()} ${it.currency})" }
+                        "I've noted your expenses for $items. Please confirm below."
+                    }
+                } else if (parsedList.isNotEmpty()) {
+                    val exp = parsedList.first()
+                    if (exp.language == "my") {
+                        val name = exp.item.ifBlank { CategoryResolver.toBurmeseName(exp.category) }
+                        val amt = if (exp.amount > 0) " ${exp.amount.toLong()} ${exp.currency}" else ""
+                        "$name အတွက်$amt မှတ်သားထားပါတယ်။ အောက်ပါ Card တွင် အတည်ပြုပေးပါ။"
+                    } else {
+                        val name = exp.item.ifBlank { exp.category }
+                        val amt = if (exp.amount > 0) " (${exp.amount.toLong()} ${exp.currency})" else ""
+                        "I've noted your expense for $name$amt. Please confirm below."
+                    }
+                } else {
+                    message.content.trim()
+                }
+            }
+
+            val parsedText = parseMarkdown(effectiveContent)
             Text(
                 text = parsedText,
                 color = MaterialTheme.colorScheme.onBackground,
@@ -1087,8 +1142,6 @@ fun MessageItem(
                 fontSize = 10.sp,
                 modifier = Modifier.align(Alignment.End)
             )
-
-            val parsedList = message.parsedExpenses ?: listOfNotNull(message.parsedExpense)
             
             for (index in parsedList.indices) {
                 val parsed = parsedList[index]
@@ -1162,7 +1215,7 @@ fun MessageItem(
                             onDismiss = { showAmountInputDialog = false },
                             onConfirm = { amount ->
                                 showAmountInputDialog = false
-                                onConfirmChallenge(parsed.copy(amount = amount))
+                                onConfirmChallenge(index, parsed.copy(amount = amount))
                             }
                         )
                     }
@@ -1199,17 +1252,24 @@ fun MessageItem(
                                 }
                             } else null
 
+                            val effectiveCategories = if (categories.isNotEmpty()) categories else CategoryResolver.DEFAULT_ENTITIES
+
+                            val resolvedCategory = if (!isChallenge) {
+                                CategoryResolver.resolve(parsed.category, effectiveCategories)
+                            } else null
+
                             val effectiveParsed = if (isChallenge && resolvedChallenge != null && parsed.challengeTitle.isBlank()) {
                                 parsed.copy(challengeTitle = resolvedChallenge.title, merchant = resolvedChallenge.title)
+                            } else if (!isChallenge && resolvedCategory != null) {
+                                parsed.copy(category = resolvedCategory.name)
                             } else parsed
 
                             val exists = if (isChallenge) {
                                 resolvedChallenge != null
                             } else {
-                                val categoryName = effectiveParsed.category
-                                val cleanQuery = categoryName.filter { it.isLetterOrDigit() || it.isWhitespace() }.lowercase().trim()
-                                categories.any {
+                                resolvedCategory != null || effectiveCategories.any {
                                     val cleanDb = it.name.filter { c -> c.isLetterOrDigit() || c.isWhitespace() }.lowercase().trim()
+                                    val cleanQuery = effectiveParsed.category.filter { c -> c.isLetterOrDigit() || c.isWhitespace() }.lowercase().trim()
                                     cleanDb == cleanQuery
                                 }
                             }
@@ -1258,8 +1318,8 @@ fun MessageItem(
                                     ) {
                                         Text(
                                             text = if (isChallenge) {
-                                                if (isMy) "⚠️ စုဘူးမရှိသေးပါ။ ကျေးဇူးပြု၍ အခြားစုဘူးသို့ ပြောင်းလဲပေးပါ။"
-                                                else "⚠️ Challenge does not exist. Please switch to an existing challenge."
+                                                if (isMy) "⚠️ စုဘူးမရှိသေးပါ။ ကျေးဇူးပြု၍ စုဘူးအသစ် အရင်ဖန်တီးပေးပါ။"
+                                                else "⚠️ Challenge does not exist. Please create the challenge first."
                                             } else {
                                                 if (isMy) "⚠️ အမျိုးအစား မရှိသေးပါ။ ကျေးဇူးပြု၍ အမျိုးအစားအသစ်သို့ ပြောင်းလဲပေးပါ။"
                                                 else "⚠️ Category does not exist. Please switch to an existing category."
@@ -1371,7 +1431,7 @@ fun MessageItem(
                                                     if (isFlexiWithNoAmount) {
                                                         showAmountInputDialog = true
                                                     } else {
-                                                        onConfirmChallenge(effectiveParsed)
+                                                        onConfirmChallenge(index, effectiveParsed)
                                                     }
                                                 },
                                                 enabled = exists,
@@ -1380,7 +1440,7 @@ fun MessageItem(
                                                     containerColor = EmeraldGreen,
                                                     disabledContainerColor = Color.LightGray
                                                 ),
-                                                contentPadding = PaddingValues(vertical = 4.dp)
+                                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                                             ) {
                                                 Text(
                                                     if (isFlexiWithNoAmount) {
@@ -1389,25 +1449,26 @@ fun MessageItem(
                                                         if (isMy) "အတည်ပြု" else "Confirm"
                                                     },
                                                     color = if (exists) Color.White else Color.Gray,
-                                                    fontSize = 12.sp
+                                                    fontSize = 11.sp,
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                                 )
-                                            }
-                                            OutlinedButton(
-                                                onClick = { showSwitchChallengeDialog = true },
-                                                modifier = Modifier.weight(1.1f),
-                                                border = BorderStroke(1.dp, EmeraldGreen),
-                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = EmeraldGreen),
-                                                contentPadding = PaddingValues(vertical = 4.dp)
-                                            ) {
-                                                Text(if (isMy) "စုဘူးပြောင်း" else "Switch", fontSize = 12.sp, maxLines = 1)
                                             }
                                             Button(
                                                 onClick = { onCancelAction(index) },
-                                                modifier = Modifier.weight(0.9f),
+                                                modifier = Modifier.weight(1f),
                                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2)),
-                                                contentPadding = PaddingValues(vertical = 4.dp)
+                                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                                             ) {
-                                                Text(if (isMy) "ဖျက်သိမ်း" else "Cancel", color = Color(0xFFEF4444), fontSize = 12.sp)
+                                                Text(
+                                                    text = if (isMy) "ဖျက်သိမ်း" else "Cancel",
+                                                    color = Color(0xFFEF4444),
+                                                    fontSize = 11.sp,
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                )
                                             }
                                         }
                                     }
@@ -1432,7 +1493,7 @@ fun MessageItem(
                                                         if (isFlexiWithNoAmount) {
                                                             showAmountInputDialog = true
                                                         } else {
-                                                            onConfirmChallenge(effectiveParsed)
+                                                            onConfirmChallenge(index, effectiveParsed)
                                                         }
                                                     },
                                                     enabled = exists,
@@ -1441,7 +1502,7 @@ fun MessageItem(
                                                         containerColor = EmeraldGreen,
                                                         disabledContainerColor = Color.LightGray
                                                     ),
-                                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                                                 ) {
                                                     Text(
                                                         if (isFlexiWithNoAmount) {
@@ -1450,25 +1511,26 @@ fun MessageItem(
                                                             if (isMy) "အတည်ပြု" else "Confirm"
                                                         },
                                                         color = if (exists) Color.White else Color.Gray,
-                                                        fontSize = 12.sp
+                                                        fontSize = 11.sp,
+                                                        maxLines = 1,
+                                                        softWrap = false,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                                     )
-                                                }
-                                                OutlinedButton(
-                                                    onClick = { showSwitchChallengeDialog = true },
-                                                    modifier = Modifier.weight(1.1f),
-                                                    border = BorderStroke(1.dp, EmeraldGreen),
-                                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = EmeraldGreen),
-                                                    contentPadding = PaddingValues(vertical = 4.dp)
-                                                ) {
-                                                    Text(if (isMy) "စုဘူးပြောင်း" else "Switch", fontSize = 12.sp, maxLines = 1)
                                                 }
                                                 Button(
                                                     onClick = { onCancelAction(index) },
-                                                    modifier = Modifier.weight(0.9f),
+                                                    modifier = Modifier.weight(1f),
                                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2)),
-                                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                                                 ) {
-                                                    Text(if (isMy) "ဖျက်သိမ်း" else "Cancel", color = Color(0xFFEF4444), fontSize = 12.sp)
+                                                    Text(
+                                                        text = if (isMy) "ဖျက်သိမ်း" else "Cancel",
+                                                        color = Color(0xFFEF4444),
+                                                        fontSize = 11.sp,
+                                                        maxLines = 1,
+                                                        softWrap = false,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                    )
                                                 }
                                             }
                                         } else {
@@ -1484,26 +1546,46 @@ fun MessageItem(
                                                         containerColor = EmeraldGreen,
                                                         disabledContainerColor = Color.LightGray
                                                     ),
-                                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                                                 ) {
-                                                    Text(if (isMy) "အတည်ပြု" else "Confirm", color = if (exists) Color.White else Color.Gray, fontSize = 12.sp)
+                                                    Text(
+                                                        text = if (isMy) "အတည်ပြု" else "Confirm",
+                                                        color = if (exists) Color.White else Color.Gray,
+                                                        fontSize = 11.sp,
+                                                        maxLines = 1,
+                                                        softWrap = false,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                    )
                                                 }
                                                 OutlinedButton(
                                                     onClick = { showSwitchCategoryDialog = true },
-                                                    modifier = Modifier.weight(1.1f),
+                                                    modifier = Modifier.weight(1.05f),
                                                     border = BorderStroke(1.dp, EmeraldGreen),
                                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = EmeraldGreen),
-                                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                                                 ) {
-                                                    Text(if (isMy) "အမျိုးအစားပြောင်း" else "Switch", fontSize = 12.sp, maxLines = 1)
+                                                    Text(
+                                                        text = if (isMy) "ကဏ္ဍပြောင်း" else "Switch",
+                                                        fontSize = 11.sp,
+                                                        maxLines = 1,
+                                                        softWrap = false,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                    )
                                                 }
                                                 Button(
                                                     onClick = { onCancelAction(index) },
-                                                    modifier = Modifier.weight(0.9f),
+                                                    modifier = Modifier.weight(0.95f),
                                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2)),
-                                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                                                 ) {
-                                                    Text(if (isMy) "ဖျက်သိမ်း" else "Cancel", color = Color(0xFFEF4444), fontSize = 12.sp)
+                                                    Text(
+                                                        text = if (isMy) "ဖျက်သိမ်း" else "Cancel",
+                                                        color = Color(0xFFEF4444),
+                                                        fontSize = 11.sp,
+                                                        maxLines = 1,
+                                                        softWrap = false,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                    )
                                                 }
                                             }
                                         }

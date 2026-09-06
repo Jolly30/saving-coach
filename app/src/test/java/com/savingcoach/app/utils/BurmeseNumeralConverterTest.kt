@@ -36,6 +36,25 @@ class BurmeseNumeralConverterTest {
     }
 
     @Test
+    fun testKThousandsSuffix() {
+        assertEquals("100000", BurmeseNumeralConverter.convert("100k"))
+        assertEquals("100000", BurmeseNumeralConverter.convert("100K"))
+        assertEquals("100000", BurmeseNumeralConverter.convert("100 k"))
+        assertEquals("100000", BurmeseNumeralConverter.convert("100 K"))
+        assertEquals("50000", BurmeseNumeralConverter.convert("50k"))
+        assertEquals("10000", BurmeseNumeralConverter.convert("10k"))
+        assertEquals("1000", BurmeseNumeralConverter.convert("1k"))
+        assertEquals("1500", BurmeseNumeralConverter.convert("1.5k"))
+        assertEquals("how to save 100000 in a week", BurmeseNumeralConverter.convert("how to save 100k in a week"))
+        assertEquals("100000 MMK", BurmeseNumeralConverter.convert("100k MMK"))
+
+        // Should not corrupt ks, kg, km, kb
+        assertEquals("100ks", BurmeseNumeralConverter.convert("100ks"))
+        assertEquals("100kg", BurmeseNumeralConverter.convert("100kg"))
+        assertEquals("100km", BurmeseNumeralConverter.convert("100km"))
+    }
+
+    @Test
     fun testCoffeeBurmeseDigits() {
         val query = "coffee ၂၅၀၀ မှတ်ပေး"
         val converted = BurmeseNumeralConverter.convert(query)

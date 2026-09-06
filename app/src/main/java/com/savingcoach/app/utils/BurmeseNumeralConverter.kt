@@ -130,6 +130,21 @@ object BurmeseNumeralConverter {
             val num = match.groupValues[1].toDoubleOrNull()
             if (num != null) (num * 100).toInt().toString() else match.value
         }
+
+        // 6. Handle 'k' / 'K' thousands suffix (e.g. "100k" -> 100000, "50k" -> 50000, "1.5k" -> 1500)
+        // Must not match "ks" (Kyats) or units like "kg", "km", "kb", etc.
+        val kThousandPattern = "(\\d+(?:,\\d+)*(?:\\.\\d+)?)\\s*[kK](?!\\s*s\\b|[a-zA-Z])".toRegex()
+        result = kThousandPattern.replace(result) { match ->
+            val num = match.groupValues[1].replace(",", "").toDoubleOrNull()
+            if (num != null) (num * 1000).toLong().toString() else match.value
+        }
+
+        // 7. Handle 'lakh' / 'lakhs' (100,000)
+        val lakhEnglishPattern = "(?i)(\\d+(?:,\\d+)*(?:\\.\\d+)?)\\s*lakhs?\\b".toRegex()
+        result = lakhEnglishPattern.replace(result) { match ->
+            val num = match.groupValues[1].replace(",", "").toDoubleOrNull()
+            if (num != null) (num * 100000).toLong().toString() else match.value
+        }
         
         return result
     }
