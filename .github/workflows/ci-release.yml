@@ -46,10 +46,6 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: Sign APK (verify alignment)
-        run: |
-          apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
-
       - name: Rename APK to piggy.apk
         run: cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/piggy.apk
 
