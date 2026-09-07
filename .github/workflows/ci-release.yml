@@ -29,7 +29,7 @@ jobs:
 
       - name: Setup Google Services
         run: |
-          echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
+          echo '${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}' | base64 -d > app/google-services.json
 
       - name: Setup Local Properties
         run: |
@@ -50,11 +50,14 @@ jobs:
         run: |
           apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
 
+      - name: Rename APK to piggy.apk
+        run: cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/piggy.apk
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ github.ref_name }}
-          body_path: CHANGELOG.md
+          generate_release_notes: true
           files: |
-            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/release/piggy.apk
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
