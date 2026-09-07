@@ -22,9 +22,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("../release.keystore")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "local-dev-pass"
-            keyAlias = System.getenv("KEY_ALIAS") ?: "savingcoach"
-            keyPassword = System.getenv("KEY_PASSWORD") ?: "local-dev-pass"
+            storePassword = System.getenv("KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() } ?: "savingcoach123"
+            keyAlias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "piggy"
+            keyPassword = System.getenv("KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: "savingcoach123"
         }
     }
 
